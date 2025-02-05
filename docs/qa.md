@@ -10,6 +10,16 @@
 
 ## [main](../qa/main.py)
 
+### `get_answer(context: str, question: str) -> str`
+Возвращает сгенерированный LLM ответ на вопрос пользователя по заданному документу в соответствии с промтом
+
+    Args:
+        context (str): текст документа (или фрагмента документа)
+        question (str): вопрос пользователя
+
+    Returns:
+        str: экземпляр класса Chunk — фрагмент документа
+
 ### `qa(request: web.Request) -> web.Response`
 Возвращает ответ на вопрос пользователя и ссылку на источник
 
@@ -32,6 +42,12 @@
 
 ### `class Config`
 Класс с переменными окружения
+
+#### `get_mistral_headers() -> dict`
+Возвращает заголовки для запросов к Mistral API
+
+#### `get_default_prompt(context: str, question: str)`
+Создаёт payload с промптом для Mistral API
 
 ## [database](../qa/database.py)
 
@@ -75,18 +91,6 @@
 
     Returns:
         Chunk | None: экземпляр класса Chunk — фрагмент документа
-
-## [llm_prompting](../qa/llm_prompting.py)
-
-### `get_answer(context: str, question: str) -> str`
-Возвращает сгенерированный LLM ответ на вопрос пользователя по заданному документу в соответствии с промтом
-
-    Args:
-        context (str): текст документа (или фрагмента документа)
-        question (str): вопрос пользователя
-
-    Returns:
-        str: экземпляр класса Chunk — фрагмент документа
 
 ## [tests](../qa/tests.py)
 

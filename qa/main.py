@@ -2,13 +2,13 @@ from contextlib import redirect_stderr
 import io
 import logging
 from aiohttp import web
+import requests
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from config import Config
 from database import Chunk
-from llm_prompting import get_answer
 from confluence_retrieving import get_chunk, reindex_confluence
 
 routes = web.RouteTableDef()
@@ -22,6 +22,34 @@ text_splitter = RecursiveCharacterTextSplitter(
 encoder_model = SentenceTransformer(
     "saved_models/multilingual-e5-large-wikiutmn", device="cpu"
 )
+
+
+def get_answer(context: str, question: str) -> str:
+    """Отправляет запрос к LLM и возвращает ответ."""
+    try:
+        headers = Config.get_mistral_headers()
+        prompt = Config.get_default_prompt(context, question)
+
+        logging.info(f"Запрос к Mistral API: {prompt}")
+
+        response = requests.post(Config.MISTRAL_API_URL, json=prompt, headers=headers)
+
+        logging.info(f"Ответ Mistral API: {response.status_code} {response.text}")
+
+        if response.status_code == 200:
+            data = response.json()
+            return (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+        else:
+            logging.error(f"Ошибка {response.status_code}: {response.text}")
+            return ""
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return ""
 
 
 @routes.post("/qa/")

@@ -3,7 +3,6 @@ python-dotenv
 aiohttp
 langchain
 langchain-community
-gigachat
 atlassian-python-api
 beautifulsoup4
 lxml

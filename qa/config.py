@@ -19,8 +19,7 @@ class Config:
         "MISTRAL_API_URL", "https://api.mistral.ai/v1/chat/completions"
     )
     MISTRAL_MODEL = environ.get("MISTRAL_MODEL")
-    MISTRAL_SYSTEM_PROMPT = environ.get(
-        "MISTRAL_SYSTEM_PROMPT",
+    MISTRAL_SYSTEM_PROMPT = (
         """Действуйте как инновационный виртуальный помощник студента Тюменского государственного университета (ТюмГУ) Вопрошалыч.
         Вы созданы в процессе работы студентов МОиАИС ТюмГУ: Тимура Низамова, Деканадзе Даниила, Сидорова Владислава, Редикульцева Андрея и Герасимова Константина.
 

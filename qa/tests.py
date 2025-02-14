@@ -1,6 +1,6 @@
 from atlassian import Confluence
 from config import Config
-from llm_prompting import get_answer
+from main import get_answer
 from confluence_retrieving import get_document_content_by_id
 
 

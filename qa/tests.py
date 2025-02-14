@@ -1,6 +1,7 @@
 from atlassian import Confluence
 from config import Config
 from main import get_answer
+from time import sleep
 from confluence_retrieving import get_document_content_by_id
 
 
@@ -10,6 +11,7 @@ def test_llm():
     context = """Чтобы поменять занятия по физической культуре на посещение
     частного фитнес-клуба, необходимо заполнить заявление и обратиться
     к курирующему преподавателю"""
+    sleep(1.1)
     question = "Что нужно сделать, чтобы заменить физру на частный клуб?"
     assert "препод" in get_answer(context, question).lower()
     assert "не найден" in get_answer(context, "Когда наступит лето?").lower()

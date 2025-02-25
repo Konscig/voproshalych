@@ -3,12 +3,24 @@ from typing import Optional, List
 from bcrypt import hashpw, gensalt, checkpw
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Text, func, and_
+from sqlalchemy import (
+    BigInteger,
+    Integer,
+    Column,
+    DateTime,
+    ForeignKey,
+    Text,
+    Enum,
+    event,
+    func,
+    and_,
+)
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 from cluster_analysis import mark_of_question
 from config import app
 from pandas import date_range
+from datetime import date, timedelta
 
 db = SQLAlchemy(app)
 
@@ -142,6 +154,65 @@ class Admin(db.Model, UserMixin):
         """
         hashed = base64.b64decode(self.password_hash.encode("utf-8"))
         return checkpw(password.encode("utf-8"), hashed)
+
+
+class HolidayTemplate(db.Model):
+    __tablename__ = "holiday_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text(), nullable=False)
+    type: Mapped[str] = mapped_column(Enum("fixed", "floating", name="holiday_types"))
+    template_llm: Mapped[str] = mapped_column(Text())
+    vk: Mapped[bool] = mapped_column()
+    tg: Mapped[bool] = mapped_column()
+    month: Mapped[Optional[int]] = mapped_column(Integer)
+    day: Mapped[Optional[int]] = mapped_column(Integer)
+    week_number: Mapped[Optional[int]] = mapped_column(Integer)
+    day_of_week: Mapped[Optional[int]] = mapped_column(Integer)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
+
+    @property
+    def current_year_date(self) -> date:
+        return self.calculate_for_year(date.today().year)
+
+    def calculate_for_year(self, year: int) -> date:
+        raise NotImplementedError()
+
+
+class FixedHoliday(HolidayTemplate):
+    __mapper_args__ = {"polymorphic_identity": "fixed"}
+
+    def calculate_for_year(self, year) -> date:
+        if self.month is None or self.day is None:
+            raise ValueError("Month and day must be set for FixedHoliday")
+        return date(year, self.month, self.day)
+
+
+class FloatingHoliday(HolidayTemplate):
+    __mapper_args__ = {"polymorphic_identity": "floating"}
+
+    def calculate_for_year(self, year: int) -> date:
+        if self.month is None or self.day_of_week is None or self.week_number is None:
+            raise ValueError(
+                "Month, day_of_week, and week_number must be set for FloatingHoliday"
+            )
+
+        first_day = date(year, self.month, 1)
+        offset = (self.day_of_week - first_day.weekday()) % 7
+        first_occurrence = first_day + timedelta(days=offset)
+
+        if self.week_number == 5:
+            next_month = first_day.replace(day=28) + timedelta(days=4)
+            last_day = next_month - timedelta(days=next_month.day)
+            return last_day - timedelta(
+                days=(last_day.weekday() - self.day_of_week) % 7
+            )
+
+        return first_occurrence + timedelta(weeks=self.week_number - 1)
 
 
 def get_questions_for_clusters(

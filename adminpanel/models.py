@@ -157,7 +157,7 @@ class Admin(db.Model, UserMixin):
 
 
 class HolidayTemplate(db.Model):
-    __tablename__ = "holiday_templates"
+    __tablename__ = "holiday_template"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text(), nullable=False)
@@ -165,6 +165,8 @@ class HolidayTemplate(db.Model):
     template_llm: Mapped[str] = mapped_column(Text())
     vk: Mapped[bool] = mapped_column()
     tg: Mapped[bool] = mapped_column()
+    male_holiday: Mapped[bool] = mapped_column()
+    female_holiday: Mapped[bool] = mapped_column()
     month: Mapped[Optional[int]] = mapped_column(Integer)
     day: Mapped[Optional[int]] = mapped_column(Integer)
     week_number: Mapped[Optional[int]] = mapped_column(Integer)

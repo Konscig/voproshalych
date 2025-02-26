@@ -21,13 +21,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.create_table(
-        "holiday_templates",
+        "holiday_template",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("name", sa.Text, nullable=False),
         sa.Column("type", sa.Enum("fixed", "floating", name="holiday_types")),
         sa.Column("template_llm", sa.Text),
         sa.Column("vk", sa.Boolean, default=False),
         sa.Column("tg", sa.Boolean, default=False),
+        sa.Column("male_holiday", sa.Boolean, default=False),
+        sa.Column("female_holiday", sa.Boolean, default=False),
         sa.Column("month", sa.Integer),
         sa.Column("day", sa.Integer),
         sa.Column("week_number", sa.Integer),

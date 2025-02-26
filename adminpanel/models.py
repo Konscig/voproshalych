@@ -157,6 +157,25 @@ class Admin(db.Model, UserMixin):
 
 
 class HolidayTemplate(db.Model):
+    """Шаблон праздника
+
+    Args:
+        id (int): id шаблона.
+        name (str): название праздника.
+        type (str): тип праздника (fixed или floating).
+        template_llm (str): шаблон для LLM.
+        vk (bool): флаг для VK.
+        tg (bool): флаг для TG.
+        male_holiday (bool): флаг для мужского праздника.
+        female_holiday (bool): флаг для женского праздника.
+        month (int | None): месяц (для fixed).
+        day (int | None): день (для fixed).
+        week_number (int | None): номер недели (для floating).
+        day_of_week (int | None): день недели (для floating).
+        created_at (datetime): время создания модели.
+        updated_at (datetime): время обновления модели.
+    """
+
     __tablename__ = "holiday_template"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -186,6 +205,11 @@ class HolidayTemplate(db.Model):
 
 
 class FixedHoliday(HolidayTemplate):
+    """Фиксированный праздник.
+
+    Наследует все атрибуты и методы от HolidayTemplate.
+    """
+
     __mapper_args__ = {"polymorphic_identity": "fixed"}
 
     def calculate_for_year(self, year) -> date:
@@ -195,6 +219,11 @@ class FixedHoliday(HolidayTemplate):
 
 
 class FloatingHoliday(HolidayTemplate):
+    """Плавающий праздник.
+
+    Наследует все атрибуты и методы от HolidayTemplate.
+    """
+
     __mapper_args__ = {"polymorphic_identity": "floating"}
 
     def calculate_for_year(self, year: int) -> date:

@@ -78,6 +78,48 @@ async def qa(request: web.Request) -> web.Response:
     return web.json_response({"answer": answer, "confluence_url": chunk.confluence_url})
 
 
+@routes.post("/generate_greeting/")
+async def generate_greeting(request: web.Request) -> web.Response:
+    """Генерация поздравления с использованием LLM.
+
+    Args:
+        request (web.Request): запрос, содержащий `template`, `user_name`, `holiday_name`
+
+    Returns:
+        web.Response: ответ с поздравлением
+    """
+    data = await request.json()
+    template = data["template"]
+    user_name = data["user_name"]
+    holiday_name = data["holiday_name"]
+
+    try:
+        headers = Config.get_mistral_headers()
+        prompt = Config.get_greeting_prompt(template, user_name, holiday_name)
+
+        logging.info(f"Запрос к Mistral API: {prompt}")
+
+        response = requests.post(Config.MISTRAL_API_URL, json=prompt, headers=headers)
+
+        logging.info(f"Ответ Mistral API: {response.status_code} {response.text}")
+
+        if response.status_code == 200:
+            data = response.json()
+            greeting = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+            return web.json_response({"greeting": greeting})
+        else:
+            logging.error(f"Ошибка {response.status_code}: {response.text}")
+            return web.Response(text="Ошибка генерации поздравления", status=500)
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return web.Response(text="Ошибка генерации поздравления", status=500)
+
+
 @routes.post("/reindex/")
 async def reindex(request: web.Request) -> web.Response:
     """Пересоздаёт векторный индекс текстов для ответов на вопросы

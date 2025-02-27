@@ -23,8 +23,10 @@ from database import (
     add_question_answer,
     rate_answer,
     get_subscribed_users,
+    get_today_holidays,
 )
 from strings import Strings
+from datetime import datetime, timedelta
 
 
 class Permission(vk.ABCRule[VKMessage]):
@@ -492,6 +494,141 @@ async def broadcast(request: web.Request) -> web.Response:
         )
 
 
+async def get_greeting(template: str, user_name: str, holiday_name: str) -> str:
+    """Генерация поздравления с использованием микросервиса.
+
+    Args:
+        template (str): Шаблон для LLM.
+        user_name (str): Имя пользователя.
+        holiday_name (str): Название праздника.
+
+    Returns:
+        str: Сгенерированное поздравление.
+    """
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"http://{Config.QA_HOST}/generate_greeting/",
+            json={
+                "template": template,
+                "user_name": user_name,
+                "holiday_name": holiday_name,
+            },
+        ) as response:
+            if response.status == 200:
+                resp = await response.json()
+                return resp["greeting"]
+            else:
+                logging.error(f"Ошибка {response.status}: {await response.text()}")
+                return ""
+
+
+async def get_vk_user_name(user_id: int) -> str:
+    """Получает имя пользователя VK.
+
+    Args:
+        user_id (int): ID пользователя VK.
+
+    Returns:
+        str: Имя пользователя.
+    """
+    user_info = await vk_bot.api.users.get(user_ids=user_id)
+    if user_info:
+        return user_info[0].first_name
+    return "пользователь"
+
+
+async def get_telegram_user_name(user_id: int) -> str:
+    """Получает имя пользователя Telegram.
+
+    Args:
+        user_id (int): ID пользователя Telegram.
+
+    Returns:
+        str: Имя пользователя.
+    """
+    try:
+        user = await tg_bot.get_chat(user_id)
+        if user.first_name:
+            return user.first_name
+    except Exception as e:
+        logging.error(f"Ошибка получения имени пользователя Telegram: {e}")
+    return "пользователь"
+
+
+async def get_vk_user_gender(user_id: int) -> str:
+
+    user_info = await vk_bot.api.users.get(user_ids=user_id, fields=["sex"])
+    if user_info and user_info[0].sex == 2:
+        return "male"
+    elif user_info and user_info[0].sex == 1:
+        return "female"
+    return "unknown"
+
+
+async def send_holiday_greetings():
+    """Отправляет поздравления пользователям VK и Telegram в праздничные дни."""
+    holidays = get_today_holidays(engine)
+    if not holidays:
+        return
+
+    vk_users, tg_users = get_subscribed_users(engine)
+
+    DELAY_BETWEEN_MESSAGES = 2
+    DELAY_BETWEEN_PLATFORMS = 5
+
+    for user_id in vk_users:
+        gender = await get_vk_user_gender(user_id)
+        user_name = await get_vk_user_name(user_id)
+
+        for holiday in holidays:
+            if holiday.vk and (
+                (holiday.male_holiday and gender == "male")
+                or (holiday.female_holiday and gender == "female")
+                or (holiday.male_holiday and holiday.female_holiday)
+            ):
+                greeting = await get_greeting(
+                    holiday.template_llm,
+                    user_name,
+                    holiday.name,
+                )
+                await vk_bot.api.messages.send(
+                    user_id=user_id, message=greeting, random_id=0
+                )
+                await asyncio.sleep(DELAY_BETWEEN_MESSAGES)
+
+    await asyncio.sleep(DELAY_BETWEEN_PLATFORMS)
+
+    for user_id in tg_users:
+        user_name = await get_telegram_user_name(user_id)
+
+        for holiday in holidays:
+            if holiday.tg and not (holiday.male_holiday ^ holiday.female_holiday):
+                greeting = await get_greeting(
+                    holiday.template_llm,
+                    user_name,
+                    holiday.name,
+                )
+                try:
+                    await tg_bot.send_message(chat_id=user_id, text=greeting)
+                    await asyncio.sleep(DELAY_BETWEEN_MESSAGES)
+                except Exception as e:
+                    logging.error(f"Ошибка отправки поздравления в Telegram: {e}")
+
+
+async def check_and_send_greetings():
+    """Функция запуска модуля отправки поздравлений"""
+    while True:
+        now = datetime.now()
+        next_run = now.replace(hour=14, minute=0, second=0, microsecond=0)
+
+        if now.hour >= 14:
+            await send_holiday_greetings()
+            next_run = next_run + timedelta(days=1)
+
+        await asyncio.sleep((next_run - now).total_seconds())
+        await send_holiday_greetings()
+
+
 def launch_vk_bot():
     """Функция начала работы чат-бота ВКонтакте"""
 
@@ -516,6 +653,15 @@ def run_web_app():
     web.run_app(app, port=5000)
 
 
+def launch_greeting_service():
+    """Функция запуска модуля отправки поздравлений"""
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(check_and_send_greetings())
+    loop.close()
+
+
 if __name__ == "__main__":
     loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
     for logger in loggers:
@@ -523,9 +669,12 @@ if __name__ == "__main__":
     web_process = Process(target=run_web_app)
     vk_process = Process(target=launch_vk_bot)
     tg_process = Process(target=launch_telegram_bot)
+    greeting_process = Process(target=launch_greeting_service)
     web_process.start()
     vk_process.start()
     tg_process.start()
+    greeting_process.start()
     web_process.join()
     vk_process.join()
     tg_process.join()
+    greeting_process.join()

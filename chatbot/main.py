@@ -155,7 +155,7 @@ async def vk_handler(message: VKMessage):
     await vk_send_confluence_keyboard(message, question_types)
 
 
-
+dispatcher.message(tg.F.text.in_([Strings.ConfluenceButton]))
 async def tg_handler(message: tg.types.Message):
     """Обработчик события (для чат-бота Telegram), при котором пользователь запрашивает
     справочную информацию
@@ -166,6 +166,8 @@ async def tg_handler(message: tg.types.Message):
 
     question_types = make_markup_by_confluence()
     await tg_send_confluence_keyboard(message, question_types)
+
+
 
 
 @vk_bot.on.message(
@@ -264,7 +266,7 @@ async def vk_subscribe(message: VKMessage):
         )
 
 
-@dispatcher.message(tg.F.text == [Strings.Subscribe, Strings.Unsubscribe])
+@dispatcher.message(tg.F.text.in_([Strings.Subscribe, Strings.Unsubscribe]))
 async def tg_subscribe(message: tg.types.Message):
     """Обработчик события (для чат-бота Telegram), при котором пользователь оформляет
     или снимает подписку на рассылку
@@ -290,14 +292,14 @@ async def tg_subscribe(message: tg.types.Message):
         )
 
 
-async def get_answer(question: str) -> str:
+async def get_answer(question: str) -> tuple[str, str | None]:
     """Получение ответа на вопрос с использованием микросервиса
 
     Args:
         question (str): вопрос пользователя
 
     Returns:
-        str: ответ на вопрос и ссылка на страницу в вики-системе
+        tuple[str, str | None]: ответ на вопрос и ссылка на страницу в вики-системе
     """
 
     question = question.strip().lower()
@@ -307,9 +309,10 @@ async def get_answer(question: str) -> str:
         ) as response:
             if response.status == 200:
                 resp = await response.json()
-                return resp["answer"]
+                return resp["answer"], resp["confluence_url"]
             else:
-                return ""
+                return ("", None)
+
 
 
 @vk_bot.on.message()
@@ -417,11 +420,10 @@ async def tg_answer(message: tg.types.Message):
     ответа
 
     Args:
-        message (Message): сообщение с вопросом пользователя
+        message (tg.types.Message): сообщение с вопросом пользователя
     """
-    if message.from_user is None:
-        return
-    if message.text is None or len(str(message.text)) < 4:
+
+    if len(message.text) < 4:
         await message.answer(text=Strings.Less4Symbols)
         return
     user_id = get_user_id(engine, telegram_id=message.from_user.id)
@@ -431,27 +433,27 @@ async def tg_answer(message: tg.types.Message):
     if check_spam(engine, user_id):
         await message.answer(text=Strings.SpamWarning)
         return
+    processing = await message.answer(Strings.TryFindAnswer)
     answer, confluence_url = await get_answer(message.text)
-    if len(answer) < 5:
-        await message.answer(text=Strings.NotFound)
-        return
     question_answer_id = add_question_answer(
         engine, message.text, answer, confluence_url, user_id
     )
+    await message.bot.delete_message(message.chat.id, processing.message_id)
+    if confluence_url is None:
+        await message.answer(text=Strings.NotFound)
+        return
+    if len(answer) == 0:
+        answer = Strings.NotAnswer
+
+    keyboard = tg.types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [tg.types.InlineKeyboardButton(text="👎", callback_data=f"1 {question_answer_id}"),
+             tg.types.InlineKeyboardButton(text="❤", callback_data=f"5 {question_answer_id}")]
+        ]
+    )
     await message.answer(
-        text=answer if len(answer) > 0 else Strings.NotAnswer,
-        reply_markup=tg.types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    tg.types.InlineKeyboardButton(
-                        text="👎", callback_data=f"1 {question_answer_id}"
-                    ),
-                    tg.types.InlineKeyboardButton(
-                        text="❤", callback_data=f"5 {question_answer_id}"
-                    ),
-                ]
-            ]
-        ),
+        text=f"{answer}\n\n{Strings.SourceURL} {confluence_url}",
+        reply_markup=keyboard,
     )
 
 

@@ -44,8 +44,7 @@ vk_bot.labeler.vbml_ignore_case = True
 vk_bot.labeler.custom_rules["permission"] = Permission
 tg_bot = tg.Bot(token=Config.TG_ACCESS_TOKEN)
 dispatcher = tg.Dispatcher()
-router = tg.Router()
-dispatcher.include_router(router)
+
 
 def vk_keyboard_choice(notify_text: str) -> str:
     """Возвращает клавиатуру из кнопок предоставления справочной информации
@@ -80,19 +79,14 @@ def tg_keyboard_choice(notify_text: str) -> tg.types.ReplyKeyboardMarkup:
         tg.types.ReplyKeyboardMarkup: клавиатура с шаблонами сообщений
     """
 
-    # AIOGram 3 требует передавать кнопки сразу в keyboard=
+
     keyboard = tg.types.ReplyKeyboardMarkup(
         keyboard=[
             [tg.types.KeyboardButton(text=Strings.ConfluenceButton)],
             [tg.types.KeyboardButton(text=(notify_text))]
         ],
         resize_keyboard=True
-    ) #
-
-
-    # keyboard = tg.types.ReplyKeyboardMarkup(resize_keyboard=True)
-    # keyboard.add(tg.types.KeyboardButton(Strings.ConfluenceButton))
-    # keyboard.add(tg.types.KeyboardButton(notify_text))
+    )
     return keyboard
 
 
@@ -145,13 +139,6 @@ async def tg_send_confluence_keyboard(message: tg.types.Message, question_types:
     )
 
 
-    # for i in question_types:
-    #     inline_keyboard.add(
-    #         tg.types.InlineKeyboardButton(
-    #             text=i["content"]["title"], callback_data=f"conf_id{i['content']['id']}"
-    #         )
-    #     )
-
     await message.answer(text=Strings.WhichInfoDoYouWant, reply_markup=inline_keyboard)
 
 
@@ -168,7 +155,7 @@ async def vk_handler(message: VKMessage):
     await vk_send_confluence_keyboard(message, question_types)
 
 
-@router.message(tg.F.text == [Strings.ConfluenceButton])
+
 async def tg_handler(message: tg.types.Message):
     """Обработчик события (для чат-бота Telegram), при котором пользователь запрашивает
     справочную информацию
@@ -201,7 +188,7 @@ async def vk_confluence_parse(message: VKMessage):
         await message.answer(message=parse, random_id=0)
 
 
-@router.callback_query(lambda c: c.data.startswith("conf_id"))
+@dispatcher.callback_query(lambda c: c.data.startswith("conf_id"))
 async def tg_confluence_parse(callback: tg.types.CallbackQuery):
     """Обработчик события (для чат-бота Telegram), при котором пользователь нажимает
     на кнопку, относящуюся к типу или подтипу вопросов
@@ -235,7 +222,7 @@ async def vk_rate(message: VKMessage):
         await message.answer(message=Strings.ThanksForFeedback, random_id=0)
 
 
-@router.callback_query()
+@dispatcher.callback_query()
 async def tg_rate(callback_query: tg.types.CallbackQuery):
     """Обработчик события (для чат-бота Telegram), при котором пользователь оценивает
     ответ на вопрос
@@ -244,7 +231,7 @@ async def tg_rate(callback_query: tg.types.CallbackQuery):
         callback_query (tg.types.CallbackQuery): запрос при нажатии на inline-кнопку
     """
 
-    score, question_answer_id = map(int, callback_query.data.split())
+    score, question_answer_id = map(int, str(callback_query.data).split())
     if rate_answer(engine, question_answer_id, score):
         await callback_query.answer(text=Strings.ThanksForFeedback)
 
@@ -277,7 +264,7 @@ async def vk_subscribe(message: VKMessage):
         )
 
 
-@router.message(tg.F.text == [Strings.Subscribe, Strings.Unsubscribe])
+@dispatcher.message(tg.F.text == [Strings.Subscribe, Strings.Unsubscribe])
 async def tg_subscribe(message: tg.types.Message):
     """Обработчик события (для чат-бота Telegram), при котором пользователь оформляет
     или снимает подписку на рассылку
@@ -286,7 +273,7 @@ async def tg_subscribe(message: tg.types.Message):
         message (tg.types.Message): сообщение пользователя
     """
 
-    user_id = get_user_id(engine, telegram_id=message.from_user.id) # message["from"]["id"]
+    user_id = get_user_id(engine, telegram_id=message.from_user.id)
     if user_id is None:
         await message.answer(text=Strings.NoneUserTelegram)
         return
@@ -303,14 +290,14 @@ async def tg_subscribe(message: tg.types.Message):
         )
 
 
-async def get_answer(question: str) -> tuple[str, str | None]:
+async def get_answer(question: str) -> str:
     """Получение ответа на вопрос с использованием микросервиса
 
     Args:
         question (str): вопрос пользователя
 
     Returns:
-        tuple[str, str | None]: ответ на вопрос и ссылка на страницу в вики-системе
+        str: ответ на вопрос и ссылка на страницу в вики-системе
     """
 
     question = question.strip().lower()
@@ -320,9 +307,9 @@ async def get_answer(question: str) -> tuple[str, str | None]:
         ) as response:
             if response.status == 200:
                 resp = await response.json()
-                return resp["answer"], resp["confluence_url"]
+                return resp["answer"]
             else:
-                return ("", None)
+                return ""
 
 
 @vk_bot.on.message()
@@ -398,7 +385,7 @@ async def vk_answer(message: VKMessage):
     )
 
 
-@router.message(filters.CommandStart())
+@dispatcher.message(filters.CommandStart())
 async def tg_start(message: tg.types.Message):
     """Обработчик события (для чат-бота Telegram), при котором пользователь отправляет
     команду /start
@@ -421,7 +408,7 @@ async def tg_start(message: tg.types.Message):
         )
 
 
-@router.message()
+@dispatcher.message()
 async def tg_answer(message: tg.types.Message):
     """Обработчик события (для чат-бота Telegram), при котором пользователь задаёт
     вопрос чат-боту
@@ -430,41 +417,41 @@ async def tg_answer(message: tg.types.Message):
     ответа
 
     Args:
-        message (tg.types.Message): сообщение с вопросом пользователя
+        message (Message): сообщение с вопросом пользователя
     """
-
-    if len(message.text) < 4:
+    if message.from_user is None:
+        return
+    if message.text is None or len(str(message.text)) < 4:
         await message.answer(text=Strings.Less4Symbols)
         return
     user_id = get_user_id(engine, telegram_id=message.from_user.id)
     if user_id is None:
         await message.answer(text=Strings.NoneUserTelegram)
         return
-
     if check_spam(engine, user_id):
         await message.answer(text=Strings.SpamWarning)
         return
-
-    processing = await message.answer(Strings.TryFindAnswer)
     answer, confluence_url = await get_answer(message.text)
+    if len(answer) < 5:
+        await message.answer(text=Strings.NotFound)
+        return
     question_answer_id = add_question_answer(
         engine, message.text, answer, confluence_url, user_id
     )
-
-    await tg_bot.delete_message(message.chat.id, processing.message_id)
-
-    if confluence_url is None:
-        await message.answer(text=Strings.NotFound)
-        return
-
-    if len(answer) == 0:
-        answer = Strings.NotAnswer
     await message.answer(
-        text=f"{answer}\n\n{Strings.SourceURL} {confluence_url}",
-        reply_markup=tg.types.InlineKeyboardMarkup(inline_keyboard=[
-            [tg.types.InlineKeyboardButton(text="❤", callback_data=f"5 {question_answer_id}")],
-            [tg.types.InlineKeyboardButton(text="👎", callback_data=f"1 {question_answer_id}")]
-        ])
+        text=answer if len(answer) > 0 else Strings.NotAnswer,
+        reply_markup=tg.types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    tg.types.InlineKeyboardButton(
+                        text="👎", callback_data=f"1 {question_answer_id}"
+                    ),
+                    tg.types.InlineKeyboardButton(
+                        text="❤", callback_data=f"5 {question_answer_id}"
+                    ),
+                ]
+            ]
+        ),
     )
 
 
@@ -525,8 +512,6 @@ def launch_vk_bot():
 async def launch_telegram_bot():
     """Функция начала работы чат-бота Telegram"""
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     await dispatcher.start_polling(tg_bot)
 
 

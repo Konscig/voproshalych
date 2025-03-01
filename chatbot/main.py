@@ -138,7 +138,6 @@ async def tg_send_confluence_keyboard(message: tg.types.Message, question_types:
             ]
     )
 
-
     await message.answer(text=Strings.WhichInfoDoYouWant, reply_markup=inline_keyboard)
 
 
@@ -155,7 +154,7 @@ async def vk_handler(message: VKMessage):
     await vk_send_confluence_keyboard(message, question_types)
 
 
-dispatcher.message(tg.F.text.in_([Strings.ConfluenceButton]))
+@dispatcher.message(tg.F.text.in_([Strings.ConfluenceButton]))
 async def tg_handler(message: tg.types.Message):
     """Обработчик события (для чат-бота Telegram), при котором пользователь запрашивает
     справочную информацию

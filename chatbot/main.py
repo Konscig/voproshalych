@@ -5,6 +5,7 @@ import math
 from multiprocessing import Process
 from aiogram import filters
 from aiogram.exceptions import TelegramUnauthorizedError as TUerror
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 import aiogram as tg
 from aiohttp import web
 from sqlalchemy import create_engine
@@ -131,14 +132,15 @@ async def tg_send_confluence_keyboard(message: tg.types.Message, question_types:
         question_types (list): страницы или подстраницы из структуры пространства в вики-системе
     """
 
-    inline_keyboard = tg.types.InlineKeyboardMarkup(
-        inline_keyboard=[[tg.types.InlineKeyboardButton(
-            text=i["content"]["title"], callback_data=f"conf_id{i['content']['id']}")]
-            for i in question_types
-            ]
-    )
+    keyboard_builder = InlineKeyboardBuilder()
 
-    await message.answer(text=Strings.WhichInfoDoYouWant, reply_markup=inline_keyboard)
+    for item in question_types:
+        keyboard_builder.button(
+            text=item["content"]["title"],
+            callback_data=f"conf_id{item['content']['id']}"
+        )
+
+    await message.answer(text=Strings.WhichInfoDoYouWant, reply_markup=keyboard_builder.as_markup())
 
 
 @vk_bot.on.message(text=[Strings.ConfluenceButton])

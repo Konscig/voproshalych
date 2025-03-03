@@ -123,6 +123,9 @@ async def vk_send_confluence_keyboard(message: VKMessage, question_types: list):
         keyboard_message = "⠀"
 
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 async def tg_send_confluence_keyboard(message: tg.types.Message, question_types: list):
     """Создаёт inline-кнопки для чат-бота Telegram на основе справочной структуры
     пространства в вики-системе

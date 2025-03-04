@@ -591,10 +591,13 @@ async def send_holiday_greetings():
                     user_name,
                     holiday.name,
                 )
-                await vk_bot.api.messages.send(
-                    user_id=user_id, message=greeting, random_id=0
-                )
-                await asyncio.sleep(DELAY_BETWEEN_MESSAGES)
+                try:
+                    await vk_bot.api.messages.send(
+                        user_id=user_id, message=greeting, random_id=0
+                    )
+                    await asyncio.sleep(DELAY_BETWEEN_MESSAGES)
+                except Exception as e:
+                    logging.error(f"Ошибка отправки поздравления в VK: {e}")
 
     await asyncio.sleep(DELAY_BETWEEN_PLATFORMS)
 

@@ -42,8 +42,8 @@ class Config:
         """
 
     MISTRAL_GREETING_PROMPT = """Создай поздравление для пользователя.
-        Имя пользователя: {user_name}
-        Название праздника: {holiday_name}
+        Имя пользователя: "{user_name}"
+        Название праздника: "{holiday_name}"
 
         Шаблон:
         """
@@ -80,15 +80,16 @@ class Config:
     def get_greeting_prompt(
         cls, template: str, user_name: str, holiday_name: str
     ) -> dict:
-        """Создаёт payload с промптом для генерации поздравлений для Mistral API"""
+        """Создаёт payload с промптом для генерации поздравлений для Mistral API,
+        подставляя имя пользователя и название праздника в системное сообщение."""
+        prompt = cls.MISTRAL_GREETING_PROMPT.format(
+            user_name=user_name, holiday_name=holiday_name
+        )
         return {
             "model": cls.MISTRAL_MODEL,
             "messages": [
-                {"role": "system", "content": cls.MISTRAL_GREETING_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Имя пользователя: {user_name}\nНазвание праздника: {holiday_name}\n\n{template}",
-                },
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": template},
             ],
             "temperature": 0.7,
             "max_tokens": 200,

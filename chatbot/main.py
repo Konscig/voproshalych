@@ -4,7 +4,7 @@ import logging
 import math
 from multiprocessing import Process
 import aiogram as tg
-from aiohttp import web
+from aiohttp import web, ClientError
 from sqlalchemy import create_engine
 import vkbottle as vk
 from vkbottle.bot import Message as VKMessage
@@ -494,32 +494,46 @@ async def broadcast(request: web.Request) -> web.Response:
         )
 
 
-async def get_greeting(template: str, user_name: str, holiday_name: str) -> str:
-    """Генерация поздравления с использованием микросервиса.
+async def get_greeting(
+    template: str, user_name: str, holiday_name: str, retries=3
+) -> str:
+    """
+    Отправляет запрос к QA-сервису для генерации поздравления и возвращает полученный результат.
 
     Args:
-        template (str): Шаблон для LLM.
+        template (str): Шаблон поздравления.
         user_name (str): Имя пользователя.
         holiday_name (str): Название праздника.
+        retries (int, optional): Количество повторных попыток запроса. По умолчанию 3.
 
     Returns:
-        str: Сгенерированное поздравление.
+        str: Сгенерированное поздравление или пустая строка при ошибке.
     """
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            f"http://{Config.QA_HOST}/generate_greeting/",
-            json={
-                "template": template,
-                "user_name": user_name,
-                "holiday_name": holiday_name,
-            },
-        ) as response:
-            if response.status == 200:
-                resp = await response.json()
-                return resp["greeting"]
-            else:
-                logging.error(f"Ошибка {response.status}: {await response.text()}")
-                return ""
+    url = f"http://{Config.QA_HOST}/generate_greeting/"
+    data = {"template": template, "user_name": user_name, "holiday_name": holiday_name}
+
+    for attempt in range(retries):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=data) as resp:
+                    logging.info(f"Статус: {resp.status}")
+                    if resp.status == 200:
+                        resp_json = await resp.json()
+                        greeting = resp_json.get("greeting", "")
+                        logging.info(f"Получено: {greeting}")
+                        return greeting
+                    else:
+                        error_text = await resp.text()
+                        logging.error(f"Ошибка {resp.status}: {error_text}")
+        except ClientError as e:
+            logging.error(f"Попытка {attempt+1}: {e}")
+            if attempt < retries - 1:
+                await asyncio.sleep(2)
+        except Exception as e:
+            logging.exception(f"Ошибка: {e}")
+            break
+    logging.error("Поздравление не получено")
+    return ""
 
 
 async def get_vk_user_name(user_id: int) -> str:
@@ -565,6 +579,22 @@ async def get_vk_user_gender(user_id: int) -> str:
     return "unknown"
 
 
+async def send_vk_message(user_id: int, greeting: str, delay: int = 2):
+    try:
+        await vk_bot.api.messages.send(user_id=user_id, message=greeting, random_id=0)
+        await asyncio.sleep(delay)
+    except vk.VKAPIError as e:
+        logging.error(f"Ошибка отправки поздравления в VK для {user_id}: {e}")
+
+
+async def send_tg_message(user_id: int, greeting: str, delay: int = 2):
+    try:
+        await tg_bot.send_message(chat_id=user_id, text=greeting)
+        await asyncio.sleep(delay)
+    except Exception as e:
+        logging.error(f"Ошибка отправки поздравления в Telegram для {user_id}: {e}")
+
+
 async def send_holiday_greetings():
     """Отправляет поздравления пользователям VK и Telegram в праздничные дни."""
     holidays = get_today_holidays(engine)
@@ -572,6 +602,7 @@ async def send_holiday_greetings():
         return
 
     vk_users, tg_users = get_subscribed_users(engine)
+    logging.info(f"Subscribed Telegram users: {tg_users}")
 
     DELAY_BETWEEN_MESSAGES = 2
     DELAY_BETWEEN_PLATFORMS = 5
@@ -591,13 +622,7 @@ async def send_holiday_greetings():
                     user_name,
                     holiday.name,
                 )
-                try:
-                    await vk_bot.api.messages.send(
-                        user_id=user_id, message=greeting, random_id=0
-                    )
-                    await asyncio.sleep(DELAY_BETWEEN_MESSAGES)
-                except Exception as e:
-                    logging.error(f"Ошибка отправки поздравления в VK: {e}")
+                await send_vk_message(user_id, greeting, DELAY_BETWEEN_MESSAGES)
 
     await asyncio.sleep(DELAY_BETWEEN_PLATFORMS)
 
@@ -611,11 +636,7 @@ async def send_holiday_greetings():
                     user_name,
                     holiday.name,
                 )
-                try:
-                    await tg_bot.send_message(chat_id=user_id, text=greeting)
-                    await asyncio.sleep(DELAY_BETWEEN_MESSAGES)
-                except Exception as e:
-                    logging.error(f"Ошибка отправки поздравления в Telegram: {e}")
+                await send_tg_message(user_id, greeting, DELAY_BETWEEN_MESSAGES)
 
 
 async def check_and_send_greetings():

@@ -643,14 +643,13 @@ async def check_and_send_greetings():
     """Функция запуска модуля отправки поздравлений"""
     while True:
         now = datetime.now()
-        next_run = now.replace(hour=14, minute=0, second=0, microsecond=0)
+        next_run = now.replace(hour=13, minute=25, second=0, microsecond=0)
 
-        if now.hour >= 14:
+        if now.hour >= 13 and now.minute >= 25:
             await send_holiday_greetings()
             next_run = next_run + timedelta(days=1)
 
         await asyncio.sleep((next_run - now).total_seconds())
-        await send_holiday_greetings()
 
 
 def launch_vk_bot():

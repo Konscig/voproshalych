@@ -123,8 +123,6 @@ async def vk_send_confluence_keyboard(message: VKMessage, question_types: list):
         keyboard_message = "⠀"
 
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
 
 async def tg_send_confluence_keyboard(message: tg.types.Message, question_types: list):
     """Создаёт inline-кнопки для чат-бота Telegram на основе справочной структуры
@@ -134,21 +132,17 @@ async def tg_send_confluence_keyboard(message: tg.types.Message, question_types:
         message (tg.types.Message): сообщение пользователя
         question_types (list): страницы или подстраницы из структуры пространства в вики-системе
     """
-    logger.info("Создание клавиатуры для пользователя: %s", message.from_user.id)
-
     keyboard_builder = InlineKeyboardBuilder()
 
-    try:
-        for item in question_types:
-            keyboard_builder.button(
-                text=item["content"]["title"],
-                callback_data=f"conf_id{item['content']['id']}"
-            )
-        logger.info("Клавиатура успешно создана с %d кнопками", len(question_types))
+    for item in question_types:
+        keyboard_builder.button(
+            text=item["content"]["title"],
+            callback_data=f"conf_id{item['content']['id']}"
+        )
 
-        await message.answer(text=Strings.WhichInfoDoYouWant, reply_markup=keyboard_builder.as_markup())
-    except Exception as e:
-        logger.error("Ошибка при создании клавиатуры: %s", str(e), exc_info=True)
+    keyboard_builder.adjust(1)
+
+    await message.answer(text=Strings.WhichInfoDoYouWant, reply_markup=keyboard_builder.as_markup())
 
 
 @vk_bot.on.message(text=[Strings.ConfluenceButton])
@@ -172,16 +166,10 @@ async def tg_handler(message: tg.types.Message):
     Args:
         message (tg.types.Message): сообщение, отправленное пользователем при запросе справочной информации
     """
-    logger.info("Получено сообщение от пользователя: %s", message.text)
 
-    try:
-        question_types = make_markup_by_confluence()
-        logger.info("Получены типы вопросов: %s", question_types)
+    question_types = make_markup_by_confluence()
 
-        await tg_send_confluence_keyboard(message, question_types)
-    except Exception as e:
-        logger.error("Ошибка в обработчике tg_handler: %s", str(e), exc_info=True)
-
+    await tg_send_confluence_keyboard(message, question_types)
 
 
 

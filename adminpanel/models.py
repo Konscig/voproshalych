@@ -3,11 +3,13 @@ from typing import Optional, List
 from bcrypt import hashpw, gensalt, checkpw
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Text, func, and_
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 from cluster_analysis import mark_of_question
 from config import app
 from pandas import date_range
+
 db = SQLAlchemy(app)
 
 

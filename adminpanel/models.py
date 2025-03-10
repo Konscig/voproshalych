@@ -3,18 +3,6 @@ from typing import Optional, List
 from bcrypt import hashpw, gensalt, checkpw
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from sqlalchemy import (
-    BigInteger,
-    Integer,
-    Column,
-    DateTime,
-    ForeignKey,
-    Text,
-    Enum,
-    event,
-    func,
-    and_,
-)
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 from cluster_analysis import mark_of_question

@@ -8,8 +8,6 @@ from pgvector.sqlalchemy import Vector
 from cluster_analysis import mark_of_question
 from config import app
 from pandas import date_range
-from datetime import date, timedelta
-
 db = SQLAlchemy(app)
 
 

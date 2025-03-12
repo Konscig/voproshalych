@@ -643,13 +643,24 @@ async def check_and_send_greetings():
     """Функция запуска модуля отправки поздравлений"""
     while True:
         now = datetime.now()
-        next_run = now.replace(hour=13, minute=25, second=0, microsecond=0)
+        today_run_time = now.replace(hour=13, minute=25, second=0, microsecond=0)
+        if now >= today_run_time:
+            holidays = get_today_holidays(engine)
+            if holidays:
+                logging.info("Triggering holiday greetings send (late start).")
+                await send_holiday_greetings()
+            else:
+                logging.info("No holidays today. Skipping greetings for today.")
+            next_run = today_run_time + timedelta(days=1)
+        else:
+            logging.info(
+                f"Waiting for next run at {today_run_time.strftime('%H:%M:%S')}. Current time: {now.strftime('%H:%M:%S')}"
+            )
+            next_run = today_run_time
 
-        if now.hour >= 13 and now.minute >= 25:
-            await send_holiday_greetings()
-            next_run = next_run + timedelta(days=1)
-
-        await asyncio.sleep((next_run - now).total_seconds())
+        sleep_duration = (next_run - now).total_seconds()
+        logging.info(f"Sleeping for {sleep_duration} seconds until next schedule.")
+        await asyncio.sleep(sleep_duration)
 
 
 def launch_vk_bot():

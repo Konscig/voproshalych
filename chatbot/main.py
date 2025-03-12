@@ -80,13 +80,12 @@ def tg_keyboard_choice(notify_text: str) -> tg.types.ReplyKeyboardMarkup:
         tg.types.ReplyKeyboardMarkup: клавиатура с шаблонами сообщений
     """
 
-
     keyboard = tg.types.ReplyKeyboardMarkup(
         keyboard=[
             [tg.types.KeyboardButton(text=Strings.ConfluenceButton)],
-            [tg.types.KeyboardButton(text=(notify_text))]
+            [tg.types.KeyboardButton(text=(notify_text))],
         ],
-        resize_keyboard=True
+        resize_keyboard=True,
     )
     return keyboard
 
@@ -123,7 +122,6 @@ async def vk_send_confluence_keyboard(message: VKMessage, question_types: list):
         keyboard_message = "⠀"
 
 
-
 async def tg_send_confluence_keyboard(message: tg.types.Message, question_types: list):
     """Создаёт inline-кнопки для чат-бота Telegram на основе справочной структуры
     пространства в вики-системе
@@ -137,12 +135,14 @@ async def tg_send_confluence_keyboard(message: tg.types.Message, question_types:
     for item in question_types:
         keyboard_builder.button(
             text=item["content"]["title"],
-            callback_data=f"conf_id{item['content']['id']}"
+            callback_data=f"conf_id{item['content']['id']}",
         )
 
     keyboard_builder.adjust(1)
 
-    await message.answer(text=Strings.WhichInfoDoYouWant, reply_markup=keyboard_builder.as_markup())
+    await message.answer(
+        text=Strings.WhichInfoDoYouWant, reply_markup=keyboard_builder.as_markup()
+    )
 
 
 @vk_bot.on.message(text=[Strings.ConfluenceButton])
@@ -170,7 +170,6 @@ async def tg_handler(message: tg.types.Message):
     question_types = make_markup_by_confluence()
 
     await tg_send_confluence_keyboard(message, question_types)
-
 
 
 @vk_bot.on.message(
@@ -317,7 +316,6 @@ async def get_answer(question: str) -> tuple[str, str | None]:
                 return ("", None)
 
 
-
 @vk_bot.on.message()
 async def vk_answer(message: VKMessage):
     """Обработчик события (для чат-бота ВКонтакте), при котором пользователь задаёт
@@ -450,8 +448,14 @@ async def tg_answer(message: tg.types.Message):
 
     keyboard = tg.types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [tg.types.InlineKeyboardButton(text="👎", callback_data=f"1 {question_answer_id}"),
-             tg.types.InlineKeyboardButton(text="❤", callback_data=f"5 {question_answer_id}")]
+            [
+                tg.types.InlineKeyboardButton(
+                    text="👎", callback_data=f"1 {question_answer_id}"
+                ),
+                tg.types.InlineKeyboardButton(
+                    text="❤", callback_data=f"5 {question_answer_id}"
+                ),
+            ]
         ]
     )
     await message.answer(
@@ -521,8 +525,9 @@ async def launch_telegram_bot():
 
 
 def run_telegram_process():
-    """Start the Telegram bot in a new event loop in a separate process"""
+    """Запуск Telegram-бота в новом цикле событий в отдельном процессе"""
     asyncio.run(launch_telegram_bot())
+
 
 def run_web_app():
     """Функция запуска сервера для принятия запроса на рассылку"""

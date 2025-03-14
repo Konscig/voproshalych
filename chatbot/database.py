@@ -7,6 +7,8 @@ from sqlalchemy import (
     Engine,
     ForeignKey,
     Text,
+    Enum,
+    Integer,
     func,
     select,
     and_,
@@ -18,6 +20,7 @@ from sqlalchemy.orm import (
     mapped_column,
     relationship,
 )
+from datetime import timedelta, date
 
 Base = declarative_base()
 
@@ -80,6 +83,96 @@ class QuestionAnswer(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class HolidayTemplate(Base):
+    """Шаблон праздника
+
+    Args:
+        id (int): id шаблона.
+        name (str): название праздника.
+        type (str): тип праздника (fixed или floating).
+        template_llm (str): шаблон для LLM.
+        vk (bool): флаг для VK.
+        tg (bool): флаг для TG.
+        male_holiday (bool): флаг для мужского праздника.
+        female_holiday (bool): флаг для женского праздника.
+        month (int | None): месяц (для fixed).
+        day (int | None): день (для fixed).
+        week_number (int | None): номер недели (для floating).
+        day_of_week (int | None): день недели (для floating).
+        created_at (datetime): время создания модели.
+        updated_at (datetime): время обновления модели.
+    """
+
+    __tablename__ = "holiday_template"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text(), nullable=False)
+    type: Mapped[str] = mapped_column(Enum("fixed", "floating", name="holiday_types"))
+    template_llm: Mapped[str] = mapped_column(Text())
+    vk: Mapped[bool] = mapped_column()
+    tg: Mapped[bool] = mapped_column()
+    male_holiday: Mapped[bool] = mapped_column()
+    female_holiday: Mapped[bool] = mapped_column()
+    month: Mapped[Optional[int]] = mapped_column(Integer)
+    day: Mapped[Optional[int]] = mapped_column(Integer)
+    week_number: Mapped[Optional[int]] = mapped_column(Integer)
+    day_of_week: Mapped[Optional[int]] = mapped_column(Integer)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __mapper_args__ = {"polymorphic_on": type, "polymorphic_identity": "base"}
+
+    @property
+    def current_year_date(self) -> date:
+        return self.calculate_for_year(date.today().year)
+
+    def calculate_for_year(self, year: int) -> date:
+        raise NotImplementedError()
+
+
+class FixedHoliday(HolidayTemplate):
+    """Фиксированный праздник.
+
+    Наследует все атрибуты и методы от HolidayTemplate.
+    """
+
+    __mapper_args__ = {"polymorphic_identity": "fixed"}
+
+    def calculate_for_year(self, year) -> date:
+        if self.month is None or self.day is None:
+            raise ValueError("Month and day must be set for FixedHoliday")
+        return date(year, self.month, self.day)
+
+
+class FloatingHoliday(HolidayTemplate):
+    """Плавающий праздник.
+
+    Наследует все атрибуты и методы от HolidayTemplate.
+    """
+
+    __mapper_args__ = {"polymorphic_identity": "floating"}
+
+    def calculate_for_year(self, year: int) -> date:
+        if self.month is None or self.day_of_week is None or self.week_number is None:
+            raise ValueError(
+                "Month, day_of_week, and week_number must be set for FloatingHoliday"
+            )
+
+        first_day = date(year, self.month, 1)
+        offset = (self.day_of_week - first_day.weekday()) % 7
+        first_occurrence = first_day + timedelta(days=offset)
+
+        if self.week_number == 5:
+            next_month = first_day.replace(day=28) + timedelta(days=4)
+            last_day = next_month - timedelta(days=next_month.day)
+            return last_day - timedelta(
+                days=(last_day.weekday() - self.day_of_week) % 7
+            )
+
+        return first_occurrence + timedelta(weeks=self.week_number - 1)
 
 
 def add_user(
@@ -281,3 +374,30 @@ def get_subscribed_users(engine: Engine) -> tuple[list[int | None], list[int | N
             ).scalars()
         ]
     return vk_users, tg_users
+
+
+def get_today_holidays(engine: Engine) -> List[HolidayTemplate]:
+    """Получает список праздников на сегодня.
+
+    Args:
+        engine (Engine): подключение к БД
+
+    Returns:
+        List[HolidayTemplate]: список праздников
+    """
+    with Session(engine) as session:
+        today = date.today()
+        holidays = []
+
+        fixed_holidays = session.query(FixedHoliday).all()
+        floating_holidays = session.query(FloatingHoliday).all()
+
+        for holiday in fixed_holidays:
+            if holiday.calculate_for_year(today.year) == today:
+                holidays.append(holiday)
+
+        for holiday in floating_holidays:
+            if holiday.calculate_for_year(today.year) == today:
+                holidays.append(holiday)
+
+        return holidays

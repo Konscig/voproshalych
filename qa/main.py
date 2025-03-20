@@ -1,6 +1,7 @@
 from contextlib import redirect_stderr
 import io
 import logging
+import numpy as np
 from aiohttp import web
 import requests
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -8,7 +9,7 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from config import Config
-from database import Chunk
+from database import Chunk, set_embedding, get_answer_by_id, get_the_highest_question
 from confluence_retrieving import get_chunk, reindex_confluence
 
 routes = web.RouteTableDef()
@@ -29,13 +30,7 @@ def get_answer(context: str, question: str) -> str:
     try:
         headers = Config.get_mistral_headers()
         prompt = Config.get_default_prompt(context, question)
-
-        logging.info(f"Запрос к Mistral API: {prompt}")
-
         response = requests.post(Config.MISTRAL_API_URL, json=prompt, headers=headers)
-
-        logging.info(f"Ответ Mistral API: {response.status_code} {response.text}")
-
         if response.status_code == 200:
             data = response.json()
             return (
@@ -52,6 +47,24 @@ def get_answer(context: str, question: str) -> str:
         return ""
 
 
+@routes.post("/answer_embed/")
+async def set_answer_embedding(
+    request: web.Request, encoder_model: SentenceTransformer
+):
+    qa_id = (await request.json())["answer_id"]
+    answer_text = get_answer_by_id(engine=engine, question_answer_id=qa_id)
+    if not answer_text:
+        return
+    embedding = encoder_model.encode(answer_text)
+    set_embedding(engine=engine, question_answer_id=qa_id, embed=embedding)
+
+
+async def find_similar_question(encoder_model: SentenceTransformer, question: str):
+    answer = get_the_highest_question(
+        engine=engine, encoder_model=encoder_model, question=question
+    )
+
+
 @routes.post("/qa/")
 async def qa(request: web.Request) -> web.Response:
     """Возвращает ответ на вопрос пользователя и ссылку на источник
@@ -64,6 +77,7 @@ async def qa(request: web.Request) -> web.Response:
     """
 
     question = (await request.json())["question"]
+    # сюда обработку вопроса
     chunk = get_chunk(engine=engine, encoder_model=encoder_model, question=question)
     if chunk is None:
         return web.Response(text="Chunk not found", status=404)

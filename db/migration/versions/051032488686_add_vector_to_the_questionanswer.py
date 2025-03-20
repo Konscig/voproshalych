@@ -22,13 +22,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Создаем временную таблицу с автоинкрементом для id
     op.create_table(
         "question_answer_temp",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("question", sa.Text(), nullable=False),
-        sa.Column(
-            "embedding", Vector(1024)
-        ),  # Добавляем embedding сразу после question
+        sa.Column("embedding", Vector(1024)),
         sa.Column("answer", sa.Text(), nullable=True),
         sa.Column("confluence_url", sa.Text(), nullable=True),
         sa.Column("score", sa.Integer(), nullable=True),
@@ -44,16 +43,26 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
 
+    # Копируем данные из старой таблицы во временную (без указания id)
     op.execute(
         """
-        INSERT INTO question_answer_temp (id, question, answer, confluence_url, score, user_id, created_at, updated_at)
-        SELECT id, question, answer, confluence_url, score, user_id, created_at, updated_at FROM question_answer
-    """
+        INSERT INTO question_answer_temp (question, embedding, answer, confluence_url, score, user_id, created_at, updated_at)
+        SELECT question, NULL, answer, confluence_url, score, user_id, created_at, updated_at FROM question_answer;
+        """
     )
 
+    # Удаляем старую таблицу
     op.drop_table("question_answer")
 
+    # Переименовываем временную таблицу в question_answer
     op.rename_table("question_answer_temp", "question_answer")
+
+    # Восстанавливаем значение последовательности на максимальный id из таблицы
+    op.execute(
+        """
+        SELECT setval('question_answer_id_seq', (SELECT max(id) FROM question_answer), true);
+        """
+    )
 
 
 def downgrade() -> None:

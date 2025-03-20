@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, List
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Column,

@@ -34,20 +34,20 @@ def upgrade() -> None:
         sa.Column("score", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column(
-            "time_created",
+            "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=True,
         ),
-        sa.Column("time_updated", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
 
     op.execute(
         """
-        INSERT INTO question_answer_temp (id, question, answer, confluence_url, score, user_id, time_created, time_updated)
-        SELECT id, question, answer, confluence_url, score, user_id, time_created, time_updated FROM question_answer
+        INSERT INTO question_answer_temp (id, question, answer, confluence_url, score, user_id, created_at, updated_at)
+        SELECT id, question, answer, confluence_url, score, user_id, created_at, updated_at FROM question_answer
     """
     )
 
@@ -66,20 +66,20 @@ def downgrade() -> None:
         sa.Column("score", sa.Integer(), nullable=True),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column(
-            "time_created",
+            "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=True,
         ),
-        sa.Column("time_updated", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
 
     op.execute(
         """
-        INSERT INTO question_answer_old (id, question, answer, confluence_url, score, user_id, time_created, time_updated)
-        SELECT id, question, answer, confluence_url, score, user_id, time_created, time_updated FROM question_answer
+        INSERT INTO question_answer_old (id, question, answer, confluence_url, score, user_id, created_at, updated_at)
+        SELECT id, question, answer, confluence_url, score, user_id, created_at, updated_at FROM question_answer
     """
     )
 

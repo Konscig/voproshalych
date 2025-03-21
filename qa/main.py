@@ -80,7 +80,7 @@ async def qa(request: web.Request) -> web.Response:
 
 @routes.post("/generate_greeting/")
 async def generate_greeting(request: web.Request) -> web.Response:
-    """Генерация поздравления с использованием LLM.
+    """Генерирует поздравления с использованием LLM.
 
     Args:
         request (web.Request): запрос, содержащий `template`, `user_name`, `holiday_name`

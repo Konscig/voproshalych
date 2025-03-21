@@ -9,7 +9,7 @@ from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from config import Config
-from database import Chunk, set_embedding, get_answer_by_id, get_the_highest_question
+from database import Chunk, set_embedding, get_answer_by_id, get_all_questions_with_high
 from confluence_retrieving import get_chunk, reindex_confluence
 
 routes = web.RouteTableDef()
@@ -48,36 +48,80 @@ def get_answer(context: str, question: str) -> str:
 
 
 @routes.post("/answer_embed/")
-async def set_answer_embedding(
-    request: web.Request, encoder_model: SentenceTransformer
-):
+async def set_question_embedding(request: web.Request):
+    """Задает векторное представление вопросу
+
+    Args:
+        request (web.Request): запрос, содержащий текст вопроса
+
+    Returns:
+        web.Response: результат векторизации
+    """
     qa_id = (await request.json())["answer_id"]
     answer_text = get_answer_by_id(engine=engine, question_answer_id=qa_id)
     if not answer_text:
-        return
+        return web.json_response({"error": "Answer not found"}, status=404)
     embedding = encoder_model.encode(answer_text)
     set_embedding(engine=engine, question_answer_id=qa_id, embed=embedding)
+    return web.json_response({"message": "Embedding set successfully"}, status=200)
 
 
-async def find_similar_question(encoder_model: SentenceTransformer, question: str):
-    answer = get_the_highest_question(
-        engine=engine, encoder_model=encoder_model, question=question
-    )
+async def find_similar_question(
+    encoder_model: SentenceTransformer, question: str
+) -> tuple[str, str] | None:
+    """Ищет самый похожий вопрос с оценкой 5 и возвращает его ответ и URL источника
+
+    Args:
+        encoder_model (SentenceTransformer): модель получения векторных представлений SentenceTransformer
+        question (str): текст заданного вопроса
+
+    Returns:
+        tuple[str, str] | None: кортеж, содержащий наиболее близкий ответ и ссылку на документ в Confluence, иначе None.
+    """
+
+    questions = get_all_questions_with_high(engine=engine)
+    question_embedding = encoder_model.encode(question)
+
+    best_match = None
+    best_cosine_distance = float("inf")
+    best_qa_id = None
+
+    for q in questions:
+        qa_id, answer_text, embedding, url = (
+            q["id"],
+            q["answer"],
+            q["embedding"],
+            q["url"],
+        )
+
+        if embedding is None:
+            continue
+
+        cosine_distance = 1 - np.dot(question_embedding, embedding) / (
+            np.linalg.norm(question_embedding) * np.linalg.norm(embedding)
+        )
+
+        if cosine_distance < best_cosine_distance:
+            best_cosine_distance = cosine_distance
+            best_match = answer_text
+            best_qa_id = int(qa_id)
+            best_qa_url = url
+    if best_cosine_distance < 0.8 and best_match and best_qa_id and best_qa_url:
+        url = best_qa_url
+        return best_match, url or ""
+
+    return None
 
 
 @routes.post("/qa/")
 async def qa(request: web.Request) -> web.Response:
-    """Возвращает ответ на вопрос пользователя и ссылку на источник
-
-    Args:
-        request (web.Request): запрос, содержащий `question`
-
-    Returns:
-        web.Response: ответ
-    """
-
-    question = (await request.json())["question"]
-    # сюда обработку вопроса
+    """Возвращает ответ на вопрос пользователя и ссылку на источник"""
+    data = await request.json()
+    question = data.get("question")
+    result = await find_similar_question(encoder_model=encoder_model, question=question)
+    if result:
+        db_answer, url = result
+        return web.json_response({"answer": db_answer, "confluence_url": url})
     chunk = get_chunk(engine=engine, encoder_model=encoder_model, question=question)
     if chunk is None:
         return web.Response(text="Chunk not found", status=404)
@@ -85,7 +129,7 @@ async def qa(request: web.Request) -> web.Response:
     with redirect_stderr(alt_stream):
         answer = get_answer(chunk.text, question)
     warnings = alt_stream.getvalue()
-    if len(warnings) > 0:
+    if warnings:
         logging.warning(warnings)
     if "stopped" in warnings or "ответ не найден" in answer.lower():
         return web.Response(text="Answer not found", status=404)

@@ -1,6 +1,6 @@
 import numpy as np
 from pgvector.sqlalchemy import Vector
-from typing import Optional, List
+from typing import Optional, List, TypedDict
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import (
     Text,
@@ -109,6 +109,15 @@ class QuestionAnswer(Base):
 
 
 def get_answer_by_id(engine: Engine, question_answer_id: int):
+    """Получает ответ по id QuestionAnswer
+
+    Args:
+        engine (Engine): текущее подключение к БД
+        question_answer_id (int): идентификатор QuestionAnswer
+
+    Returns:
+        str: текст ответа на вопрос
+    """
     with Session(engine) as session:
         answer = (
             session.execute(
@@ -123,6 +132,16 @@ def get_answer_by_id(engine: Engine, question_answer_id: int):
 
 
 def set_embedding(engine: Engine, question_answer_id: int, embed):
+    """Задает векторное представление вопросу в БД
+    Args:
+        engine (Engine): текущее подключение к БД
+        question_answer_id (int): идентификатор QuestionAnswer
+        embed (Embedding): векторное представление вопроса
+
+    Raises:
+        ValueError: в случае не нахождения QuestionAnswer
+        e: SQL error
+    """
     with Session(engine) as session:
         try:
             with session.begin():
@@ -140,21 +159,42 @@ def set_embedding(engine: Engine, question_answer_id: int, embed):
             raise e
 
 
-def get_the_highest_question(
-    engine: Engine, encoder_model: SentenceTransformer, question: str
-) -> str:
-    question_embedding = encoder_model.encode(question)
+class QuestionDict(TypedDict):
+    """Класс вопроса с векторным представлением"""
 
+    id: int
+    answer: str
+    embedding: np.ndarray
+    url: str
+
+
+def get_all_questions_with_high(engine: Engine) -> List[QuestionDict]:
+    """Получает все вопросы с оценкой "отлично"
+
+    Args:
+        engine (Engine): текущее подключение к БД
+
+    Returns:
+        List[QuestionDict]: Список QuestionDict с id вопроса, его ответом, векторным представлением и ссылкой на Confluence
+    """
     with Session(engine) as session:
-        result = session.execute(
-            select(QuestionAnswer.answer)
-            .order_by(
-                QuestionAnswer.embedding.cosine_distance(Vector(question_embedding))
-            )
-            .where(QuestionAnswer.score == 5)
-            .limit(1)
-        ).first()
-    if result:
-        answer = str(result[0])
+        question_answers = session.execute(
+            select(
+                QuestionAnswer.id,
+                QuestionAnswer.answer,
+                QuestionAnswer.embedding,
+                QuestionAnswer.confluence_url,
+            ).where(QuestionAnswer.score == 5)
+        ).all()
 
-    return answer
+    result: List[QuestionDict] = [
+        {
+            "id": int(qa_id),
+            "answer": str(answer_text),
+            "embedding": np.array(embedding) if embedding is not None else np.array([]),
+            "url": str(url),
+        }
+        for qa_id, answer_text, embedding, url in question_answers
+    ]
+
+    return result

@@ -115,7 +115,14 @@ async def find_similar_question(
 
 @routes.post("/qa/")
 async def qa(request: web.Request) -> web.Response:
-    """Возвращает ответ на вопрос пользователя и ссылку на источник"""
+    """Возвращает ответ на вопрос пользователя и ссылку на источник
+
+    Args:
+        request (web.Request): запрос
+
+    Returns:
+        web.Response: ответ
+    """
     data = await request.json()
     question = data.get("question")
     result = await find_similar_question(encoder_model=encoder_model, question=question)

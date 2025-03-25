@@ -27,6 +27,8 @@ from database import (
     rate_answer,
     get_subscribed_users,
     get_today_holidays,
+    get_history_of_chat,
+    filter_chat_history,
 )
 from strings import Strings
 from datetime import datetime, timedelta

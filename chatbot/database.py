@@ -437,3 +437,30 @@ def get_history_of_chat(
 
     result = full_pairs + unanswered
     return result
+
+
+def filter_chat_history(history: List[QuestionAnswer]) -> List[QuestionAnswer]:
+    """Фильтрует историю чата, оставляя:
+    - Все пары вопрос-ответ
+    - Неотвеченные вопросы, которые появились после последнего ответа.
+
+    Args:
+        history (List[QuestionAnswer]): Список вопросов и ответов из get_history_of_chat.
+
+    Returns:
+        List[QuestionAnswer]: Отфильтрованная история.
+    """
+    if not history:
+        return []
+
+    pairs = [qa for qa in history if qa.answer is not None]
+    unanswered = [qa for qa in history if qa.answer is None]
+
+    if not pairs:
+        return unanswered
+
+    last_answer_time = max(qa.created_at for qa in pairs)
+
+    filtered_unanswered = [qa for qa in unanswered if qa.created_at > last_answer_time]
+
+    return pairs + filtered_unanswered

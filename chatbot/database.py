@@ -406,7 +406,17 @@ def get_today_holidays(engine: Engine) -> List[HolidayTemplate]:
 def get_history_of_chat(
     user: User, session: Session, time: int = 30, limit_pairs: int = 5
 ) -> List[QuestionAnswer]:
-    """Получает историю чата с пользователем за последние время"""
+    """Получает историю чата с пользователем за последние время
+
+    Args:
+        user (User): пользователь, для которого получаем историю чата
+        session (Session): сессия базы данных
+        time (int): время в минутах, за которое получаем историю чата
+        limit_pairs (int): максимальное количество пар вопросов-ответов
+
+    Returns:
+       List[QuestionAnswer]: список пар вопросов-ответов и вопросов без ответов
+    """
     now = datetime.now()
     cutoff_time = now - timedelta(minutes=time)
 
@@ -420,21 +430,10 @@ def get_history_of_chat(
     )
 
     full_pairs = [qa for qa in recent_qa if qa.answer is not None]
-
     if len(full_pairs) > limit_pairs:
         full_pairs = full_pairs[-limit_pairs:]
 
-    last_full_time = full_pairs[-1].created_at if full_pairs else None
-
-    if last_full_time is not None:
-        unanswered = [
-            qa
-            for qa in recent_qa
-            if qa.answer is None and qa.created_at > last_full_time
-        ]
-    else:
-        unanswered = [qa for qa in recent_qa if qa.answer is None]
+    unanswered = [qa for qa in recent_qa if qa.answer is None]
 
     result = full_pairs + unanswered
-
     return result

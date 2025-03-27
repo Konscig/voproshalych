@@ -298,7 +298,7 @@ async def tg_subscribe(message: tg.types.Message):
         )
 
 
-async def get_answer(question: str) -> tuple[str, str | None]:
+async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
     """Получение ответа на вопрос с использованием микросервиса
 
     Args:
@@ -307,11 +307,21 @@ async def get_answer(question: str) -> tuple[str, str | None]:
     Returns:
         tuple[str, str | None]: ответ на вопрос и ссылка на страницу в вики-системе
     """
-
+    chat_history = get_history_of_chat(engine, user_id)
+    answered_pairs, recent_unanswered = filter_chat_history(chat_history)
+    unanswered_texts = [qa.question.strip().lower() for qa in recent_unanswered]
     question = question.strip().lower()
+    combined_question = " ".join(unanswered_texts + [question.strip().lower()])
+
+    dialog_context = []
+    for qa in answered_pairs:
+        dialog_context.append(f"Q: {qa.question}")
+        dialog_context.append(f"A: {qa.answer}")
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"http://{Config.QA_HOST}/qa/", json={"question": question}
+            f"http://{Config.QA_HOST}/qa/",
+            json={"question": combined_question, "dialog_context": dialog_context},
         ) as response:
             if response.status == 200:
                 resp = await response.json()
@@ -354,7 +364,7 @@ async def vk_answer(message: VKMessage):
         await message.answer(message=Strings.SpamWarning, random_id=0)
         return
     processing = await message.answer(message=Strings.TryFindAnswer, random_id=0)
-    answer, confluence_url = await get_answer(message.text)
+    answer, confluence_url = await get_answer(message.text, user_id=user_id)
     question_answer_id = add_question_answer(
         engine, message.text, answer, confluence_url, user_id
     )
@@ -439,7 +449,7 @@ async def tg_answer(message: tg.types.Message):
         await message.answer(text=Strings.SpamWarning)
         return
     processing = await message.answer(Strings.TryFindAnswer)
-    answer, confluence_url = await get_answer(message.text)
+    answer, confluence_url = await get_answer(message.text, user_id=user_id)
     question_answer_id = add_question_answer(
         engine, message.text, answer, confluence_url, user_id
     )

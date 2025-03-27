@@ -404,7 +404,7 @@ def get_today_holidays(engine: Engine) -> List[HolidayTemplate]:
 
 
 def get_history_of_chat(
-    user: User, session: Session, time: int = 30, limit_pairs: int = 5
+    engine: Engine, user_id: int, time: int = 30, limit_pairs: int = 5
 ) -> List[QuestionAnswer]:
     """Получает историю чата с пользователем за последние время
 
@@ -417,26 +417,32 @@ def get_history_of_chat(
     Returns:
        List[QuestionAnswer]: список пар вопросов-ответов и вопросов без ответов
     """
-    now = datetime.now()
-    cutoff_time = now - timedelta(minutes=time)
+    with Session(engine) as session:
+        user = session.query(User).get(user_id)
+        if not user:
+            return []
 
-    recent_qa = (
-        session.query(QuestionAnswer)
-        .filter(
-            QuestionAnswer.user_id == user.id, QuestionAnswer.created_at >= cutoff_time
+        now = datetime.now()
+        cutoff_time = now - timedelta(minutes=time)
+
+        recent_qa = (
+            session.query(QuestionAnswer)
+            .filter(
+                QuestionAnswer.user_id == user.id,
+                QuestionAnswer.created_at >= cutoff_time,
+            )
+            .order_by(QuestionAnswer.created_at.asc())
+            .all()
         )
-        .order_by(QuestionAnswer.created_at.asc())
-        .all()
-    )
 
-    full_pairs = [qa for qa in recent_qa if qa.answer is not None]
-    if len(full_pairs) > limit_pairs:
-        full_pairs = full_pairs[-limit_pairs:]
+        full_pairs = [qa for qa in recent_qa if qa.answer is not None]
+        if len(full_pairs) > limit_pairs:
+            full_pairs = full_pairs[-limit_pairs:]
 
-    unanswered = [qa for qa in recent_qa if qa.answer is None]
+        unanswered = [qa for qa in recent_qa if qa.answer is None]
 
-    result = full_pairs + unanswered
-    return result
+        result = full_pairs + unanswered
+        return result
 
 
 def filter_chat_history(
@@ -454,7 +460,7 @@ def filter_chat_history(
         (отвеченные_пары, актуальные_неотвеченные)
     """
     if not history:
-        return []
+        return [], []
 
     pairs = [qa for qa in history if qa.answer is not None]
     unanswered = [qa for qa in history if qa.answer is None]
@@ -463,7 +469,6 @@ def filter_chat_history(
         return [], unanswered
 
     last_answer_time = max(qa.created_at for qa in pairs)
-
     filtered_unanswered = [qa for qa in unanswered if qa.created_at > last_answer_time]
 
     return pairs, filtered_unanswered

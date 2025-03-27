@@ -24,11 +24,18 @@ encoder_model = SentenceTransformer(
 )
 
 
-def get_answer(context: str, question: str) -> str:
+def get_answer(
+    dialog_history: list, knowledge_base: str, combined_question: str
+) -> str:
     """Отправляет запрос к LLM и возвращает ответ."""
     try:
+        history_text = "\n".join(dialog_history)
         headers = Config.get_mistral_headers()
-        prompt = Config.get_default_prompt(context, question)
+        prompt = Config.get_default_prompt(
+            dialog_history=history_text,
+            knowledge_base=knowledge_base,
+            combined_question=combined_question,
+        )
 
         logging.info(f"Запрос к Mistral API: {prompt}")
 
@@ -62,14 +69,24 @@ async def qa(request: web.Request) -> web.Response:
     Returns:
         web.Response: ответ
     """
+    data = await request.json()
+    combined_question = data.get("question", "")
+    dialog_context = data.get("dialog_context", [])
 
-    question = (await request.json())["question"]
-    chunk = get_chunk(engine=engine, encoder_model=encoder_model, question=question)
+    chunk = get_chunk(
+        engine=engine, encoder_model=encoder_model, question=combined_question
+    )
+
     if chunk is None:
         return web.Response(text="Chunk not found", status=404)
+
     alt_stream = io.StringIO()
     with redirect_stderr(alt_stream):
-        answer = get_answer(chunk.text, question)
+        answer = get_answer(
+            knowledge_base=chunk.text,
+            dialog_history=dialog_context,
+            combined_question=combined_question,
+        )
     warnings = alt_stream.getvalue()
     if len(warnings) > 0:
         logging.warning(warnings)

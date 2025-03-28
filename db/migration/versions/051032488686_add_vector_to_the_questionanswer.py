@@ -57,10 +57,25 @@ def upgrade() -> None:
     # Переименовываем временную таблицу в question_answer
     op.rename_table("question_answer_temp", "question_answer")
 
-    # Восстанавливаем значение последовательности на максимальный id из таблицы
+    # Проверяем, существует ли последовательность, и создаем, если нет
     op.execute(
         """
-        SELECT setval('question_answer_id_seq', (SELECT max(id) FROM question_answer), true);
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'question_answer_id_seq') THEN
+                CREATE SEQUENCE question_answer_id_seq;
+            END IF;
+        END $$;
+        """
+    )
+
+    # Связываем последовательность с id
+    op.execute("ALTER SEQUENCE question_answer_id_seq OWNED BY question_answer.id;")
+
+    # Устанавливаем правильное значение для последовательности
+    op.execute(
+        """
+        SELECT setval('question_answer_id_seq', COALESCE((SELECT max(id) FROM question_answer), 1), false);
         """
     )
 

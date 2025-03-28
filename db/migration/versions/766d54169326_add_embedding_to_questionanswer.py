@@ -1,8 +1,9 @@
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
-from qa.database import QuestionAnswer, Session
-from qa.main import encoder_model, engine
+import requests
+from os import environ
+from dotenv import load_dotenv
 
 
 # revision identifiers, used by Alembic.
@@ -11,17 +12,30 @@ down_revision: Union[str, None] = "051032488686"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+load_dotenv(dotenv_path="../../../.env")
+
 
 def upgrade() -> None:
-    with op.batch_alter_table("question_answer") as batch_op:
-        batch_op.add_column(sa.Column("embedding", sa.LargeBinary, nullable=True))
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            """
+        SELECT id FROM question_answer WHERE score = 5
+    """
+        )
+    )
 
-    with Session(engine) as session:
-        for row in session.query(QuestionAnswer).all():
-            row.embedding = encoder_model.encode(row.question)
-        session.commit()
+    for row in result.fetchall():
+        qa_id = row.id
+        try:
+            response = requests.post(
+                f"http://{environ.get('QA_HOST')}/answer_embed/",
+                json={"answer_id": qa_id},
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            print(f"Failed to set embedding for answer {qa_id}: {e}")
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("question_answer") as batch_op:
-        batch_op.drop_column("embedding")
+    op.execute(sa.text("UPDATE question_answer SET embedding = NULL WHERE score = 5"))

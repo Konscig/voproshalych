@@ -85,6 +85,7 @@ async def find_similar_question(
     best_match = None
     best_cosine_distance = float("inf")
     best_qa_id = None
+    best_qa_url = None
 
     for q in questions:
         qa_id, answer_text, embedding, url = (
@@ -94,7 +95,15 @@ async def find_similar_question(
             q["url"],
         )
 
-        if embedding is None:
+        if embedding is None or len(embedding) == 0:
+            print(f"Skipping empty embedding for QA ID {qa_id}")
+            continue
+
+        # Проверка на размерности векторов
+        if question_embedding.shape[0] != embedding.shape[0]:
+            print(
+                f"Shape mismatch: question {question_embedding.shape}, embedding {embedding.shape}"
+            )
             continue
 
         cosine_distance = 1 - np.dot(question_embedding, embedding) / (
@@ -106,9 +115,9 @@ async def find_similar_question(
             best_match = answer_text
             best_qa_id = int(qa_id)
             best_qa_url = url
+
     if best_cosine_distance < 0.8 and best_match and best_qa_id and best_qa_url:
-        url = best_qa_url
-        return best_match, url or ""
+        return best_match, best_qa_url
 
     return None
 

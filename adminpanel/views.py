@@ -182,3 +182,27 @@ def reindex_qa():
     """
     requests.post(f"http://{app.config['QA_HOST']}/reindex/", timeout=600)
     return redirect(url_for("settings"))
+
+
+@app.route('/analyze_no_docs')
+@login_required
+def analyze_no_docs() -> str:
+    """ Функция выводящая вопросы без документов
+
+    Returns:
+        str: отрендеренная веб-страница с POST-запросом на базу данных
+    """
+    time_start = request.args.get("time_start", "2024-01-01")
+    time_end = request.args.get("time_end", "2024-12-31")
+
+    clusters = []
+
+    return render_template(
+        "analyze_no_docs.html",
+        page_title="Вопросы без документов",
+        time_start=time_start,
+        time_end=time_end,
+        questions_len=len(clusters),
+        clusters_len=len(clusters),
+        clusters=clusters
+    )

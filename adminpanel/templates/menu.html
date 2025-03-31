@@ -32,6 +32,9 @@
                         <div class="text-center mb-4 {{ 'bg-orange' if page_title == 'Анализ вопросов' }}">
                             <a href="{{ url_for('questions_analysis') }}" class="link-light text-end fs-2 fst-italic text-decoration-none unselectable">Анализ вопросов</a>
                         </div>
+                        <div class="text-center mb-4 {{ 'bg-orange' if page_title == 'Вопросы без документов' }}">
+                            <a href="{{ url_for('analyze_no_docs')}}" class="link-light text-end fs-2 fst-italic text-decoration-none unselectable">Вопросы без документов</a>
+                        </div>
                         <div class="text-center mb-4 {{ 'bg-orange' if page_title == 'Рассылка' }}">
                             <a href="{{ url_for('broadcast') }}" class="link-light text-end fs-2 fst-italic text-decoration-none unselectable">Рассылка</a>
                         </div>

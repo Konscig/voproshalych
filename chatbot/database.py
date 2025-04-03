@@ -7,6 +7,7 @@ from sqlalchemy import (
     Engine,
     ForeignKey,
     Text,
+    Boolean,
     Enum,
     Integer,
     func,
@@ -68,6 +69,7 @@ class QuestionAnswer(Base):
         user (User): пользователь, задавший вопрос
         created_at (datetime): время создания модели
         updated_at (datetime): время обновления модели
+        stop_point (bool): флаг, указывающий что это конечная точка диалога (True - диалог завершен, False - продолжается, по умолчанию False)
     """
 
     __tablename__ = "question_answer"
@@ -83,6 +85,7 @@ class QuestionAnswer(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    stop_point: Mapped[bool] = mapped_column(Boolean(), default=False)
 
 
 class HolidayTemplate(Base):

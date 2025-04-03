@@ -311,17 +311,19 @@ async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
     answered_pairs, recent_unanswered = filter_chat_history(chat_history)
     unanswered_texts = [qa.question.strip().lower() for qa in recent_unanswered]
     question = question.strip().lower()
-    combined_question = " ".join(unanswered_texts + [question.strip().lower()])
 
     dialog_context = []
     for qa in answered_pairs:
         dialog_context.append(f"Q: {qa.question}")
         dialog_context.append(f"A: {qa.answer}")
 
+    for unanswered_question in recent_unanswered:
+        dialog_context.append(f"Q: {unanswered_question.question}")
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f"http://{Config.QA_HOST}/qa/",
-            json={"question": combined_question, "dialog_context": dialog_context},
+            json={"question": question, "dialog_context": dialog_context},
         ) as response:
             if response.status == 200:
                 resp = await response.json()

@@ -24,9 +24,7 @@ encoder_model = SentenceTransformer(
 )
 
 
-def get_answer(
-    dialog_history: list, knowledge_base: str, combined_question: str
-) -> str:
+def get_answer(dialog_history: list, knowledge_base: str, question: str) -> str:
     """Отправляет запрос к LLM и возвращает ответ."""
     try:
         history_text = "\n".join(dialog_history)
@@ -34,7 +32,7 @@ def get_answer(
         prompt = Config.get_default_prompt(
             dialog_history=history_text,
             knowledge_base=knowledge_base,
-            combined_question=combined_question,
+            question=question,
         )
 
         logging.info(f"Запрос к Mistral API: {prompt}")
@@ -70,12 +68,10 @@ async def qa(request: web.Request) -> web.Response:
         web.Response: ответ
     """
     data = await request.json()
-    combined_question = data.get("question", "")
+    question = data.get("question", "")
     dialog_context = data.get("dialog_context", [])
 
-    chunk = get_chunk(
-        engine=engine, encoder_model=encoder_model, question=combined_question
-    )
+    chunk = get_chunk(engine=engine, encoder_model=encoder_model, question=question)
 
     if chunk is None:
         return web.Response(text="Chunk not found", status=404)
@@ -85,7 +81,7 @@ async def qa(request: web.Request) -> web.Response:
         answer = get_answer(
             knowledge_base=chunk.text,
             dialog_history=dialog_context,
-            combined_question=combined_question,
+            question=question,
         )
     warnings = alt_stream.getvalue()
     if len(warnings) > 0:

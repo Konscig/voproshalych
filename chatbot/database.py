@@ -435,11 +435,11 @@ def get_history_of_chat(
             .all()
         )
 
-        full_pairs = [qa for qa in recent_qa if qa.answer is not None]
+        full_pairs = [qa for qa in recent_qa if qa.answer != ""]
         if len(full_pairs) > limit_pairs:
             full_pairs = full_pairs[-limit_pairs:]
 
-        unanswered = [qa for qa in recent_qa if qa.answer is None]
+        unanswered = [qa for qa in recent_qa if qa.answer == ""]
 
         result = full_pairs + unanswered
         return result
@@ -462,8 +462,8 @@ def filter_chat_history(
     if not history:
         return [], []
 
-    pairs = [qa for qa in history if qa.answer is not None]
-    unanswered = [qa for qa in history if qa.answer is None]
+    pairs = [qa for qa in history if qa.answer != ""]
+    unanswered = [qa for qa in history if qa.answer == ""]
 
     if not pairs:
         return [], unanswered

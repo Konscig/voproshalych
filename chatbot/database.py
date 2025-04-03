@@ -465,8 +465,13 @@ def filter_chat_history(
     if not history:
         return [], []
 
-    pairs = [qa for qa in history if qa.answer != ""]
-    unanswered = [qa for qa in history if qa.answer == ""]
+    stop_indices = [i for i, qa in enumerate(history) if qa.stop_point]
+    last_stop_idx = stop_indices[-1] if stop_indices else -1
+
+    trimmed_history = history[last_stop_idx + 1 :] if last_stop_idx != -1 else history
+
+    pairs = [qa for qa in trimmed_history if qa.answer != ""]
+    unanswered = [qa for qa in trimmed_history if qa.answer == ""]
 
     if not pairs:
         return [], unanswered
@@ -475,3 +480,23 @@ def filter_chat_history(
     filtered_unanswered = [qa for qa in unanswered if qa.created_at > last_answer_time]
 
     return pairs, filtered_unanswered
+
+
+def set_stop_point(engine: Engine, user_id: int, valbool: bool):
+    """Функция устанавливает значение stop_point для последнего сообщения пользователя.
+
+    Args:
+        engine (Engine): подключение к БД
+        user_id (int): id пользователя
+        valbool (bool): значение для stop_point
+    """
+    with Session(engine) as session:
+        last_message = session.scalars(
+            select(QuestionAnswer)
+            .where(QuestionAnswer.user_id == user_id)
+            .order_by(QuestionAnswer.created_at.desc())
+        ).first()
+
+        if last_message is not None:
+            last_message.stop_point = valbool
+            session.commit()

@@ -29,6 +29,7 @@ from database import (
     get_today_holidays,
     get_history_of_chat,
     filter_chat_history,
+    set_stop_point,
 )
 from strings import Strings
 from datetime import datetime, timedelta
@@ -68,6 +69,8 @@ def vk_keyboard_choice(notify_text: str) -> str:
         .add(vk.Text(Strings.ConfluenceButton))
         .row()
         .add(vk.Text(notify_text))
+        .row()
+        .add(vk.Text(Strings.NewDialog))
     )
     return keyboard.get_json()
 
@@ -88,6 +91,7 @@ def tg_keyboard_choice(notify_text: str) -> tg.types.ReplyKeyboardMarkup:
         keyboard=[
             [tg.types.KeyboardButton(text=Strings.ConfluenceButton)],
             [tg.types.KeyboardButton(text=(notify_text))],
+            [tg.types.KeyboardButton(text=Strings.NewDialog)],
         ],
         resize_keyboard=True,
     )
@@ -298,6 +302,34 @@ async def tg_subscribe(message: tg.types.Message):
         )
 
 
+@dispatcher.message(tg.F.text.in_([Strings.NewDialog]))
+async def tg_new_dialog(message: tg.types.Message):
+    """Обработчик для начала нового диалога"""
+    user_id = get_user_id(engine, telegram_id=message.from_user.id)
+
+    if user_id is None:
+        await message.answer(text=Strings.NoneUserTelegram)
+        return
+
+    set_stop_point(engine, user_id, True)
+    await message.answer(text=Strings.DialogReset)
+
+
+@vk_bot.on.message(text=[Strings.NewDialog])
+async def vk_new_dialog(message: VKMessage):
+    user_id = get_user_id(engine, vk_id=message.from_id)
+
+    if user_id is None:
+        await message.answer(message=Strings.NoneUserVK, random_id=0)
+        return
+
+    set_stop_point(engine, user_id, True)
+    await message.answer(
+        message=Strings.DialogReset,
+        random_id=0,
+    )
+
+
 async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
     """Получение ответа на вопрос с использованием микросервиса
 
@@ -309,7 +341,6 @@ async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
     """
     chat_history = get_history_of_chat(engine, user_id)
     answered_pairs, recent_unanswered = filter_chat_history(chat_history)
-    unanswered_texts = [qa.question.strip().lower() for qa in recent_unanswered]
     question = question.strip().lower()
 
     dialog_context = []

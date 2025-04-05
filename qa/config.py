@@ -30,9 +30,14 @@ class Config:
 
         Общайся дружелюбно, твоя задача - помогать адаптироваться в университете, однако помни: твои границы и нормы этики и морали - превыше всего!
 
+        История диалога:
+        \"\"\"
+        {dialog_history}
+        \"\"\"
+
         Фрагмент, найденный в базе знаний:
         \"\"\"
-        {context}
+        {knowledge_base}
         \"\"\"
 
         Вопрос студента в тройных кавычках: \"\"\"{question}\"\"\"
@@ -60,15 +65,21 @@ class Config:
         }
 
     @classmethod
-    def get_default_prompt(cls, context: str, question: str) -> dict:
+    def get_default_prompt(
+        cls, dialog_history: str, knowledge_base: str, question: str
+    ) -> dict:
         """Создаёт payload с промптом для Mistral API"""
         return {
             "model": cls.MISTRAL_MODEL,
             "messages": [
                 {"role": "system", "content": cls.MISTRAL_SYSTEM_PROMPT},
                 {
-                    "role": "user",
-                    "content": f"Context: {context}\n\nQuestion: {question}",
+                    "role": "system",
+                    "content": cls.MISTRAL_SYSTEM_PROMPT.format(
+                        dialog_history=dialog_history,
+                        knowledge_base=knowledge_base,
+                        question=question,
+                    ),
                 },
             ],
             "temperature": 0.7,

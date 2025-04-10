@@ -19,6 +19,9 @@ class Config:
         "MISTRAL_API_URL", "https://api.mistral.ai/v1/chat/completions"
     )
     MISTRAL_MODEL = environ.get("MISTRAL_MODEL")
+
+    JUDGE_MODEL = environ.get("JUDGE_MODEL")
+    JUDGE_API = environ.get("JUDGE_API")
     MISTRAL_SYSTEM_PROMPT = """Действуй как инновационный виртуальный помощник студента Тюменского государственного университета (ТюмГУ) Вопрошалыч.
 
         Используй следующий фрагмент из базы знаний в тройных кавычках, чтобы кратко ответить на вопрос студента.
@@ -47,6 +50,20 @@ class Config:
         Шаблон:
         """
 
+    JUDGE_PROMPT = """Context: You are the answer moderator.
+
+    You will be provided with an answer were given with a very close (with a cosine distancy) question to question asked.
+    Your goal is to evaluate whether the answer that the question text has that is closest to the new question asked is relevant in meaning.
+    Answer just Yes or No, please.
+    If the answer is relevant, please answer "Yes".
+    If you answered "No", please give reasons about.
+
+
+    Answer to evaluate: {answer_text}
+
+    Question were given: {question_text}
+    """
+
     @classmethod
     def get_mistral_headers(cls) -> dict:
         """Возвращает заголовки для запросов к Mistral API"""
@@ -61,7 +78,15 @@ class Config:
 
     @classmethod
     def get_default_prompt(cls, context: str, question: str) -> dict:
-        """Создаёт payload с промптом для Mistral API"""
+        """Создаёт payload с промптом для Mistral API
+
+        Args:
+            context (str): фрагмент подобранного документа
+            question (str): текст вопроса
+
+        Returns:
+            dict: payload для LLM-модели.
+        """
         return {
             "model": cls.MISTRAL_MODEL,
             "messages": [
@@ -80,7 +105,16 @@ class Config:
         cls, template: str, user_name: str, holiday_name: str
     ) -> dict:
         """Создаёт payload с промптом для генерации поздравлений для Mistral API,
-        подставляя имя пользователя и название праздника в системное сообщение."""
+        подставляя имя пользователя и название праздника в системное сообщение.
+
+        Args:
+            template (str): шаблон для поздравления
+            user_name (str): имя пользователя
+            holiday_name (str): название праздника
+
+        Returns:
+            dict: payload для LLM-модели.
+        """
         prompt = cls.MISTRAL_GREETING_PROMPT.format(
             user_name=user_name, holiday_name=holiday_name
         )
@@ -89,6 +123,43 @@ class Config:
             "messages": [
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": template},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 200,
+        }
+
+    @classmethod
+    def get_judge_headers(cls) -> dict:
+        """Возвращает заголовки для запросов модели-судьи к Mistral API"""
+        if not cls.JUDGE_API:
+            raise ValueError(
+                "API-ключ для Mistral не найден. Убедитесь, что MISTRAL_API установлен."
+            )
+        return {
+            "Authorization": f"Bearer {cls.JUDGE_API}",
+            "Content-Type": "application/json",
+        }
+
+    @classmethod
+    def get_judge_prompt(cls, question_text: str, answer_text: str) -> dict:
+        """Создает payload с промптом для модели-судьи.
+
+        Args:
+            question_text (str): текст заданного вопроса
+            answer_text (str): текст ответа на заданный вопрос
+
+        Returns:
+            dict: payload для модели-судьи.
+        """
+
+        return {
+            "model": cls.JUDGE_MODEL,
+            "messages": [
+                {"role": "system", "content": cls.JUDGE_PROMPT},
+                {
+                    "role": "system",
+                    "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}",
+                },
             ],
             "temperature": 0.7,
             "max_tokens": 200,

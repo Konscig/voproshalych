@@ -108,7 +108,7 @@ class QuestionAnswer(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
-def get_answer_by_id(engine: Engine, question_answer_id: int):
+def get_answer_by_id(engine: Engine, question_answer_id: int) -> str:
     """Получает ответ по id QuestionAnswer
 
     Args:
@@ -119,9 +119,9 @@ def get_answer_by_id(engine: Engine, question_answer_id: int):
         str: текст ответа на вопрос
     """
     with Session(engine) as session:
-        answer = (
+        answer = str(
             session.execute(
-                select(QuestionAnswer.answer).where(
+                select(QuestionAnswer.answer, QuestionAnswer.question).where(
                     QuestionAnswer.id == question_answer_id
                 )
             )

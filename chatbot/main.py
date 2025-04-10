@@ -224,6 +224,13 @@ async def vk_rate(message: VKMessage):
     """
 
     payload_data = json.loads(message.payload)
+    if payload_data["score"] == 5:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"http://{Config.QA_HOST}/answer_embed/",
+                json={"answer_id": payload_data["question_answer_id"]},
+            ):
+                pass
     if rate_answer(engine, payload_data["question_answer_id"], payload_data["score"]):
         await message.answer(message=Strings.ThanksForFeedback, random_id=0)
 

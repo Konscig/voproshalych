@@ -26,7 +26,15 @@ encoder_model = SentenceTransformer(
 
 
 def get_answer(context: str, question: str) -> str:
-    """Отправляет запрос к LLM и возвращает ответ."""
+    """Отправляет запрос к LLM и возвращает ответ.
+
+    Args:
+        context (str): фрагмент документа, содержащий ответ на вопрос
+        question (str): текст вопроса
+
+    Returns:
+        str: ответ на вопрос
+    """
     try:
         headers = Config.get_mistral_headers()
         prompt = Config.get_default_prompt(context, question)
@@ -47,6 +55,36 @@ def get_answer(context: str, question: str) -> str:
         return ""
 
 
+def assess_answer(question: str, answer: str):
+    """Оценивает релевантность подобранного ответа на вопрос с использованием LLM модели-судьи.
+
+    Args:
+        question (str): текст вопроса
+        answer (str): текст ответа
+    """
+    try:
+        headers = Config.get_judge_headers()
+        prompt = Config.get_judge_prompt(question_text=question, answer_text=answer)
+        response = requests.post(Config.MISTRAL_API_URL, json=prompt, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            solution = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+                .lower()
+            )
+            logging.info(f"Solution is {solution}")
+            if solution == "yes":
+                return True
+            else:
+                return False
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        return ""
+
+
 @routes.post("/answer_embed/")
 async def set_question_embedding(request: web.Request):
     """Задает векторное представление вопросу
@@ -59,6 +97,7 @@ async def set_question_embedding(request: web.Request):
     """
     qa_id = (await request.json())["answer_id"]
     answer_text = get_answer_by_id(engine=engine, question_answer_id=qa_id)
+    logging.info(f"Answer text: {answer_text}")
 
     if not answer_text:
         logging.error(f"Answer not found for QA ID: {qa_id}")
@@ -131,7 +170,7 @@ async def find_similar_question(
             best_qa_id = int(qa_id)
             best_qa_url = url
 
-    if best_cosine_distance <= 0.33 and best_match and best_qa_id and best_qa_url:
+    if best_cosine_distance <= 0.6 and best_match and best_qa_id and best_qa_url:
         logging.info(
             f"Best match found for QA ID {best_qa_id} with cosine distance {best_cosine_distance}"
         )
@@ -162,7 +201,11 @@ async def qa(request: web.Request) -> web.Response:
     if result:
         db_answer, url = result
         logging.info(f"Answer found in database for question '{question}'")
-        return web.json_response({"answer": db_answer, "confluence_url": url})
+        verdict = assess_answer(question=question, answer=db_answer)
+        if verdict:
+            return web.json_response({"answer": db_answer, "confluence_url": url})
+        else:
+            logging.error(f"Answer {db_answer} were banned for question {question}")
 
     logging.info(
         f"No match found in database for question '{question}', processing with LLM."

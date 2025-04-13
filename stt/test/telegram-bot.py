@@ -1,34 +1,33 @@
 import os
+import time
 import requests
 import ffmpeg
+from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import Message
-from dotenv import load_dotenv
 import asyncio
 import httpx
-import time
+
 
 load_dotenv()
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("TG_ACCESS_TOKEN")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
 FASTAPI_URL = "http://127.0.0.1:8000/transcribe/"
 
 # скачивает файл с сервера telegram по переданному file_path ,
-# конвертирует его из формата .oga в .wav и сохраняет как example.wav
-
-async def download_and_convert(file_path: str, user_id: str, voice_id: str):
-    # создание уникального имени файла на основе времени, user_id и voice_id
+# конвертирует его из формата .oga в .wav и сохраняет
+async def download_and_convert(file_path: str, user_id: str):
 
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
 
     timestamp = int(time.time())
-    wav_path = f"voice_{user_id}_{voice_id}_{timestamp}.wav"
-    ogg_path = f"voice_{user_id}_{voice_id}_{timestamp}.oga"
+    wav_path = f"voice_{user_id}_{timestamp}.wav"
+    ogg_path = f"voice_{user_id}_{timestamp}.oga"
 
-    response = requests.get(file_url) # скачивает файл по сформированному URL
-    with open(ogg_path, "wb") as f:   # сохраняет скачанный файл в формате .oga
+    response = requests.get(file_url)
+    with open(ogg_path, "wb") as f:
         f.write(response.content)
 
     try:
@@ -41,13 +40,12 @@ async def download_and_convert(file_path: str, user_id: str, voice_id: str):
     return wav_path
 
 # отправляет конвертированный аудиофайл на сервер для обработки ;
-
 async def send_to_server(wav_path: str) -> str:
     async with httpx.AsyncClient() as client:
-        with open(wav_path, "rb") as audio_file:  # открываем файл в бинарном режиме
+        with open(wav_path, "rb") as audio_file:
             response = await client.post(
                 FASTAPI_URL,
-                files={"file": (wav_path, audio_file, "audio/wav")}  # отправляем файл
+                files={"file": (wav_path, audio_file, "audio/wav")}
             )
 
     if response.status_code == 200:
@@ -56,23 +54,16 @@ async def send_to_server(wav_path: str) -> str:
         return f"Ошибка {response.status_code}: {response.text}"
 
 # обработчик голосовых сообщений :
-# получает file_id голосового сообщения ;
-# запрашивает у Telegram API информацию о файле (включая file_path) ;
-# вызывает функцию для скачивания и конвертации файла ;
-# вызыввает функцию отпраквки аудиофайла на сервер для обработки ;
-
 async def handle_voice(message: Message):
 
     file_info = await bot.get_file(message.voice.file_id)
     file_path = file_info.file_path
 
-    wav_path = await download_and_convert(file_path, message.from_user.id, message.voice.file_id)
+    wav_path = await download_and_convert(file_path, message.from_user.id)
     transcription = await send_to_server(wav_path)
     await message.reply(f"Распознанный текст: {transcription}")
 
-
 # регистрация функции handle_voice как обработчика для голосовых сообщений ;
-
 dp.message.register(handle_voice, lambda message: hasattr(message, "voice") and message.voice is not None)
 
 if __name__ == '__main__':

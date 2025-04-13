@@ -15,8 +15,8 @@ ADD *.toml *.lock /app/
 RUN uv venv --seed &&\
     uv sync --frozen
 
-ADD inference.py /app/
-RUN uv run inference.py
+ADD gigaam.py /app/
+RUN uv run gigaam.py
 
 ADD app.py /app/
 

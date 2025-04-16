@@ -294,6 +294,31 @@ async def reindex(request: web.Request) -> web.Response:
         return web.Response(text=str(e), status=500)
 
 
+@routes.post("/reembed/")
+async def reembed(request: web.Request) -> web.Response:
+    """Пересоздаёт векторные представления для вопросов
+
+    Args:
+        request (web.Request): запрос на пересоздание векторных представлений
+
+    Returns:
+        web.Response: ответ
+    """
+    logging.warning("START CREATE EMBEDDING")
+    try:
+        questions = get_all_questions_with_high(engine)
+        for question in questions:
+            q_text = question["question"]
+            q_id = question["id"]
+            embed = encoder_model.encode(q_text)
+            set_embedding(engine, q_id, embed)
+        logging.warning("SUCCESSFULLY CREATED EMBEDDING")
+        return web.Response(status=200)
+    except Exception as e:
+        logging.error("FAILED TO CREATED EMBEDDING, ERROR: " + str(e))
+        return web.Response(text=str(e), status=500)
+
+
 if __name__ == "__main__":
     with Session(engine) as session:
         questions = session.scalars(select(Chunk)).first()

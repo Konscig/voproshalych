@@ -163,6 +163,7 @@ class QuestionDict(TypedDict):
     """Класс вопроса с векторным представлением"""
 
     id: int
+    question: str
     answer: str
     embedding: np.ndarray
     url: str
@@ -181,6 +182,7 @@ def get_all_questions_with_high(engine: Engine) -> List[QuestionDict]:
         question_answers = session.execute(
             select(
                 QuestionAnswer.id,
+                QuestionAnswer.question,
                 QuestionAnswer.answer,
                 QuestionAnswer.embedding,
                 QuestionAnswer.confluence_url,
@@ -190,11 +192,12 @@ def get_all_questions_with_high(engine: Engine) -> List[QuestionDict]:
     result: List[QuestionDict] = [
         {
             "id": int(qa_id),
+            "question": str(question_text),
             "answer": str(answer_text),
             "embedding": np.array(embedding) if embedding is not None else np.array([]),
             "url": str(url),
         }
-        for qa_id, answer_text, embedding, url in question_answers
+        for qa_id, question_text, answer_text, embedding, url in question_answers
     ]
 
     return result

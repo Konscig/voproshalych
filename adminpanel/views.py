@@ -11,6 +11,7 @@ import requests
 from config import app
 from cluster_analysis import ClusterAnalysis
 from models import get_questions_count, get_questions_for_clusters, get_admins, Admin
+from datetime import datetime, timedelta
 
 
 login_manager = LoginManager()
@@ -182,3 +183,84 @@ def reindex_qa():
     """
     requests.post(f"http://{app.config['QA_HOST']}/reindex/", timeout=600)
     return redirect(url_for("settings"))
+
+
+
+
+@app.get("/service_stats")
+@login_required
+def service_stats() -> str:
+
+    documents = [
+        {'title': 'вфвфвф', 'url': '#'},
+        {'title': 'Рфцвыфеля', 'url': '#'},
+        {'title': 'вфвфвф', 'url': '#'},
+        {'title': 'Рфцвыфеля', 'url': '#'},
+        {'title': 'вфвфвф', 'url': '#'},
+        {'title': 'Рфцвыфеля', 'url': '#'},
+        {'title': 'вфвфвф', 'url': '#'},
+        {'title': 'Рфцвыфеля', 'url': '#'},
+        {'title': 'вфвфвф', 'url': '#'},
+        {'title': 'Рфцвыфеля', 'url': '#'},
+        {'title': 'вфвфвф', 'url': '#'},
+        {'title': 'Рфцвыфеля', 'url': '#'},
+        {'title': 'вфвфвф', 'url': '#'},
+        {'title': 'Рфцвыфеля', 'url': '#'},
+        {'title': 'вфвфвф', 'url': '#'},
+        {'title': 'Рфцвыфеля', 'url': '#'},
+    ]
+
+    x_questions = [
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
+        {'text': 'ВВВАААФ'},
+
+
+    ]
+
+    v_questions = [
+        {'text': 'вфыв'},
+        {'text': 'ыыыыыыыа'},
+
+    ]
+
+
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M')
+    x_count = len(x_questions)
+    v_count = len(v_questions)
+    total = x_count + v_count
+
+    ratio = f"{x_count}:{v_count}"
+    if total > 0:
+        ratio += f" ({x_count/total:.0%}/{v_count/total:.0%})"
+
+    return render_template(
+        'service_stats.html',
+        page_title='Статистика сервиса',
+        documents=documents,
+        documents_count=len(documents),
+        chunks_count=42,
+        sync_date=current_time,
+        x_count=x_count,
+        v_count=v_count,
+        ratio=ratio,
+        x_questions=x_questions,
+        v_questions=v_questions,
+        time_start='2024-01-01',
+        time_end=datetime.now().strftime('%Y-%m-%d')
+    )

@@ -58,10 +58,36 @@ class Config:
     If the answer is relevant, please answer "Yes".
     If you answered "No", please give reasons about.
 
+    Notice: If you get a document fragment content - please find any assessment in it. If you find it, please consume your answer. If you don't find it, please answer "No" and explain why.
+
 
     Answer to evaluate: {answer_text}
 
     Question were given: {question_text}
+
+    Document fragment content: {content}
+    """
+
+    JUDGE_SCORES_PROMPT = """Context: You are the strict score moderator.
+
+    You will be provided with a question an answer were given with a very close (with a cosine distancy) question to question asked.
+    You will be provided with a score of the answer.
+
+    There is two scores: 1 or 5. 1 is a bad answer - user decided, that the answer isn't relevant. 5 is a well answer - user decided, that the answer is relevant for question asked.
+    Your goal is to evaluate whether the score is relevant for question-answer pair.
+
+    For assessment you can use the question text and the answer text and espessially you can use document fragment content (if it given).
+
+    If the score is relevant, please answer "Yes". If you answered "No", please give reasons about.
+
+
+    Answer to evaluate: {answer_text}
+
+    Question were given: {question_text}
+
+    Document fragment content: {content}
+
+    Score: {score}
     """
 
     @classmethod
@@ -141,7 +167,14 @@ class Config:
         }
 
     @classmethod
-    def get_judge_prompt(cls, question_text: str, answer_text: str) -> dict:
+    def get_judge_prompt(
+        cls,
+        question_text: str,
+        answer_text: str,
+        content: str = "",
+        generation: bool = False,
+        scorer: bool = False,
+    ) -> dict:
         """Создает payload с промптом для модели-судьи.
 
         Args:
@@ -151,16 +184,43 @@ class Config:
         Returns:
             dict: payload для модели-судьи.
         """
+        if generation:
+            return {
+                "model": cls.JUDGE_MODEL,
+                "messages": [
+                    {"role": "system", "content": cls.JUDGE_PROMPT},
+                    {
+                        "role": "system",
+                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}\n\nContext: {content}",
+                    },
+                ],
+                "temperature": 0.7,
+                "max_tokens": 200,
+            }
+        else:
+            return {
+                "model": cls.JUDGE_MODEL,
+                "messages": [
+                    {"role": "system", "content": cls.JUDGE_PROMPT},
+                    {
+                        "role": "system",
+                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}",
+                    },
+                ],
+                "temperature": 0.7,
+                "max_tokens": 200,
+            }
 
-        return {
-            "model": cls.JUDGE_MODEL,
-            "messages": [
-                {"role": "system", "content": cls.JUDGE_PROMPT},
-                {
-                    "role": "system",
-                    "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}",
-                },
-            ],
-            "temperature": 0.7,
-            "max_tokens": 200,
-        }
+        if scorer:
+            return {
+                "model": cls.JUDGE_MODEL,
+                "messages": [
+                    {"role": "system", "content": cls.JUDGE_PROMPT},
+                    {
+                        "role": "system",
+                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}",
+                    },
+                ],
+                "temperature": 0.7,
+                "max_tokens": 200,
+            }

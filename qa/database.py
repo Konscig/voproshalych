@@ -169,8 +169,10 @@ class QuestionDict(TypedDict):
     url: str
 
 
-def get_all_questions_with_high(engine: Engine) -> List[QuestionDict]:
-    """Получает все вопросы с оценкой "отлично"
+def get_all_questions_with_score(
+    engine: Engine, highscore: bool = True
+) -> List[QuestionDict]:
+    """Получает все вопросы с оценкой "отлично", либо все вопросы с оценками, если `highscore` == `False`
 
     Args:
         engine (Engine): текущее подключение к БД
@@ -178,26 +180,56 @@ def get_all_questions_with_high(engine: Engine) -> List[QuestionDict]:
     Returns:
         List[QuestionDict]: Список QuestionDict с id вопроса, его ответом, векторным представлением и ссылкой на Confluence
     """
-    with Session(engine) as session:
-        question_answers = session.execute(
-            select(
-                QuestionAnswer.id,
-                QuestionAnswer.question,
-                QuestionAnswer.answer,
-                QuestionAnswer.embedding,
-                QuestionAnswer.confluence_url,
-            ).where(QuestionAnswer.score == 5)
-        ).all()
 
-    result: List[QuestionDict] = [
-        {
-            "id": int(qa_id),
-            "question": str(question_text),
-            "answer": str(answer_text),
-            "embedding": np.array(embedding) if embedding is not None else np.array([]),
-            "url": str(url),
-        }
-        for qa_id, question_text, answer_text, embedding, url in question_answers
-    ]
+    if highscore:
+        with Session(engine) as session:
+            question_answers = session.execute(
+                select(
+                    QuestionAnswer.id,
+                    QuestionAnswer.question,
+                    QuestionAnswer.answer,
+                    QuestionAnswer.embedding,
+                    QuestionAnswer.confluence_url,
+                ).where(QuestionAnswer.score == 5)
+            ).all()
 
-    return result
+        result: List[QuestionDict] = [
+            {
+                "id": int(qa_id),
+                "question": str(question_text),
+                "answer": str(answer_text),
+                "embedding": (
+                    np.array(embedding) if embedding is not None else np.array([])
+                ),
+                "url": str(url),
+            }
+            for qa_id, question_text, answer_text, embedding, url in question_answers
+        ]
+
+        return result
+    else:
+        with Session(engine) as session:
+            question_answers = session.execute(
+                select(
+                    QuestionAnswer.id,
+                    QuestionAnswer.question,
+                    QuestionAnswer.answer,
+                    QuestionAnswer.embedding,
+                    QuestionAnswer.confluence_url,
+                ).where(QuestionAnswer.score != None)
+            ).all()
+
+        result: List[QuestionDict] = [
+            {
+                "id": int(qa_id),
+                "question": str(question_text),
+                "answer": str(answer_text),
+                "embedding": (
+                    np.array(embedding) if embedding is not None else np.array([])
+                ),
+                "url": str(url),
+            }
+            for qa_id, question_text, answer_text, embedding, url in question_answers
+        ]
+
+        return result

@@ -15,6 +15,8 @@ services:
             - db-data:/var/lib/postgresql/data
         networks:
             - chatbot-conn
+        ports:
+          - 5433:5432
         healthcheck:
             test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
             interval: 10s

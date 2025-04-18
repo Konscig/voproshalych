@@ -78,11 +78,6 @@
                                         <div class="text-muted">Позитивные</div>
                                     </div>
                                 </div>
-                                <div class="col-12 mt-2">
-                                    <div class="ratio-badge bg-dark-blue text-white">
-                                        Соотношение: {{ ratio }}
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -122,7 +117,7 @@
                                     data-bs-target="#questionsCollapse"
                                     aria-expanded="false">
                                 <i class="bi bi-patch-question me-2"></i>
-                                Детализация оценок ({{ x_questions|length + v_questions|length }})
+                                Детализация оценок ({{ question_counts }})
                             </button>
                         </h2>
                         <div id="questionsCollapse"

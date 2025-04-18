@@ -10,7 +10,7 @@ from flask_login import (
 import requests
 from config import app
 from cluster_analysis import ClusterAnalysis
-from models import get_questions_count, get_questions_for_clusters, get_admins, Admin
+from models import get_questions_count, get_questions_for_clusters, get_admins, Admin, get_chunks_count, get_documents_count, get_last_sync_date, get_unique_docs_urls
 from datetime import datetime, timedelta
 
 
@@ -190,77 +190,60 @@ def reindex_qa():
 @app.get("/service_stats")
 @login_required
 def service_stats() -> str:
+    """
+    Description:
 
-    documents = [
-        {'title': 'вфвфвф', 'url': '#'},
-        {'title': 'Рфцвыфеля', 'url': '#'},
-        {'title': 'вфвфвф', 'url': '#'},
-        {'title': 'Рфцвыфеля', 'url': '#'},
-        {'title': 'вфвфвф', 'url': '#'},
-        {'title': 'Рфцвыфеля', 'url': '#'},
-        {'title': 'вфвфвф', 'url': '#'},
-        {'title': 'Рфцвыфеля', 'url': '#'},
-        {'title': 'вфвфвф', 'url': '#'},
-        {'title': 'Рфцвыфеля', 'url': '#'},
-        {'title': 'вфвфвф', 'url': '#'},
-        {'title': 'Рфцвыфеля', 'url': '#'},
-        {'title': 'вфвфвф', 'url': '#'},
-        {'title': 'Рфцвыфеля', 'url': '#'},
-        {'title': 'вфвфвф', 'url': '#'},
-        {'title': 'Рфцвыфеля', 'url': '#'},
-    ]
+    Функция выводит статистику сервиса
 
-    x_questions = [
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
-        {'text': 'ФЫВФЫВФЫВФЫВФЫВ'},
-        {'text': 'ВВВАААФ'},
+    Returns:
+    str: отрендеренная веб-страница с POST-запросом на сервер
+    """
 
+    if len(request.values.keys()) == 0:
+        time_start = str(date.today() - timedelta(days=30))
+        time_end = str(date.today() + timedelta(days=1))
+    else:
+        time_start = str(request.values.get("time_start"))
+        time_end = str(request.values.get("time_end"))
 
-    ]
+    x_questions = get_questions_for_clusters(
+        time_start=time_start,
+        time_end=time_end,
+        have_not_answer=False,
+        have_low_score=True,
+        have_high_score=False,
+        have_not_score=False,
+    ) # Вопросы с плохой оценкой
 
-    v_questions = [
-        {'text': 'вфыв'},
-        {'text': 'ыыыыыыыа'},
+    v_questions = get_questions_for_clusters(
+        time_start=time_start,
+        time_end=time_end,
+        have_not_answer=False,
+        have_low_score=False,
+        have_high_score=True,
+        have_not_score=False,
+    ) # Вопросы с хорошей оценкой
 
-    ]
-
-
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M')
     x_count = len(x_questions)
     v_count = len(v_questions)
     total = x_count + v_count
-
-    ratio = f"{x_count}:{v_count}"
-    if total > 0:
-        ratio += f" ({x_count/total:.0%}/{v_count/total:.0%})"
+    documents_count = get_documents_count()
+    chunks_count = get_chunks_count()
+    sync_date = get_last_sync_date()
+    documents = get_unique_docs_urls()
 
     return render_template(
         'service_stats.html',
         page_title='Статистика сервиса',
         documents=documents,
-        documents_count=len(documents),
-        chunks_count=42,
-        sync_date=current_time,
+        documents_count=documents_count,
+        chunks_count=chunks_count,
+        sync_date=sync_date,
         x_count=x_count,
         v_count=v_count,
-        ratio=ratio,
         x_questions=x_questions,
         v_questions=v_questions,
-        time_start='2024-01-01',
-        time_end=datetime.now().strftime('%Y-%m-%d')
+        time_start=time_start,
+        time_end=time_end,
+        question_counts=total
     )

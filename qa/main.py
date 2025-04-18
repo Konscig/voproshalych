@@ -14,6 +14,7 @@ from database import (
     set_embedding,
     get_answer_by_id,
     get_all_questions_with_score,
+    get_document_by_url,
 )
 from confluence_retrieving import get_chunk, reindex_confluence
 
@@ -335,8 +336,13 @@ async def check_score(request: web.Request) -> web.Response:
         for question in questions:
             q_text = question["question"]
             q_answer = question["answer"]
-            q_content = ""
+            q_content = get_document_by_url(engine, question["url"])
+            if q_content is None:
+                q_content = ""
 
+            logging.info(f"Question: {q_text}")
+            logging.info(f"Answer: {q_answer}")
+            logging.info(f"Content: {q_content[:50]}")
         headers = Config.get_judge_headers()
         prompt = Config.get_judge_prompt(
             question_text=q_text, answer_text=q_answer, content=q_content, scorer=True

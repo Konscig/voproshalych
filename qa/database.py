@@ -233,3 +233,26 @@ def get_all_questions_with_score(
         ]
 
         return result
+
+
+def get_document_by_url(engine: Engine, url: str) -> str | None:
+    """Собирает документ из чанков по ссылке на Confluence
+
+    Args:
+        engine (Engine): подключение к БД
+        url (str): ссылка на Confluence
+
+    Returns:
+        str | None: полный текст документа или None, если документ не найден
+    """
+    if not url:
+        return None
+
+    with Session(engine) as session:
+        document = session.execute(
+            select(func.string_agg(Chunk.text, "\n\n").label("full_text")).where(
+                Chunk.confluence_url == url, Chunk.text != None
+            )
+        ).scalar_one_or_none()
+
+    return document

@@ -15,6 +15,7 @@ from database import (
     get_answer_by_id,
     get_all_questions_with_score,
     get_document_by_url,
+    delete_score,
 )
 from confluence_retrieving import get_chunk, reindex_confluence
 
@@ -323,13 +324,14 @@ async def reindex(request: web.Request) -> web.Response:
 
 @routes.post("/check-score/")
 async def check_score(request: web.Request) -> web.Response:
-    """_summary_
+    """Проверяет оценку ответа на вопрос с использованием LLM модели-судьи.
+    \nЕсли оценка "плохо" - удаляет ответ из базы данных.
 
     Args:
-        request (web.Request): _description_
+        request (web.Request): запрос, содержащий `question`, `answer`, `content`
 
     Returns:
-        web.Response: _description_
+        web.Response: ответ с результатом проверки
     """
     try:
         questions = get_all_questions_with_score(engine, highscore=False)
@@ -359,7 +361,12 @@ async def check_score(request: web.Request) -> web.Response:
             )
             logging.info(f"Solution is {solution}")
             if solution == "yes":
-                return True
+                logging.info("Answer is good")
+                return web.Response(status=200)
+            else:
+                logging.info("Answer is bad")
+                delete_score(engine, question["id"])
+                return web.Response(status=200)
     except Exception as e:
         return web.Response(text=str(e), status=500)
 

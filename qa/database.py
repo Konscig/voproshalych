@@ -256,3 +256,17 @@ def get_document_by_url(engine: Engine, url: str) -> str | None:
         ).scalar_one_or_none()
 
     return document
+
+
+def delete_score(engine: Engine, qa_id: int) -> None:
+    """Удаляет оценку у вопроса
+
+    Args:
+        engine (Engine): текущее подключение к БД
+        qa_id (int): идентификатор QuestionAnswer
+    """
+    with Session(engine) as session:
+        session.query(QuestionAnswer).filter(QuestionAnswer.id == qa_id).update(
+            {QuestionAnswer.score: None}
+        )
+        session.commit()

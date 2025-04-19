@@ -1,5 +1,6 @@
 from os import environ
 from dotenv import load_dotenv
+from time import sleep
 
 load_dotenv(dotenv_path="../.env")
 
@@ -54,12 +55,17 @@ class Config:
 
     You will be provided with an answer were given with a very close (with a cosine distancy) question to question asked.
     Your goal is to evaluate whether the answer that the question text has that is closest to the new question asked is relevant in meaning.
+
+    Attention: You are assessing the work of answering model prompted like "инновационный виртуальный помощник студента Тюменского государственного университета (ТюмГУ) Вопрошалыч".
+
+    Please, while you are assessing, pay attention that the answer were generated, and it can be not absolutely equals to the question asked, so you need to evaluate the score based on the meaning of the answer and the question asked.
+
     Answer just Yes or No, please.
-    If the answer is relevant, please answer "Yes".
+
+    If the answer is relevant, please answer ONLY "Yes" NO REASONS NEEDED.
     If you answered "No", please give reasons about.
 
     Notice: If you get a document fragment content - please find any assessment in it. If you find it, please consume your answer. If you don't find it, please answer "No" and explain why.
-
 
     Answer to evaluate: {answer_text}
 
@@ -68,18 +74,22 @@ class Config:
     Document fragment content: {content}
     """
 
-    JUDGE_SCORES_PROMPT = """Context: You are the strict score moderator.
+    JUDGE_SCORES_PROMPT = """Context: You are the score moderator.
 
     You will be provided with a question an answer were given with a very close (with a cosine distancy) question to question asked.
     You will be provided with a score of the answer.
 
+    Attention: You are evaluate the work of answering model prompted like "инновационный виртуальный помощник студента Тюменского государственного университета (ТюмГУ) Вопрошалыч".
+
     There is two scores: 1 or 5. 1 is a bad answer - user decided, that the answer isn't relevant. 5 is a well answer - user decided, that the answer is relevant for question asked.
     Your goal is to evaluate whether the score is relevant for question-answer pair.
 
+    Please, while you are evaluating the score, pay attention that the answer were generated, and it can be not absolutely equals to the question asked, so you need to evaluate the score based on the meaning of the answer and the question asked.
+
     For assessment you can use the question text and the answer text and espessially you can use document fragment content (if it given).
 
-    If the score is relevant, please answer "Yes". If you answered "No", please give reasons about.
-
+    If the answer is relevant, please answer ONLY "Yes" NO REASONS NEEDED.
+    If you answered "No", please give reasons about.
 
     Answer to evaluate: {answer_text}
 
@@ -184,6 +194,20 @@ class Config:
         Returns:
             dict: payload для модели-судьи.
         """
+        if scorer:
+            return {
+                "model": cls.JUDGE_MODEL,
+                "messages": [
+                    {"role": "system", "content": cls.JUDGE_PROMPT},
+                    {
+                        "role": "system",
+                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}, \n\nDocument fragment content: {content}",
+                    },
+                ],
+                "temperature": 0.7,
+                "max_tokens": 200,
+            }
+
         if generation:
             return {
                 "model": cls.JUDGE_MODEL,
@@ -191,7 +215,7 @@ class Config:
                     {"role": "system", "content": cls.JUDGE_PROMPT},
                     {
                         "role": "system",
-                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}\n\nContext: {content}",
+                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}\n\nDocument fragment content: {content}",
                     },
                 ],
                 "temperature": 0.7,
@@ -204,21 +228,7 @@ class Config:
                     {"role": "system", "content": cls.JUDGE_PROMPT},
                     {
                         "role": "system",
-                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}",
-                    },
-                ],
-                "temperature": 0.7,
-                "max_tokens": 200,
-            }
-
-        if scorer:
-            return {
-                "model": cls.JUDGE_MODEL,
-                "messages": [
-                    {"role": "system", "content": cls.JUDGE_PROMPT},
-                    {
-                        "role": "system",
-                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}",
+                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text} \n\nDocument fragment content: {content}",
                     },
                 ],
                 "temperature": 0.7,

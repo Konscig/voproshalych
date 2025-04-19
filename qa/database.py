@@ -11,6 +11,7 @@ from sqlalchemy import (
     BigInteger,
     Engine,
     select,
+    update,
 )
 from sqlalchemy.orm import (
     Mapped,
@@ -259,14 +260,21 @@ def get_document_by_url(engine: Engine, url: str) -> str | None:
 
 
 def delete_score(engine: Engine, qa_id: int) -> None:
-    """Удаляет оценку у вопроса
-
-    Args:
-        engine (Engine): текущее подключение к БД
-        qa_id (int): идентификатор QuestionAnswer
-    """
+    """Удаляет оценку у вопроса и эмбеддинг, если оценка 5"""
     with Session(engine) as session:
-        session.query(QuestionAnswer).filter(QuestionAnswer.id == qa_id).update(
-            {QuestionAnswer.score: None}
-        )
-        session.commit()
+        # Получаем вопрос с его оценкой
+        qa = session.query(QuestionAnswer).filter(QuestionAnswer.id == qa_id).first()
+
+        if qa:
+            if qa.score == 5:
+                session.execute(
+                    update(QuestionAnswer)
+                    .where(QuestionAnswer.id == qa_id)
+                    .values(embedding=None)
+                )
+            session.execute(
+                update(QuestionAnswer)
+                .where(QuestionAnswer.id == qa_id)
+                .values(score=None)
+            )
+            session.commit()

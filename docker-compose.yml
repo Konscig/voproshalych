@@ -64,8 +64,8 @@ services:
         depends_on:
             db:
                 condition: service_healthy
-            qa:
-                condition: service_started
+            # qa:
+            #     condition: service_started
             db-migrate:
                 condition: service_completed_successfully
         networks:

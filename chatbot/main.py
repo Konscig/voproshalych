@@ -2,16 +2,21 @@ import asyncio
 import json
 import logging
 import math
+import os
 from multiprocessing import Process
+
+import ffmpeg
+import aiofiles
+import aiogram as tg
 from aiogram import filters
 from aiogram.exceptions import TelegramUnauthorizedError as TUerror
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-import aiogram as tg
-from aiohttp import web, ClientError
+from aiohttp import web, ClientError, ClientSession
 from sqlalchemy import create_engine
 import vkbottle as vk
 from vkbottle.bot import Message as VKMessage
-from vkbottle.http import aiohttp
+from vkbottle.http import aiohttp as vk_aiohttp
+
 from config import Config
 from confluence_interaction import (
     make_markup_by_confluence,
@@ -31,6 +36,67 @@ from database import (
 from strings import Strings
 from datetime import datetime, timedelta
 
+STT_URL = Config.STT_URL
+
+def remove_file(path: str):
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+async def send_to_stt(wav_path: str) -> str:
+    """
+    Sends the WAV audio to the STT microservice and returns the transcription text.
+    """
+    async with ClientSession() as session:
+        async with aiofiles.open(wav_path, 'rb') as f:
+            file_data = await f.read()
+        data = {'file': (wav_path, file_data, 'audio/wav')}
+        async with session.post(STT_URL, data=data) as resp:
+            if resp.status == 200:
+                result = await resp.json()
+                return result.get('transcription', '')
+            else:
+                logging.error(f"STT service returned status {resp.status}")
+                return ''
+
+async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
+    """
+    Downloads a Telegram voice file (.oga), converts to .wav, returns path.
+    """
+    ogg_path = f"voice_tg_{user_id}_{int(datetime.now().timestamp())}.oga"
+    wav_path = ogg_path.replace('.oga', '.wav')
+    # download .oga file
+    await file.download(destination=ogg_path)
+    # convert to wav
+    try:
+        ffmpeg.input(ogg_path).output(wav_path, format='wav').run(overwrite_output=True)
+    except Exception as e:
+        logging.error(f"TG conversion error: {e}")
+    finally:
+        remove_file(ogg_path)
+    return wav_path
+
+async def download_and_convert_vk(url: str, user_id: int) -> str:
+    """
+    Downloads a VK audio_message (.ogg), converts to .wav, returns path.
+    """
+    ogg_path = f"voice_vk_{user_id}_{int(datetime.now().timestamp())}.ogg"
+    wav_path = ogg_path.replace('.ogg', '.wav')
+    # download .ogg file
+    async with vk_aiohttp.ClientSession() as session:
+        resp = await session.get(url)
+        content = await resp.read()
+        async with aiofiles.open(ogg_path, 'wb') as f:
+            await f.write(content)
+    # convert to wav
+    try:
+        ffmpeg.input(ogg_path).output(wav_path, format='wav').run(overwrite_output=True)
+    except Exception as e:
+        logging.error(f"VK conversion error: {e}")
+    finally:
+        remove_file(ogg_path)
+    return wav_path
 
 class Permission(vk.ABCRule[VKMessage]):
     def __init__(self, user_ids: list):
@@ -295,6 +361,23 @@ async def tg_subscribe(message: tg.types.Message):
             reply_markup=tg_keyboard_choice(Strings.Subscribe),
         )
 
+@dispatcher.message(filters.Voice())
+async def tg_voice_handler(message: tg.types.Message):
+    file = await tg_bot.get_file(message.voice.file_id)
+    wav = await download_and_convert_tg(file, message.from_user.id)
+    text = await send_to_stt(wav)
+    remove_file(wav)
+    await message.reply(f"Распознанный текст: {text}")
+
+@vk_bot.on.message(func=lambda m: m.attachments and any(att.type=='audio_message' for att in m.attachments))
+async def vk_voice_handler(message: VKMessage):
+    for att in message.attachments:
+        if att.type=='audio_message':
+            wav = await download_and_convert_vk(att.audio_message.link_ogg, message.from_id)
+            text = await send_to_stt(wav)
+            remove_file(wav)
+            await message.answer(f"Распознанный текст: {text}", random_id=0)
+            break
 
 async def get_answer(question: str) -> tuple[str, str | None]:
     """Получение ответа на вопрос с использованием микросервиса
@@ -307,7 +390,7 @@ async def get_answer(question: str) -> tuple[str, str | None]:
     """
 
     question = question.strip().lower()
-    async with aiohttp.ClientSession() as session:
+    async with ClientSession() as session:
         async with session.post(
             f"http://{Config.QA_HOST}/qa/", json={"question": question}
         ) as response:

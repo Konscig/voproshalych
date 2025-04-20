@@ -25,7 +25,7 @@ uv run fastapi dev
 curl -X 'POST' \
   'http://127.0.0.1:8000/transcribe/' \
   -H 'accept: application/json' \
-  -F 'file=@/Users/masha/src/voproshalych/stt/test/voice_117053811_1744395017.wav'
+  -F 'file=@/file_path'
 ```
 
 ## docker

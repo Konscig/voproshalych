@@ -5,11 +5,13 @@ services:
         image: virtassist/db:latest
         container_name: virtassist-db
         restart: unless-stopped
-        environment:
-            - TZ=${TZ}
-            - POSTGRES_DB=${POSTGRES_DB}
-            - POSTGRES_USER=${POSTGRES_USER}
-            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        env_file:
+            - .env.docker
+        # environment:
+        #     - TZ=${TZ}
+        #     - POSTGRES_DB=${POSTGRES_DB}
+        #     - POSTGRES_USER=${POSTGRES_USER}
+        #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
         volumes:
             - db-data:/var/lib/postgresql/data
         networks:
@@ -56,7 +58,7 @@ services:
         image: virtassist/chatbot:latest
         container_name: virtassist-chatbot
         restart: unless-stopped
-        command: python main.py
+        # command: python main.py
         env_file:
             - .env.docker
         depends_on:

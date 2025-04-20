@@ -23,21 +23,21 @@ services:
             retries: 3
             start_period: 20s
             start_interval: 5s
-    db-migrate:
-        build:
-            context: ./db
-            dockerfile: Dockerfile-migrate
-        image: virtassist/db-migrate:latest
-        container_name: virtassist-db-migrate
-        restart: no
-        command: alembic upgrade head
-        env_file:
-            - .env.docker
-        depends_on:
-            db:
-                condition: service_healthy
-        networks:
-            - chatbot-conn
+    # db-migrate:
+    #     build:
+    #         context: ./db
+    #         dockerfile: Dockerfile-migrate
+    #     image: virtassist/db-migrate:latest
+    #     container_name: virtassist-db-migrate
+    #     restart: no
+    #     command: alembic upgrade head
+    #     env_file:
+    #         - .env.docker
+    #     depends_on:
+    #         db:
+    #             condition: service_healthy
+    #     networks:
+    #         - chatbot-conn
     qa:
         build: ./qa
         image: virtassist/qa:latest
@@ -49,8 +49,8 @@ services:
         depends_on:
             db:
                 condition: service_healthy
-            db-migrate:
-                condition: service_completed_successfully
+            # db-migrate:
+            #     condition: service_completed_successfully
         networks:
             - chatbot-conn
     chatbot:
@@ -64,10 +64,10 @@ services:
         depends_on:
             db:
                 condition: service_healthy
-            # qa:
-            #     condition: service_started
-            db-migrate:
-                condition: service_completed_successfully
+            qa:
+                condition: service_started
+            # db-migrate:
+            #     condition: service_completed_successfully
         networks:
             - chatbot-conn
     adminpanel:
@@ -87,8 +87,8 @@ services:
                 condition: service_started
             chatbot:
                 condition: service_started
-            db-migrate:
-                condition: service_completed_successfully
+            # db-migrate:
+            #     condition: service_completed_successfully
         networks:
             - chatbot-conn
 volumes:

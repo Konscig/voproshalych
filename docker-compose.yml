@@ -74,7 +74,7 @@ services:
         networks:
             - chatbot-conn
         volumes:
-            - ./chatbot/main.py:/app/main.py
+            - ./chatbot/main.py:/chatbot/main.py
 
     adminpanel:
         build: ./adminpanel

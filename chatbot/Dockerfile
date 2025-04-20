@@ -7,15 +7,19 @@ RUN apt-get update && \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# ENV PYTHONDONTWRITEBYTECODE 1
+# ENV PYTHONUNBUFFERED 1
+ENV UV_SYSTEM_PYTHON=1
 
-ADD *.toml *.lock /usr/src/app/
-RUN uv venv --seed &&\
-    uv sync --frozen
+# ADD *.toml *.lock .python-version ./
+ADD *.toml *.lock ./
+# RUN uv venv --seed &&\
+#     uv sync --frozen
+RUN uv sync --frozen
 
-COPY . .
+COPY *.py .
 
 CMD uv run main.py
+# CMD python main.py

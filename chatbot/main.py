@@ -8,7 +8,7 @@ from multiprocessing import Process
 import ffmpeg
 import aiofiles
 import aiogram as tg
-from aiogram import filters
+from aiogram import filters, F
 from aiogram.exceptions import TelegramUnauthorizedError as TUerror
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiohttp import web, ClientError, ClientSession
@@ -66,9 +66,9 @@ async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
     """
     ogg_path = f"voice_tg_{user_id}_{int(datetime.now().timestamp())}.oga"
     wav_path = ogg_path.replace('.oga', '.wav')
-    # download .oga file
-    await file.download(destination=ogg_path)
-    # convert to wav
+
+    await tg_bot.download_file(file.file_path, destination=ogg_path)
+
     try:
         ffmpeg.input(ogg_path).output(wav_path, format='wav').run(overwrite_output=True)
     except Exception as e:
@@ -83,13 +83,11 @@ async def download_and_convert_vk(url: str, user_id: int) -> str:
     """
     ogg_path = f"voice_vk_{user_id}_{int(datetime.now().timestamp())}.ogg"
     wav_path = ogg_path.replace('.ogg', '.wav')
-    # download .ogg file
     async with vk_aiohttp.ClientSession() as session:
         resp = await session.get(url)
         content = await resp.read()
         async with aiofiles.open(ogg_path, 'wb') as f:
             await f.write(content)
-    # convert to wav
     try:
         ffmpeg.input(ogg_path).output(wav_path, format='wav').run(overwrite_output=True)
     except Exception as e:
@@ -361,18 +359,37 @@ async def tg_subscribe(message: tg.types.Message):
             reply_markup=tg_keyboard_choice(Strings.Subscribe),
         )
 
-@dispatcher.message(filters.Voice())
+@dispatcher.message(F.voice)
 async def tg_voice_handler(message: tg.types.Message):
+    """
+    Обработчик голосовых сообщений Telegram:
+    - Скачивает голосовое сообщение (.oga) с сервера Telegram.
+    - Конвертирует скачанный файл в формат WAV.
+    - Отправляет WAV-файл микросервису STT для распознавания.
+    - Удаляет временный файл WAV.
+    - Отправляет распознанный текст пользователю.
+    """
     file = await tg_bot.get_file(message.voice.file_id)
     wav = await download_and_convert_tg(file, message.from_user.id)
     text = await send_to_stt(wav)
     remove_file(wav)
     await message.reply(f"Распознанный текст: {text}")
 
-@vk_bot.on.message(func=lambda m: m.attachments and any(att.type=='audio_message' for att in m.attachments))
+@vk_bot.on.message(
+    func=lambda m: m.attachments and any(att.type == "audio_message" for att in m.attachments)
+)
 async def vk_voice_handler(message: VKMessage):
+    """
+    Обработчик голосовых сообщений ВКонтакте:
+    - Перебирает вложения сообщения и ищет аудио-сообщение.
+    - Скачивает аудио-сообщение (.ogg) по ссылке.
+    - Конвертирует скачанный файл в формат WAV.
+    - Отправляет WAV-файл микросервису STT для распознавания.
+    - Удаляет временный файл WAV.
+    - Отправляет распознанный текст пользователю.
+    """
     for att in message.attachments:
-        if att.type=='audio_message':
+        if att.type == "audio_message":
             wav = await download_and_convert_vk(att.audio_message.link_ogg, message.from_id)
             text = await send_to_stt(wav)
             remove_file(wav)

@@ -55,7 +55,8 @@ services:
             - chatbot-conn
     chatbot:
         build: ./chatbot
-        image: virtassist/chatbot:latest
+        # image: virtassist/chatbot:latest
+        image: virtassist/chatbot:stt
         container_name: virtassist-chatbot
         restart: unless-stopped
         # command: python main.py
@@ -66,10 +67,15 @@ services:
                 condition: service_healthy
             qa:
                 condition: service_started
+            stt:
+                condition: service_started
             # db-migrate:
             #     condition: service_completed_successfully
         networks:
             - chatbot-conn
+        volumes:
+            - ./chatbot/main.py:/app/main.py
+
     adminpanel:
         build: ./adminpanel
         image: virtassist/adminpanel:latest
@@ -91,6 +97,17 @@ services:
             #     condition: service_completed_successfully
         networks:
             - chatbot-conn
+    stt:
+        build: ./stt
+        image: stt-service:0.1.0
+        # container_name: virtassist-stt
+        # command: uv run fastapi dev --host 0.0.0.0
+        # ports:
+        #  - 8000:8000
+        restart: unless-stopped
+        networks:
+            - chatbot-conn
+
 volumes:
     db-data:
 

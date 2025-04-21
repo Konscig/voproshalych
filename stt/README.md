@@ -32,6 +32,25 @@ curl -X 'POST' \
 
 ```sh
 docker build -t stt-service:0.1.0 .
+docker build -t test-service:0.1.0 .
+
 docker run --name stt -it --rm -p 8000:8000 stt-service:0.1.0 uv run fastapi dev --host 0.0.0.0
+docker run --name test -it --rm test-service:0.1.0
 ```
 
+## docker compose
+
+```sh
+docker compose down --remove-orphans
+docker compose up -d && docker compose logs -f
+docker compose run -it --rm test-tel
+```
+
+## docker push
+
+```sh
+# docker tag stt-service:0.1.0 webmasha/stt:0.1.0 
+# docker login -u webmasha
+# docker push webmasha/stt:0.1.0
+docker compose push
+```

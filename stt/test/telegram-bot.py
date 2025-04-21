@@ -14,7 +14,7 @@ TOKEN = os.getenv("TG_ACCESS_TOKEN")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-FASTAPI_URL = "http://127.0.0.1:8000/transcribe/"
+FASTAPI_URL = "http://stt:8000/transcribe/"
 
 # скачивает файл с сервера telegram по переданному file_path ,
 # конвертирует его из формата .oga в .wav и сохраняет
@@ -67,4 +67,5 @@ async def handle_voice(message: Message):
 dp.message.register(handle_voice, lambda message: hasattr(message, "voice") and message.voice is not None)
 
 if __name__ == '__main__':
+    print('telegram-bot:: started in pull mode')
     asyncio.run(dp.start_polling(bot))

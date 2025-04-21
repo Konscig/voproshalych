@@ -8,7 +8,7 @@ from vkbottle.bot import Bot, Message
 
 load_dotenv()
 GROUP_TOKEN = os.getenv("VK_ACCESS_GROUP_TOKEN")
-FASTAPI_URL = "http://127.0.0.1:8000/transcribe/"
+FASTAPI_URL = "http://stt:8000/transcribe/"
 
 bot = Bot(token=GROUP_TOKEN)
 
@@ -62,4 +62,5 @@ async def handle_voice(message: Message):
                 break
 
 if __name__ == "__main__":
+    print('vk-bot:: started in pull mode')
     bot.run_forever()

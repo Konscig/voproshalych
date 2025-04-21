@@ -31,11 +31,11 @@ curl -X 'POST' \
 ## docker
 
 ```sh
-docker build -t stt-service:0.1.0 .
-docker build -t test-service:0.1.0 .
+docker buildx build -t webmasha/stt-test:0.2.0 --platform linux/arm64,linux/amd64 --push test
+docker buildx build -t webmasha/stt-gam:0.1.0 --platform linux/arm64,linux/amd64 --push .
 
-docker run --name stt -it --rm -p 8000:8000 stt-service:0.1.0 uv run fastapi dev --host 0.0.0.0
-docker run --name test -it --rm test-service:0.1.0
+docker run --name stt -it --rm -p 8000:8000 webmasha/stt-gam:0.1.0  uv run fastapi dev --host 0.0.0.0
+docker run --name test -it --rm webmasha/stt-test:0.2.0
 ```
 
 ## docker compose
@@ -49,7 +49,7 @@ docker compose run -it --rm test-tel
 ## docker push
 
 ```sh
-# docker tag stt-service:0.1.0 webmasha/stt:0.1.0 
+# docker tag stt-service:0.1.0 webmasha/stt:0.1.0
 # docker login -u webmasha
 # docker push webmasha/stt:0.1.0
 docker compose push

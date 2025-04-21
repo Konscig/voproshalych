@@ -11,7 +11,3 @@ model = gigaam.load_model(
 
 def transcribe_audio(model, wav_path: str) -> str:
     return model.transcribe(wav_path)
-
-
-
-

@@ -10,4 +10,5 @@ dependencies = [
     "requests>=2.32.3",
     "aiogram>=3.19.0",
     "httpx>=0.28.1",
+    "vkbottle>=4.4.6",
 ]

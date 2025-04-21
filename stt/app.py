@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from gigaam import model, transcribe_audio
+from am import model, transcribe_audio
 import os
 
 app = FastAPI()

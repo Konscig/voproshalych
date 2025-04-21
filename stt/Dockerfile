@@ -9,15 +9,16 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 
 EXPOSE 8000
 
-WORKDIR /app
+WORKDIR /stt
 
-ADD *.toml *.lock /app/
-RUN uv venv --seed &&\
-    uv sync --frozen
+ENV UV_SYSTEM_PYTHON=1
 
-ADD gigaam.py /app/
-RUN uv run gigaam.py
+ADD *.toml *.lock ./
+RUN uv sync --frozen
 
-ADD app.py /app/
+ADD am.py .
+RUN uv run am.py
+
+ADD app.py .
 
 CMD uv run fastapi dev --host 0.0.0.0

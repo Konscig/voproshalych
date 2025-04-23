@@ -84,18 +84,20 @@
                 </div>
                 <div class="accordion" id="mainAccordion">
                     <div class="accordion-item">
-                        <h2 class="accordion-header">
+                        <h2 class="accordion-header" id="documentsHeading">
                             <button class="accordion-button collapsed"
                                     type="button"
                                     data-bs-toggle="collapse"
                                     data-bs-target="#documentsCollapse"
-                                    aria-expanded="false">
+                                    aria-expanded="false"
+                                    aria-controls="documentsCollapse">
                                 <i class="bi bi-folder2-open me-2"></i>
                                 Список документов ({{ documents|length }})
                             </button>
                         </h2>
                         <div id="documentsCollapse"
                              class="accordion-collapse collapse"
+                             aria-labelledby="documentsHeading"
                              data-bs-parent="#mainAccordion">
                             <div class="accordion-body p-0">
                                 <div class="scroll-container" style="max-height: 300px">
@@ -110,36 +112,41 @@
                         </div>
                     </div>
                     <div class="accordion-item">
-                        <h2 class="accordion-header">
+                        <h2 class="accordion-header" id="questionsHeading">
                             <button class="accordion-button collapsed"
                                     type="button"
                                     data-bs-toggle="collapse"
                                     data-bs-target="#questionsCollapse"
-                                    aria-expanded="false">
+                                    aria-expanded="false"
+                                    aria-controls="questionsCollapse">
                                 <i class="bi bi-patch-question me-2"></i>
                                 Детализация оценок ({{ question_counts }})
                             </button>
                         </h2>
                         <div id="questionsCollapse"
                              class="accordion-collapse collapse"
+                             aria-labelledby="questionsHeading"
                              data-bs-parent="#mainAccordion">
                             <div class="accordion-body p-0">
-                                <div class="scroll-container" style="max-height: 400px">
-                                    <div class="accordion" id="innerAccordion">
-                                        <div class="accordion-item">
-                                            <h2 class="accordion-header">
-                                                <button class="accordion-button collapsed"
-                                                        type="button"
-                                                        data-bs-toggle="collapse"
-                                                        data-bs-target="#negativeQuestions">
-                                                    <i class="bi bi-x-circle me-2 text-danger"></i>
-                                                    Плохая оценка ({{ x_questions|length }})
-                                                </button>
-                                            </h2>
-                                            <div id="negativeQuestions"
-                                                 class="accordion-collapse collapse"
-                                                 data-bs-parent="#innerAccordion">
-                                                <div class="accordion-body pt-0">
+                                <div class="accordion" id="innerAccordion">
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="negativeHeading">
+                                            <button class="accordion-button collapsed"
+                                                    type="button"
+                                                    data-bs-toggle="collapse"
+                                                    data-bs-target="#negativeQuestions"
+                                                    aria-expanded="false"
+                                                    aria-controls="negativeQuestions">
+                                                <i class="bi bi-x-circle me-2 text-danger"></i>
+                                                Плохая оценка ({{ x_questions|length }})
+                                            </button>
+                                        </h2>
+                                        <div id="negativeQuestions"
+                                                class="accordion-collapse collapse"
+                                                aria-labelledby="negativeHeading"
+                                                data-bs-parent="#innerAccordion">
+                                            <div class="accordion-body pt-0">
+                                                <div class="scroll-container" style="max-height: 400px">
                                                     {% for q in x_questions %}
                                                     <div class="question-item mb-2">
                                                         <span class="bullet bg-danger"></span>
@@ -149,21 +156,26 @@
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
 
-                                        <div class="accordion-item">
-                                            <h2 class="accordion-header">
-                                                <button class="accordion-button collapsed"
-                                                        type="button"
-                                                        data-bs-toggle="collapse"
-                                                        data-bs-target="#positiveQuestions">
-                                                    <i class="bi bi-check-circle me-2 text-success"></i>
-                                                    Хорошая оценка ({{ v_questions|length }})
-                                                </button>
-                                            </h2>
-                                            <div id="positiveQuestions"
-                                                 class="accordion-collapse collapse"
-                                                 data-bs-parent="#innerAccordion">
-                                                <div class="accordion-body pt-0">
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="positiveHeading">
+                                            <button class="accordion-button collapsed"
+                                                    type="button"
+                                                    data-bs-toggle="collapse"
+                                                    data-bs-target="#positiveQuestions"
+                                                    aria-expanded="false"
+                                                    aria-controls="positiveQuestions">
+                                                <i class="bi bi-check-circle me-2 text-success"></i>
+                                                Хорошая оценка ({{ v_questions|length }})
+                                            </button>
+                                        </h2>
+                                        <div id="positiveQuestions"
+                                                class="accordion-collapse collapse"
+                                                aria-labelledby="positiveHeading"
+                                                data-bs-parent="#innerAccordion">
+                                            <div class="accordion-body pt-0">
+                                                <div class="scroll-container" style="max-height: 400px">
                                                     {% for q in v_questions %}
                                                     <div class="question-item mb-2">
                                                         <span class="bullet bg-success"></span>
@@ -239,17 +251,5 @@
             border-bottom: 1px solid #dee2e6;
         }
     </style>
-
-    <script>
-        $(document).ready(function() {
-
-            $('input[name="time_start"]').val('{{ time_start }}');
-            $('input[name="time_end"]').val('{{ time_end }}');
-
-            $('input[type="date"]').change(function() {
-                $('#statsForm').submit();
-            });
-        });
-    </script>
 </body>
 {% endblock %}

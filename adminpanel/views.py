@@ -213,7 +213,7 @@ def service_stats() -> str:
         have_low_score=True,
         have_high_score=False,
         have_not_score=False,
-    ) # Вопросы с плохой оценкой
+    )
 
     v_questions = get_questions_for_clusters(
         time_start=time_start,
@@ -222,7 +222,7 @@ def service_stats() -> str:
         have_low_score=False,
         have_high_score=True,
         have_not_score=False,
-    ) # Вопросы с хорошей оценкой
+    )
 
     x_count = len(x_questions)
     v_count = len(v_questions)

@@ -325,7 +325,10 @@ def get_last_sync_date() -> str:
 
 
 def get_unique_docs_urls() -> list[dict]:
-    """Возвращает уникальные документы Confluence в формате {title: название, url: ссылка}"""
+    """
+    Функция возвращает уникальные документы Confluence в формате {title: название, url: ссылка}
+    Если функция не находит название в url странице, то название берётся из первого чанка для этого документа
+    """
     with Session(db.engine) as session:
         unique_urls = (
             session.query(Chunk.confluence_url)
@@ -351,6 +354,18 @@ def get_unique_docs_urls() -> list[dict]:
                     word.capitalize()
                     for word in clean_name.replace('-', ' ').split()
                 )
+
+            if title == "Неизвестный документ":
+                first_chunk = (
+                    session.query(Chunk.text)
+                    .filter(Chunk.confluence_url == raw_url)
+                    .order_by(Chunk.created_at.asc())
+                    .first()
+                )
+
+                if first_chunk and first_chunk.text:
+                    words = first_chunk.text.split()[:7]
+                    title = ' '.join(words).capitalize()
 
             documents.append({
                 "title": title,

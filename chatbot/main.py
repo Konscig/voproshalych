@@ -12,6 +12,7 @@ from aiogram import filters, F
 from aiogram.exceptions import TelegramUnauthorizedError as TUerror
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiohttp import web, ClientError, ClientSession
+from aiohttp import FormData
 from sqlalchemy import create_engine
 import vkbottle as vk
 from vkbottle.bot import Message as VKMessage
@@ -44,15 +45,22 @@ def remove_file(path: str):
     except OSError:
         pass
 
+
 async def send_to_stt(wav_path: str) -> str:
     """
-    Sends the WAV audio to the STT microservice and returns the transcription text.
+    Отправляет WAV-файл в микросервис STT и возвращает текстовую расшифровку.
     """
+    form = FormData()
+    async with aiofiles.open(wav_path, 'rb') as f:
+        wav_bytes = await f.read()
+    form.add_field(
+        name='file',
+        value=wav_bytes,
+        filename=os.path.basename(wav_path),
+        content_type='audio/wav'
+    )
     async with ClientSession() as session:
-        async with aiofiles.open(wav_path, 'rb') as f:
-            file_data = await f.read()
-        data = {'file': (wav_path, file_data, 'audio/wav')}
-        async with session.post(STT_URL, data=data) as resp:
+        async with session.post(STT_URL, data=form) as resp:
             if resp.status == 200:
                 result = await resp.json()
                 return result.get('transcription', '')
@@ -60,9 +68,10 @@ async def send_to_stt(wav_path: str) -> str:
                 logging.error(f"STT service returned status {resp.status}")
                 return ''
 
+
 async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
     """
-    Downloads a Telegram voice file (.oga), converts to .wav, returns path.
+    Скачивает голосовое сообщение из Telegram (.oga), конвертирует его в .wav и возвращает путь к файлу.
     """
     ogg_path = f"voice_tg_{user_id}_{int(datetime.now().timestamp())}.oga"
     wav_path = ogg_path.replace('.oga', '.wav')
@@ -77,9 +86,10 @@ async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
         remove_file(ogg_path)
     return wav_path
 
+
 async def download_and_convert_vk(url: str, user_id: int) -> str:
     """
-    Downloads a VK audio_message (.ogg), converts to .wav, returns path.
+    Скачивает голосовое сообщение из VK (.ogg), конвертирует его в .wav и возвращает путь к файлу.
     """
     ogg_path = f"voice_vk_{user_id}_{int(datetime.now().timestamp())}.ogg"
     wav_path = ogg_path.replace('.ogg', '.wav')

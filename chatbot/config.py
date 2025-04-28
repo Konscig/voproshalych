@@ -19,4 +19,4 @@ class Config:
         else []
     )
     STT_HOST = environ.get("STT_HOST", "stt")
-    STT_URL = f"http://{STT_HOST}/transcribe/"
+    STT_URL = f"http://{STT_HOST}:8000/transcribe/"

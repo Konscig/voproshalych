@@ -1,0 +1,14 @@
+[project]
+name = "test_tel_bot"
+version = "0.1.0"
+description = "test tel bot"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv>=1.0.1",
+    "ffmpeg-python>=0.2.0",
+    "requests>=2.32.3",
+    "aiogram>=3.19.0",
+    "httpx>=0.28.1",
+    "vkbottle>=4.4.6",
+]

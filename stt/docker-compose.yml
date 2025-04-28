@@ -1,0 +1,21 @@
+services:
+    stt:
+        # build: .
+        image: webmasha/stt-gam:0.1.0
+        restart: unless-stopped
+        # command: uv run fastapi dev --host 0.0.0.0
+        # ports:
+        #  - 8000:8000
+    test-tel: &test
+        # build: ./test
+        image: webmasha/stt-test:0.2.0
+        restart: unless-stopped
+        env_file:
+            - .env
+        # volumes:
+        #     - ./test/telegram-bot.py:/app/telegram-bot.py
+    test-vk:
+        <<: *test
+        command: uv run vk-bot.py
+        # volumes:
+        #     - ./test/vk-bot.py:/app/vk-bot.py

@@ -5,11 +5,13 @@ services:
         image: virtassist/db:latest
         container_name: virtassist-db
         restart: unless-stopped
-        environment:
-            - TZ=${TZ}
-            - POSTGRES_DB=${POSTGRES_DB}
-            - POSTGRES_USER=${POSTGRES_USER}
-            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        env_file:
+            - .env.docker
+        # environment:
+        #     - TZ=${TZ}
+        #     - POSTGRES_DB=${POSTGRES_DB}
+        #     - POSTGRES_USER=${POSTGRES_USER}
+        #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
         volumes:
             - db-data:/var/lib/postgresql/data
         networks:
@@ -21,21 +23,21 @@ services:
             retries: 3
             start_period: 20s
             start_interval: 5s
-    db-migrate:
-        build:
-            context: ./db
-            dockerfile: Dockerfile-migrate
-        image: virtassist/db-migrate:latest
-        container_name: virtassist-db-migrate
-        restart: no
-        command: alembic upgrade head
-        env_file:
-            - .env.docker
-        depends_on:
-            db:
-                condition: service_healthy
-        networks:
-            - chatbot-conn
+    # db-migrate:
+    #     build:
+    #         context: ./db
+    #         dockerfile: Dockerfile-migrate
+    #     image: virtassist/db-migrate:latest
+    #     container_name: virtassist-db-migrate
+    #     restart: no
+    #     command: alembic upgrade head
+    #     env_file:
+    #         - .env.docker
+    #     depends_on:
+    #         db:
+    #             condition: service_healthy
+    #     networks:
+    #         - chatbot-conn
     qa:
         build: ./qa
         image: virtassist/qa:latest
@@ -47,16 +49,17 @@ services:
         depends_on:
             db:
                 condition: service_healthy
-            db-migrate:
-                condition: service_completed_successfully
+            # db-migrate:
+            #     condition: service_completed_successfully
         networks:
             - chatbot-conn
     chatbot:
         build: ./chatbot
-        image: virtassist/chatbot:latest
+        # image: virtassist/chatbot:latest
+        image: virtassist/chatbot:stt
         container_name: virtassist-chatbot
         restart: unless-stopped
-        command: python main.py
+        # command: python main.py
         env_file:
             - .env.docker
         depends_on:
@@ -64,10 +67,15 @@ services:
                 condition: service_healthy
             qa:
                 condition: service_started
-            db-migrate:
-                condition: service_completed_successfully
+            stt:
+                condition: service_started
+            # db-migrate:
+            #     condition: service_completed_successfully
         networks:
             - chatbot-conn
+        volumes:
+            - ./chatbot/main.py:/chatbot/main.py
+
     adminpanel:
         build: ./adminpanel
         image: virtassist/adminpanel:latest
@@ -85,10 +93,21 @@ services:
                 condition: service_started
             chatbot:
                 condition: service_started
-            db-migrate:
-                condition: service_completed_successfully
+            # db-migrate:
+            #     condition: service_completed_successfully
         networks:
             - chatbot-conn
+    stt:
+        build: ./stt
+        image: stt-service:0.1.0
+        # container_name: virtassist-stt
+        # command: uv run fastapi dev --host 0.0.0.0
+        # ports:
+        #  - 8000:8000
+        restart: unless-stopped
+        networks:
+            - chatbot-conn
+
 volumes:
     db-data:
 

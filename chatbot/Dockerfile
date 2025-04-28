@@ -1,12 +1,25 @@
-FROM python:3.10.0-slim-buster
+FROM python:3.10.16-slim-bullseye
 
-WORKDIR /usr/src/app
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 
-RUN pip install --upgrade pip
-COPY ./requirements.txt .
-RUN pip install -r requirements.txt
+WORKDIR /chatbot
 
-COPY . .
+# ENV PYTHONDONTWRITEBYTECODE 1
+# ENV PYTHONUNBUFFERED 1
+ENV UV_SYSTEM_PYTHON=1
+
+# ADD *.toml *.lock .python-version ./
+ADD *.toml *.lock ./
+# RUN uv venv --seed &&\
+#     uv sync --frozen
+RUN uv sync --frozen
+
+COPY *.py .
+
+CMD uv run main.py
+# CMD python main.py

@@ -18,6 +18,8 @@ from pgvector.sqlalchemy import Vector
 from cluster_analysis import mark_of_question
 from config import app
 from pandas import date_range
+from urllib.parse import unquote, parse_qs, urlparse
+import re
 
 db = SQLAlchemy(app)
 
@@ -306,3 +308,79 @@ def get_admins() -> list[Admin]:
             for admin in session.query(Admin).order_by(Admin.id).all()
         ]
     return admins
+
+
+def get_documents_count() -> int:
+    """Возвращает количество уникальных документов (confluence_url)"""
+    with Session(db.engine) as session:
+        return session.query(func.count(func.distinct(Chunk.confluence_url))).scalar()
+
+
+def get_chunks_count() -> int:
+    """Возвращает общее количество фрагментов"""
+    with Session(db.engine) as session:
+        return session.query(func.count(Chunk.id)).scalar()
+
+
+def get_last_sync_date() -> str:
+    """Возвращает дату последнего обновления или создания фрагмента"""
+    with Session(db.engine) as session:
+        last_updated = (
+            session.query(func.max(Chunk.updated_at))
+            .filter(Chunk.updated_at.is_not(None))
+            .scalar()
+        )
+        if not last_updated:
+            last_updated = session.query(func.max(Chunk.created_at)).scalar()
+        return last_updated.strftime("%Y-%m-%d") if last_updated else "N/A"
+
+
+def get_unique_docs_urls() -> list[dict]:
+    """
+    Функция возвращает уникальные документы Confluence в формате {title: название, url: ссылка}
+    Если функция не находит название в url странице, то название берётся из первого чанка для этого документа
+    """
+    with Session(db.engine) as session:
+        unique_urls = (
+            session.query(Chunk.confluence_url)
+            .distinct()
+            .all()
+        )
+
+        documents = []
+        for (raw_url,) in unique_urls:
+            decoded_url = unquote(raw_url)
+            parsed_url = urlparse(decoded_url)
+            query_params = parse_qs(parsed_url.query)
+
+            title = "Неизвестный документ"
+            if 'preview' in query_params:
+                preview_path = unquote(query_params['preview'][0])
+                filename = preview_path.split('/')[-1]
+                clean_name = filename.rsplit('.', 1)[0]
+                clean_name = clean_name.replace('+', ' ')
+                clean_name = unquote(clean_name)
+                clean_name = re.sub(r'\s*\(\d+\)\s*', '', clean_name)
+                title = ' '.join(
+                    word.capitalize()
+                    for word in clean_name.replace('-', ' ').split()
+                )
+
+            if title == "Неизвестный документ":
+                first_chunk = (
+                    session.query(Chunk.text)
+                    .filter(Chunk.confluence_url == raw_url)
+                    .order_by(Chunk.created_at.asc())
+                    .first()
+                )
+
+                if first_chunk and first_chunk.text:
+                    words = first_chunk.text.split()[:7]
+                    title = ' '.join(words).capitalize()
+
+            documents.append({
+                "title": title,
+                "url": raw_url
+            })
+
+    return documents

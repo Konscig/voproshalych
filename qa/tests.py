@@ -12,9 +12,9 @@ def test_llm():
     частного фитнес-клуба, необходимо заполнить заявление и обратиться
     к курирующему преподавателю"""
     question = "Что нужно сделать, чтобы заменить физру на частный клуб?"
-    assert "препод" in get_answer(context, question).lower()
+    assert "препод" in get_answer([], context, question).lower()
     sleep(1.1)
-    assert "не найден" in get_answer(context, "Когда наступит лето?").lower()
+    assert "не найден" in get_answer([], context, "Когда наступит лето?").lower()
 
 
 def test_confluence():

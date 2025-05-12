@@ -3,7 +3,16 @@ from typing import Optional, List
 from bcrypt import hashpw, gensalt, checkpw
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Text, func, and_
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Text,
+    func,
+    and_,
+)
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 from cluster_analysis import mark_of_question
@@ -78,6 +87,7 @@ class QuestionAnswer(db.Model):
         user (User): пользователь, задавший вопрос
         created_at (datetime): время создания модели
         updated_at (datetime): время обновления модели
+        stop_point (bool): флаг, указывающий что это конечная точка диалога (True - диалог завершен, False - продолжается, по умолчанию False)
     """
 
     __tablename__ = "question_answer"
@@ -93,6 +103,7 @@ class QuestionAnswer(db.Model):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    stop_point: Mapped[bool] = mapped_column(Boolean(), default=False)
 
 
 class Admin(db.Model, UserMixin):

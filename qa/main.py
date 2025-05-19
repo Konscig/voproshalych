@@ -49,7 +49,7 @@ def get_answer(context: str, question: str) -> str:
         response = requests.post(Config.MISTRAL_API_URL, json=prompt, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            logging.info(f"spent tokens: {data.get('usage', {}).get('complition', 0)}")
+            logging.info(f"spent tokens: {data.get('usage', {})}")
             return (
                 data.get("choices", [{}])[0]
                 .get("message", {})
@@ -256,10 +256,7 @@ async def qa(request: web.Request) -> web.Response:
     )
     if verdict:
         return web.json_response(
-            {
-                "answer": answer,
-                "confluence_url": chunk.url,
-            }
+            {"answer": answer, "confluence_url": chunk.confluence_url}
         )
     if not verdict:
         logging.error(f"Answer {answer} were banned for question {question}")

@@ -27,12 +27,8 @@ class Config:
 
         Используй следующий фрагмент из базы знаний в тройных кавычках, чтобы кратко ответить на вопрос студента.
         Оставь адреса, телефоны, имена как есть, ничего не изменяй. Предоставь краткий, точный и полезный ответ, чтобы помочь студентам.
-        Используй следующий фрагмент из базы знаний в тройных кавычках, чтобы кратко ответить на вопрос студента.
-        Оставь адреса, телефоны, имена как есть, ничего не изменяй. Предоставь краткий, точный и полезный ответ, чтобы помочь студентам.
         Если ответа в фрагментах нет, напишите "ответ не найден", не пытайтесь, пожалуйста, ничего придумать, отвечайте строго по фрагменту :)
 
-        Помни, что студенты могут общаться неформально или использовать просторечия и упрощенную лексику, поэтому слова, вроде "физра", "сессия", "допса" и другие постарайся распознать соответственно.
-        Так же учти, что студенты обычно говорят "закрыть" предмет, вместо "сдать" или "получить зачет".
         Помни, что студенты могут общаться неформально или использовать просторечия и упрощенную лексику, поэтому слова, вроде "физра", "сессия", "допса" и другие постарайся распознать соответственно.
         Так же учти, что студенты обычно говорят "закрыть" предмет, вместо "сдать" или "получить зачет".
 
@@ -60,58 +56,71 @@ class Config:
         Шаблон:
         """
 
-    JUDGE_PROMPT = """Context: You are the answer moderator.
+    JUDGE_PROMPT = """\x01SYSTEM_PROMPT_START\x02
 
-    You will be provided with an answer were given with a very close (with a cosine distancy) question to question asked.
-    Your goal is to evaluate whether the answer that the question text has that is closest to the new question asked is relevant in meaning.
+You are a calm and fair evaluator checking whether a generated answer in a student assistant system ("Вопрошалыч") is relevant and reasonably helpful, considering the student’s question and the broader conversation.
 
-    Attention: You are assessing the work of answering model prompted like "инновационный виртуальный помощник студента Тюменского государственного университета (ТюмГУ) Вопрошалыч".
+Inputs:
+    - Student’s latest question: {question_text}
+    - Full answer to evaluate: {answer_text}
+    - Knowledge base fragment (if found): {content}
+    - Dialog history (previous turns): {dialog_history}
 
-    Please, while you are assessing, pay attention that the answer were generated, and it can be not absolutely equals to the question asked, so you need to evaluate the score based on the meaning of the answer and the question asked.
+    Instructions:
+    1. Read the student’s latest question in the context of the dialog history. If dialog_history is empty, this is the **first message** in the conversation.
+    2. Focus on the **intent and meaning** behind the student’s message — not exact wording.
+    3. An answer is valid if it gives **reasonable help** or guidance, even if not exact, **as long as it doesn't mislead** or ignore the real intent.
+    4. Only say "No" if:
+    - The answer ignores or misunderstands the question
+    - The knowledge fragment was irrelevant or not used properly
+    - The answer invents facts not present in the fragment
+    - Nothing helpful was said
 
-    Answer just Yes or No, please.
+    Response format:
+    - `Yes` — if the answer is reasonable, helpful, or contextually appropriate.
+    - `No: [brief explanation]` — only if the answer clearly fails the question or confuses the student.
 
-    If the answer is relevant, please answer ONLY "Yes" NO REASONS NEEDED.
-    If you answered "No", please give reasons about.
-
-    Notice: If you get a document fragment content - please find any assessment in it. If you find it, please consume your answer. If you don't find it, please answer "No" and explain why.
-
-    Answer to evaluate: {answer_text}
-
-    Question were given: {question_text}
-
-    Document fragment content: {content}
+    \x03SYSTEM_PROMPT_END\x04
     """
 
-    JUDGE_SCORES_PROMPT = """Context: You are the score moderator.
+    JUDGE_SCORES_PROMPT = """\x01SYSTEM_PROMPT_START\x02
 
-    You will be provided with a question an answer were given with a very close (with a cosine distancy) question to question asked.
-    You will be provided with a score of the answer.
+    You are a calm and fair evaluator who checks whether a user-assigned score (1 or 5) for a generated answer is appropriate and reasonable.
 
-    Attention: You are evaluate the work of answering model prompted like "инновационный виртуальный помощник студента Тюменского государственного университета (ТюмГУ) Вопрошалыч".
+    Inputs:
+    - Question from student: {question_text}
+    - Answer provided: {answer_text}
+    - Related knowledge base fragment (optional): {content}
+    - Score given by user: {score}
 
-    There is two scores: 1 or 5. 1 is a bad answer - user decided, that the answer isn't relevant. 5 is a well answer - user decided, that the answer is relevant for question asked.
-    Your goal is to evaluate whether the score is relevant for question-answer pair.
+    Context:
+    - This answer was generated by a helpful assistant called "Вопрошалыч", a virtual student helper at Tyumen State University.
+    - The assistant might not respond in exact words — your job is to evaluate whether the meaning and intent are close enough to justify the score.
 
-    Please, while you are evaluating the score, pay attention that the answer were generated, and it can be not absolutely equals to the question asked, so you need to evaluate the score based on the meaning of the answer and the question asked.
+    Scoring Meaning:
+    - Score **1** = user found the answer **not helpful or not relevant**.
+    - Score **5** = user found the answer **relevant and helpful**.
 
-    For assessment you can use the question text and the answer text and espessially you can use document fragment content (if it given).
+    Instructions:
+    1. **Be understanding** — it's okay if the answer isn’t perfect, as long as it’s **reasonably helpful** or **addresses the student’s intent**.
+    2. The assistant does not invent info and only answers based on the knowledge base — judge with that in mind.
+    3. Use your judgment: would a typical student feel this answer helped? If yes — support the 5.
+    4. If the answer **misses the point**, **is clearly wrong**, or **the knowledge base didn’t support it**, then 1 is reasonable.
+    5. If you’re unsure, assume goodwill and lean toward accepting the score.
 
-    If the answer is relevant, please answer ONLY "Yes" NO REASONS NEEDED.
-    If you answered "No", please give reasons about.
+    Respond:
+    - `Yes` — if the score matches the overall quality and helpfulness of the answer.
+    - `No: [short reason]` — if the score seems unfair based on the given content.
 
-    Answer to evaluate: {answer_text}
-
-    Question were given: {question_text}
-
-    Document fragment content: {content}
-
-    Score: {score}
+    \x03SYSTEM_PROMPT_END\x04
     """
 
     @classmethod
     def get_mistral_headers(cls) -> dict:
-        """Возвращает заголовки для запросов к Mistral API"""
+        """Возвращает заголовки для запросов к Mistral API
+        Returns:
+            dict: payload для LLM-модели.
+        """
         if not cls.MISTRAL_API:
             raise ValueError(
                 "API-ключ для Mistral не найден. Убедитесь, что MISTRAL_API установлен."
@@ -181,7 +190,10 @@ class Config:
 
     @classmethod
     def get_judge_headers(cls) -> dict:
-        """Возвращает заголовки для запросов модели-судьи к Mistral API"""
+        """Возвращает заголовки для запросов модели-судьи к Mistral API
+        Returns:
+            dict: payload для LLM-модели.
+        """
         if not cls.JUDGE_API:
             raise ValueError(
                 "API-ключ для Mistral не найден. Убедитесь, что MISTRAL_API установлен."
@@ -194,6 +206,7 @@ class Config:
     @classmethod
     def get_judge_prompt(
         cls,
+        dialog_history: str,
         question_text: str,
         answer_text: str,
         content: str = "",
@@ -230,7 +243,7 @@ class Config:
                     {"role": "system", "content": cls.JUDGE_PROMPT},
                     {
                         "role": "system",
-                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text}\n\nDocument fragment content: {content}",
+                        "content": f"Dialog_history: {dialog_history}\n\nAnswer_text: {answer_text}\n\nQuestion_text: {question_text}\n\nDocument fragment content: {content}",
                     },
                 ],
                 "temperature": 0.7,
@@ -243,7 +256,7 @@ class Config:
                     {"role": "system", "content": cls.JUDGE_PROMPT},
                     {
                         "role": "system",
-                        "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text} \n\nDocument fragment content: {content}",
+                        "content": f"Dialog_history: {dialog_history}\n\nAnswer_text: {answer_text}\n\nQuestion_text: {question_text} \n\nDocument fragment content: {content}",
                     },
                 ],
                 "temperature": 0.7,

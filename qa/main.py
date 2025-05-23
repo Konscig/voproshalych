@@ -30,7 +30,7 @@ text_splitter = RecursiveCharacterTextSplitter(
 )
 encoder_model = SentenceTransformer(
     "saved_models/multilingual-e5-large-wikiutmn", device="cpu"
-)
+)  # type: ignore
 
 
 def get_answer(dialog_history: list, knowledge_base: str, question: str) -> str:
@@ -74,7 +74,11 @@ def get_answer(dialog_history: list, knowledge_base: str, question: str) -> str:
 
 
 def assess_answer(
-    question: str, answer: str, content: str = "", generation: bool = False
+    dialog_history: list,
+    question: str,
+    answer: str,
+    content: str = "",
+    generation: bool = False,
 ) -> bool:
     """Оценивает релевантность подобранного ответа на вопрос с использованием LLM модели-судьи.
 
@@ -85,6 +89,7 @@ def assess_answer(
     try:
         headers = Config.get_judge_headers()
         prompt = Config.get_judge_prompt(
+            dialog_history="\n".join(dialog_history),
             question_text=question,
             answer_text=answer,
             content=content,
@@ -226,7 +231,9 @@ async def qa(request: web.Request) -> web.Response:
     if result:
         db_answer, url = result
         logging.info(f"Answer found in database for question '{question}'")
-        verdict = assess_answer(question=question, answer=db_answer)
+        verdict = assess_answer(
+            dialog_history=dialog_context, question=question, answer=db_answer
+        )
         if verdict:
             return web.json_response({"answer": db_answer, "confluence_url": url})
         else:
@@ -261,7 +268,11 @@ async def qa(request: web.Request) -> web.Response:
 
     sleep(1.1)
     verdict = assess_answer(
-        question=question, answer=answer, content=chunk.text, generation=True
+        dialog_history=dialog_context,
+        question=question,
+        answer=answer,
+        content=chunk.text,
+        generation=True,
     )
     if verdict:
         return web.json_response(
@@ -365,6 +376,7 @@ async def check_score(request: web.Request) -> web.Response:
 
             headers = Config.get_judge_headers()
             prompt = Config.get_judge_prompt(
+                dialog_history="",
                 question_text=q_text,
                 answer_text=q_answer,
                 content=q_content,

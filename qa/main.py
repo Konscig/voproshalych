@@ -33,7 +33,7 @@ encoder_model = SentenceTransformer(
 )
 
 
-def get_answer(context: str, question: str) -> str:
+def get_answer(dialog_history: list, knowledge_base: str, question: str) -> str:
     """Отправляет запрос к LLM и возвращает ответ.
 
     Args:
@@ -44,9 +44,18 @@ def get_answer(context: str, question: str) -> str:
         str: ответ на вопрос
     """
     try:
+        history_text = "\n".join(dialog_history)
         headers = Config.get_mistral_headers()
-        prompt = Config.get_default_prompt(context, question)
+        prompt = Config.get_default_prompt(
+            dialog_history=history_text,
+            knowledge_base=knowledge_base,
+            question=question,
+        )
+
+        logging.info(f"Запрос к Mistral API: {prompt}")
+
         response = requests.post(Config.MISTRAL_API_URL, json=prompt, headers=headers)
+        sleep(1.1)
         if response.status_code == 200:
             data = response.json()
             logging.info(f"spent tokens: {data.get('usage', {})}")
@@ -96,6 +105,7 @@ def assess_answer(
             if solution == "yes":
                 return True
             else:
+                sleep(1.1)
                 return False
         else:
             logging.error(f"Ошибка {response.status_code}: {response.text}")
@@ -213,7 +223,8 @@ async def qa(request: web.Request) -> web.Response:
         web.Response: ответ
     """
     data = await request.json()
-    question = data.get("question")
+    question = data.get("question", "")
+    dialog_context = data.get("dialog_context", [])
 
     logging.info(f"Received question: '{question}'")
 
@@ -233,14 +244,18 @@ async def qa(request: web.Request) -> web.Response:
     )
 
     chunk = get_chunk(engine=engine, encoder_model=encoder_model, question=question)
+
     if chunk is None:
         logging.error(f"Chunk not found for question: {question}")
         return web.Response(text="Chunk not found", status=404)
 
     alt_stream = io.StringIO()
     with redirect_stderr(alt_stream):
-        answer = get_answer(chunk.text, question)
-
+        answer = get_answer(
+            knowledge_base=chunk.text,
+            dialog_history=dialog_context,
+            question=question,
+        )
     warnings = alt_stream.getvalue()
 
     if "stopped" in warnings or "ответ не найден" in answer.lower():
@@ -261,6 +276,9 @@ async def qa(request: web.Request) -> web.Response:
     if not verdict:
         logging.error(f"Answer {answer} were banned for question {question}")
         return web.Response(text="Answer banned", status=404)
+
+    logging.error(f"Unexpected verdict value: {verdict}")
+    return web.Response(text="Internal server error", status=500)
 
 
 @routes.post("/generate_greeting/")

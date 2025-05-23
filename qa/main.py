@@ -134,8 +134,6 @@ async def set_question_embedding(request: web.Request):
         return web.json_response({"error": "Answer not found"}, status=404)
 
     embedding = encoder_model.encode(answer_text)
-
-    # Логируем векторное представление ответа
     logging.info(f"Embedding for QA ID {qa_id}: {embedding}")
 
     set_embedding(engine=engine, question_answer_id=qa_id, embed=embedding)
@@ -159,7 +157,6 @@ async def find_similar_question(
     questions = get_all_questions_with_score(engine=engine)
     question_embedding = encoder_model.encode(question)
 
-    # Логируем векторное представление вопроса
     logging.info(f"Question: '{question}' => Embedding: {question_embedding}")
 
     best_match = None
@@ -179,19 +176,16 @@ async def find_similar_question(
             logging.warning(f"Skipping empty embedding for QA ID {qa_id}")
             continue
 
-        # Проверка на размерности векторов
         if question_embedding.shape[0] != embedding.shape[0]:
             logging.error(
                 f"Shape mismatch for QA ID {qa_id}: question {question_embedding.shape}, embedding {embedding.shape}"
             )
             continue
 
-        # Косинусное расстояние
         cosine_distance = 1 - np.dot(question_embedding, embedding) / (
             np.linalg.norm(question_embedding) * np.linalg.norm(embedding)
         )
 
-        # Логируем совпадение и расстояние
         logging.info(f"Cosine distance for QA ID {qa_id}: {cosine_distance}")
 
         if cosine_distance < best_cosine_distance:
@@ -441,7 +435,7 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler()],  # Логи выводятся в консоль
+        handlers=[logging.StreamHandler()],
     )
     app = web.Application()
     app.add_routes(routes)

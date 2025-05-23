@@ -262,7 +262,6 @@ def get_document_by_url(engine: Engine, url: str) -> str | None:
 def delete_score(engine: Engine, qa_id: int) -> None:
     """Удаляет оценку у вопроса и эмбеддинг, если оценка 5"""
     with Session(engine) as session:
-        # Получаем вопрос с его оценкой
         qa = session.query(QuestionAnswer).filter(QuestionAnswer.id == qa_id).first()
 
         if qa:

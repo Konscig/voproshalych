@@ -230,6 +230,13 @@ async def vk_rate(message: VKMessage):
     """
 
     payload_data = json.loads(message.payload)
+    if payload_data["score"] == 5:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"http://{Config.QA_HOST}/answer_embed/",
+                json={"answer_id": payload_data["question_answer_id"]},
+            ):
+                pass
     if rate_answer(engine, payload_data["question_answer_id"], payload_data["score"]):
         await message.answer(message=Strings.ThanksForFeedback, random_id=0)
 
@@ -244,6 +251,13 @@ async def tg_rate(callback_query: tg.types.CallbackQuery):
     """
 
     score, question_answer_id = map(int, str(callback_query.data).split())
+    if score == 5:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"http://{Config.QA_HOST}/answer_embed/",
+                json={"answer_id": question_answer_id},
+            ):
+                pass
     if rate_answer(engine, question_answer_id, score):
         await callback_query.answer(text=Strings.ThanksForFeedback)
 

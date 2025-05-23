@@ -181,7 +181,31 @@ def reindex_qa():
     Returns:
         str: статус отправки запроса
     """
-    requests.post(f"http://{app.config['QA_HOST']}/reindex/", timeout=600)
+    requests.post(f"http://{app.config['QA_HOST']}/reindex/", timeout=1000)
+    return redirect(url_for("settings"))
+
+
+@app.post("/reembed")
+@login_required
+def reembed_qa():
+    """Функция отправляет POST-запрос на пересоздание векторных представлений вопросов в модуле QA
+
+    Returns:
+        str: статус отправки запроса
+    """
+    requests.post(f"http://{app.config['QA_HOST']}/reembed/", timeout=1000)
+    return redirect(url_for("settings"))
+
+
+@app.post("/check_score")
+@login_required
+def check_scores_qa():
+    """Функция отправляет POST-запрос на пересоздание векторных представлений вопросов в модуле QA
+
+    Returns:
+        str: статус отправки запроса
+    """
+    requests.post(f"http://{app.config['QA_HOST']}/check-score/", timeout=1000)
     return redirect(url_for("settings"))
 
 

@@ -107,7 +107,8 @@ def assess_answer(
                 .lower()
             )
             logging.info(f"Solution is {solution}")
-            if solution == "yes":
+            logging.info(f"Solution type {type(solution)}")
+            if "yes" in solution:
                 return True
             else:
                 sleep(1.1)
@@ -231,6 +232,7 @@ async def qa(request: web.Request) -> web.Response:
     if result:
         db_answer, url = result
         logging.info(f"Answer found in database for question '{question}'")
+        sleep(1.1)
         verdict = assess_answer(
             dialog_history=dialog_context, question=question, answer=db_answer
         )
@@ -252,6 +254,7 @@ async def qa(request: web.Request) -> web.Response:
 
     alt_stream = io.StringIO()
     with redirect_stderr(alt_stream):
+        sleep(1.1)
         answer = get_answer(
             knowledge_base=chunk.text,
             dialog_history=dialog_context,

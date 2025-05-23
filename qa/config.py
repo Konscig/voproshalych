@@ -56,31 +56,55 @@ class Config:
         Шаблон:
         """
 
-    JUDGE_PROMPT = """\x01SYSTEM_PROMPT_START\x02
+    JUDGE_PROMPT = """\x01SINGLE_ANSWER_JUDGE_PROMPT_START\x02
 
-You are a calm and fair evaluator checking whether a generated answer in a student assistant system ("Вопрошалыч") is relevant and reasonably helpful, considering the student’s question and the broader conversation.
+    You are a careful and understanding evaluator of answers in a university assistant system.
 
-Inputs:
-    - Student’s latest question: {question_text}
-    - Full answer to evaluate: {answer_text}
-    - Knowledge base fragment (if found): {content}
-    - Dialog history (previous turns): {dialog_history}
+    Your goal is to assess whether the given answer is reasonably relevant and helpful in response to the student’s question.
+
+    Inputs:
+    - Student question.
+    - Generated answer.
+    - Relevant knowledge base content (may be empty).
+
+    Guidelines:
+    1. Evaluate if the answer provides meaningful help related to the question’s intent.
+    2. It’s okay if the wording differs from the question — what matters is the core idea and usefulness.
+    3. Only answer "No" if the answer clearly misses the point, is irrelevant, or contains invented information.
+    4. If the knowledge base is empty but the answer still offers reasonable help, consider it relevant.
+    5. Remember the answer is generated automatically; allow some flexibility for interpretation.
+
+    Respond with exactly one of:
+    - `Yes` — if the answer is sufficiently relevant and helpful. But answer strictly with only one word `Yes`.
+    - `No: [brief reason]` — only if the answer fails to address the question or is misleading.
+
+    \x03SINGLE_ANSWER_JUDGE_PROMPT_END\x04
+    """
+
+    JUDGE_PROMPT_DIALOG = """\x01JUDGE_PROMPT_DIALOG_START\x02
+
+    You are a dialog-aware answer evaluator for a university assistant system.
+
+    Your task is to gently and fairly evaluate whether a generated answer reasonably helps the student based on their initial question, considering the conversation context.
+
+    Inputs:
+    - Dialog history (may be empty, meaning this is the first message).
+    - The first question asked by the student.
+    - The generated answer to evaluate.
+    - The related knowledge base content (may be empty).
 
     Instructions:
-    1. Read the student’s latest question in the context of the dialog history. If dialog_history is empty, this is the **first message** in the conversation.
-    2. Focus on the **intent and meaning** behind the student’s message — not exact wording.
-    3. An answer is valid if it gives **reasonable help** or guidance, even if not exact, **as long as it doesn't mislead** or ignore the real intent.
-    4. Only say "No" if:
-    - The answer ignores or misunderstands the question
-    - The knowledge fragment was irrelevant or not used properly
-    - The answer invents facts not present in the fragment
-    - Nothing helpful was said
+    1. Evaluate the answer's relevance **only to the first question** in the dialog.
+    2. The answer does not have to be a perfect or literal match — it can be paraphrased or implied.
+    3. Mark "No" only if the answer clearly misses the question's intent, is irrelevant, or contains fabricated information.
+    4. If the knowledge base is empty but the answer is still helpful, treat it as relevant.
+    5. Be understanding that the answer is generated automatically and allow some flexibility.
 
-    Response format:
-    - `Yes` — if the answer is reasonable, helpful, or contextually appropriate.
-    - `No: [brief explanation]` — only if the answer clearly fails the question or confuses the student.
+    Respond only with:
+    - `Yes` — if the answer is reasonably relevant and helpful.
+    - `No: [short reason]` — if the answer fails to address the question or is misleading.
 
-    \x03SYSTEM_PROMPT_END\x04
+    \x03JUDGE_PROMPT_DIALOG_END\x04
     """
 
     JUDGE_SCORES_PROMPT = """\x01SYSTEM_PROMPT_START\x02
@@ -250,15 +274,29 @@ Inputs:
                 "max_tokens": 200,
             }
         else:
-            return {
-                "model": cls.JUDGE_MODEL,
-                "messages": [
-                    {"role": "system", "content": cls.JUDGE_PROMPT},
-                    {
-                        "role": "system",
-                        "content": f"Dialog_history: {dialog_history}\n\nAnswer_text: {answer_text}\n\nQuestion_text: {question_text} \n\nDocument fragment content: {content}",
-                    },
-                ],
-                "temperature": 0.7,
-                "max_tokens": 200,
-            }
+            if dialog_history != "":
+                return {
+                    "model": cls.JUDGE_MODEL,
+                    "messages": [
+                        {"role": "system", "content": cls.JUDGE_PROMPT_DIALOG},
+                        {
+                            "role": "system",
+                            "content": f"Dialog_history: {dialog_history}\n\nAnswer_text: {answer_text}\n\nQuestion_text: {question_text} \n\nDocument fragment content: {content}",
+                        },
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 200,
+                }
+            else:
+                return {
+                    "model": cls.JUDGE_MODEL,
+                    "messages": [
+                        {"role": "system", "content": cls.JUDGE_PROMPT},
+                        {
+                            "role": "system",
+                            "content": f"Answer_text: {answer_text}\n\nQuestion_text: {question_text} \n\nDocument fragment content: {content}",
+                        },
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 200,
+                }

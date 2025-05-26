@@ -48,8 +48,15 @@ def remove_file(path: str):
 
 async def send_to_stt(wav_path: str) -> str:
     """
-    Отправляет WAV-файл в микросервис STT и возвращает текстовую расшифровку.
+    Отправляет WAV-файл в микросервис распознавания речи (STT) и возвращает текстовую расшифровку
+
+    Args:
+        wav_path (str): Путь к WAV-файлу с голосовым сообщением
+
+    Returns:
+        str: Распознанный текст, полученный от микросервиса STT (или пустая строка в случае ошибки)
     """
+
     form = FormData()
     async with aiofiles.open(wav_path, 'rb') as f:
         wav_bytes = await f.read()
@@ -71,8 +78,16 @@ async def send_to_stt(wav_path: str) -> str:
 
 async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
     """
-    Скачивает голосовое сообщение из Telegram (.oga), конвертирует его в .wav и возвращает путь к файлу.
+    Скачивает голосовое сообщение из Telegram и конвертирует его в формат WAV
+
+    Args:
+        file (tg.types.File): Объект файла, полученный из Telegram API
+        user_id (int): Идентификатор пользователя Telegram (используется для именования файла)
+
+    Returns:
+        str: Путь к сконвертированному WAV-файлу
     """
+
     ogg_path = f"voice_tg_{user_id}_{int(datetime.now().timestamp())}.oga"
     wav_path = ogg_path.replace('.oga', '.wav')
 
@@ -89,8 +104,16 @@ async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
 
 async def download_and_convert_vk(url: str, user_id: int) -> str:
     """
-    Скачивает голосовое сообщение из VK (.ogg), конвертирует его в .wav и возвращает путь к файлу.
+    Скачивает голосовое сообщение из ВКонтакте и конвертирует его в формат WAV
+
+    Args:
+        url (str): Ссылка на аудио-сообщение (.ogg), полученная от VK API
+        user_id (int): Идентификатор пользователя ВКонтакте (используется для именования файла)
+
+    Returns:
+        str: Путь к сконвертированному WAV-файлу
     """
+
     ogg_path = f"voice_vk_{user_id}_{int(datetime.now().timestamp())}.ogg"
     wav_path = ogg_path.replace('.ogg', '.wav')
     async with vk_aiohttp.ClientSession() as session:
@@ -206,6 +229,7 @@ async def tg_send_confluence_keyboard(message: tg.types.Message, question_types:
         message (tg.types.Message): сообщение пользователя
         question_types (list): страницы или подстраницы из структуры пространства в вики-системе
     """
+
     keyboard_builder = InlineKeyboardBuilder()
 
     for item in question_types:
@@ -372,13 +396,12 @@ async def tg_subscribe(message: tg.types.Message):
 @dispatcher.message(F.voice)
 async def tg_voice_handler(message: tg.types.Message):
     """
-    Обработчик голосовых сообщений Telegram:
-    - Скачивает голосовое сообщение (.oga) с сервера Telegram.
-    - Конвертирует скачанный файл в формат WAV.
-    - Отправляет WAV-файл микросервису STT для распознавания.
-    - Удаляет временный файл WAV.
-    - Отправляет распознанный текст пользователю.
+    Обрабатывает голосовое сообщение из Telegram: скачивает, конвертирует, распознаёт и отвечает текстом
+
+    Args:
+        message (tg.types.Message): Входящее сообщение с голосом от пользователя Telegram
     """
+
     file = await tg_bot.get_file(message.voice.file_id)
     wav = await download_and_convert_tg(file, message.from_user.id)
     text = await send_to_stt(wav)
@@ -390,14 +413,12 @@ async def tg_voice_handler(message: tg.types.Message):
 )
 async def vk_voice_handler(message: VKMessage):
     """
-    Обработчик голосовых сообщений ВКонтакте:
-    - Перебирает вложения сообщения и ищет аудио-сообщение.
-    - Скачивает аудио-сообщение (.ogg) по ссылке.
-    - Конвертирует скачанный файл в формат WAV.
-    - Отправляет WAV-файл микросервису STT для распознавания.
-    - Удаляет временный файл WAV.
-    - Отправляет распознанный текст пользователю.
+    Обрабатывает голосовое сообщение из ВКонтакте: скачивает, конвертирует, распознаёт и отвечает текстом
+
+    Args:
+        message (VKMessage): Входящее сообщение от пользователя ВКонтакте с вложенным аудио-сообщением
     """
+
     for att in message.attachments:
         if att.type == "audio_message":
             wav = await download_and_convert_vk(att.audio_message.link_ogg, message.from_id)
@@ -637,6 +658,7 @@ async def get_greeting(
     Returns:
         str: Сгенерированное поздравление или пустая строка при ошибке.
     """
+
     url = f"http://{Config.QA_HOST}/generate_greeting/"
     data = {"template": template, "user_name": user_name, "holiday_name": holiday_name}
 
@@ -673,6 +695,7 @@ async def get_vk_user_name(user_id: int) -> str:
     Returns:
         str: Имя пользователя.
     """
+
     user_info = await vk_bot.api.users.get(user_ids=user_id)
     if user_info:
         return user_info[0].first_name
@@ -688,6 +711,7 @@ async def get_telegram_user_name(user_id: int) -> str:
     Returns:
         str: Имя пользователя.
     """
+
     try:
         user = await tg_bot.get_chat(user_id)
         if user.first_name:
@@ -769,6 +793,7 @@ async def send_holiday_greetings():
 
 async def check_and_send_greetings():
     """Функция запуска модуля отправки поздравлений"""
+
     while True:
         now = datetime.now()
         today_run_time = now.replace(hour=13, minute=25, second=0, microsecond=0)
@@ -807,6 +832,7 @@ async def launch_telegram_bot():
 
 def run_telegram_process():
     """Запуск Telegram-бота в новом цикле событий в отдельном процессе"""
+
     asyncio.run(launch_telegram_bot())
 
 

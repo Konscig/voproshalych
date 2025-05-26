@@ -16,8 +16,6 @@ dp = Dispatcher()
 
 FASTAPI_URL = "http://stt:8000/transcribe/"
 
-# скачивает файл с сервера telegram по переданному file_path ,
-# конвертирует его из формата .oga в .wav и сохраняет
 async def download_and_convert(file_path: str, user_id: str):
 
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
@@ -39,7 +37,6 @@ async def download_and_convert(file_path: str, user_id: str):
     print(f"Файл сохранён: {wav_path}")
     return wav_path
 
-# отправляет конвертированный аудиофайл на сервер для обработки ;
 async def send_to_server(wav_path: str) -> str:
     async with httpx.AsyncClient() as client:
         with open(wav_path, "rb") as audio_file:
@@ -53,7 +50,6 @@ async def send_to_server(wav_path: str) -> str:
     else:
         return f"Ошибка {response.status_code}: {response.text}"
 
-# обработчик голосовых сообщений :
 async def handle_voice(message: Message):
 
     file_info = await bot.get_file(message.voice.file_id)
@@ -63,7 +59,6 @@ async def handle_voice(message: Message):
     transcription = await send_to_server(wav_path)
     await message.reply(f"Распознанный текст: {transcription}")
 
-# регистрация функции handle_voice как обработчика для голосовых сообщений ;
 dp.message.register(handle_voice, lambda message: hasattr(message, "voice") and message.voice is not None)
 
 if __name__ == '__main__':

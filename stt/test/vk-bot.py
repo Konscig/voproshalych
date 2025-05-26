@@ -12,7 +12,6 @@ FASTAPI_URL = "http://stt:8000/transcribe/"
 
 bot = Bot(token=GROUP_TOKEN)
 
-# скачивает .ogg по прямой ссылке, конвертирует в .wav и возвращает путь к wav-файлу
 async def download_and_convert(url: str, user_id: int) -> str:
     timestamp = int(time.time())
     ogg_path = f"voice_{user_id}_{timestamp}.ogg"
@@ -34,7 +33,6 @@ async def download_and_convert(url: str, user_id: int) -> str:
     print(f"Файл сохранён: {wav_path}")
     return wav_path
 
-# отправляет wav-файл на внешний FastAPI‑сервер и возвращает транскрипцию
 async def send_to_server(wav_path: str) -> str:
     async with httpx.AsyncClient() as client:
         async with aiofiles.open(wav_path, "rb") as audio_file:
@@ -47,7 +45,6 @@ async def send_to_server(wav_path: str) -> str:
     else:
         return f"Ошибка {response.status_code}: {response.text}"
 
-# обработчик голосовых сообщений
 @bot.on.message()
 async def handle_voice(message: Message):
     if message.attachments:

@@ -7,11 +7,11 @@ services:
         restart: unless-stopped
         env_file:
             - .env.docker
-        # environment:
-        #     - TZ=${TZ}
-        #     - POSTGRES_DB=${POSTGRES_DB}
-        #     - POSTGRES_USER=${POSTGRES_USER}
-        #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        environment:
+            - TZ=${TZ}
+            - POSTGRES_DB=${POSTGRES_DB}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
         volumes:
             - db-data:/var/lib/postgresql/data
         networks:

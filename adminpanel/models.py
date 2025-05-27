@@ -82,7 +82,6 @@ class QuestionAnswer(db.Model):
     Args:
         id (int): id ответа
         question (str): вопрос пользователя
-        embedding (Vector): векторное представление текста вопроса размерностью 1024
         answer (str | None): ответ на вопрос пользователя
         confluence_url (str | None): ссылка на страницу в вики-системе, содержащую ответ
         score (int | None): оценка пользователем ответа
@@ -97,7 +96,6 @@ class QuestionAnswer(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     question: Mapped[str] = mapped_column(Text())
-    embedding: Mapped[Vector] = mapped_column(Vector(1024))
     answer: Mapped[Optional[str]] = mapped_column(Text())
     confluence_url: Mapped[Optional[str]] = mapped_column(Text(), index=True)
     score: Mapped[Optional[int]] = mapped_column()
@@ -343,11 +341,7 @@ def get_unique_docs_urls() -> list[dict]:
     Если функция не находит название в url странице, то название берётся из первого чанка для этого документа
     """
     with Session(db.engine) as session:
-        unique_urls = (
-            session.query(Chunk.confluence_url)
-            .distinct()
-            .all()
-        )
+        unique_urls = session.query(Chunk.confluence_url).distinct().all()
 
         documents = []
         for (raw_url,) in unique_urls:
@@ -356,16 +350,15 @@ def get_unique_docs_urls() -> list[dict]:
             query_params = parse_qs(parsed_url.query)
 
             title = "Неизвестный документ"
-            if 'preview' in query_params:
-                preview_path = unquote(query_params['preview'][0])
-                filename = preview_path.split('/')[-1]
-                clean_name = filename.rsplit('.', 1)[0]
-                clean_name = clean_name.replace('+', ' ')
+            if "preview" in query_params:
+                preview_path = unquote(query_params["preview"][0])
+                filename = preview_path.split("/")[-1]
+                clean_name = filename.rsplit(".", 1)[0]
+                clean_name = clean_name.replace("+", " ")
                 clean_name = unquote(clean_name)
-                clean_name = re.sub(r'\s*\(\d+\)\s*', '', clean_name)
-                title = ' '.join(
-                    word.capitalize()
-                    for word in clean_name.replace('-', ' ').split()
+                clean_name = re.sub(r"\s*\(\d+\)\s*", "", clean_name)
+                title = " ".join(
+                    word.capitalize() for word in clean_name.replace("-", " ").split()
                 )
 
             if title == "Неизвестный документ":
@@ -378,11 +371,8 @@ def get_unique_docs_urls() -> list[dict]:
 
                 if first_chunk and first_chunk.text:
                     words = first_chunk.text.split()[:7]
-                    title = ' '.join(words).capitalize()
+                    title = " ".join(words).capitalize()
 
-            documents.append({
-                "title": title,
-                "url": raw_url
-            })
+            documents.append({"title": title, "url": raw_url})
 
     return documents

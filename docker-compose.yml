@@ -21,6 +21,7 @@ services:
             retries: 3
             start_period: 20s
             start_interval: 5s
+
     db-migrate:
         build:
             context: ./db
@@ -47,10 +48,9 @@ services:
         depends_on:
             db:
                 condition: service_healthy
-            db-migrate:
-                condition: service_completed_successfully
         networks:
             - chatbot-conn
+
     chatbot:
         build: ./chatbot
         image: virtassist/chatbot:latest

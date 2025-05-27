@@ -1,7 +1,7 @@
 """Add stop_point column to questionanswer table
 
 Revision ID: 86c962b93381
-Revises: 3c9c99360a80
+Revises: 051032488686
 Create Date: 2025-04-03 17:54:15.610157
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "86c962b93381"
-down_revision: Union[str, None] = "3c9c99360a80"
+down_revision: Union[str, None] = "051032488686"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

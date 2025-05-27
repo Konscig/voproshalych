@@ -276,12 +276,16 @@ class Config:
         else:
             if dialog_history != "":
                 return {
-                    "model": cls.JUDGE_MODEL,
+                    "model": cls.MISTRAL_MODEL,
                     "messages": [
-                        {"role": "system", "content": cls.JUDGE_PROMPT_DIALOG},
+                        {"role": "system", "content": cls.MISTRAL_SYSTEM_PROMPT},
                         {
                             "role": "system",
-                            "content": f"Dialog_history: {dialog_history}\n\nAnswer_text: {answer_text}\n\nQuestion_text: {question_text} \n\nDocument fragment content: {content}",
+                            "content": cls.MISTRAL_SYSTEM_PROMPT.format(
+                                dialog_history=dialog_history,
+                                knowledge_base=content,
+                                question=question_text,
+                            ),
                         },
                     ],
                     "temperature": 0.7,

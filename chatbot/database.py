@@ -322,6 +322,7 @@ def add_question_answer(
         question_answer = QuestionAnswer(
             question=question,
             answer=answer,
+            embedding=Vector(1024),
             confluence_url=confluence_url,
             user_id=user_id,
         )

@@ -24,7 +24,6 @@ class TestDBFunctions:
     test_question = "Вопрос"
     test_answer = "Ответ"
     test_confluence_url = "confluence.com"
-    embedding = [0.0] * 1024
 
     def test_add_get_user(self):
         """Тест добавления и получения пользователя по id"""
@@ -130,7 +129,6 @@ class TestDBFunctions:
                         question=self.test_question,
                         answer=self.test_answer,
                         user_id=user_id,
-                        embedding=self.embedding,
                     )
                 )
             session.commit()

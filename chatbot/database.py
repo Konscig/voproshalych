@@ -63,7 +63,6 @@ class QuestionAnswer(Base):
     Args:
         id (int): id ответа
         question (str): вопрос пользователя
-        embedding (Vector): векторное представление текста вопроса размерностью 1024
         answer (str | None): ответ на вопрос пользователя
         confluence_url (str | None): ссылка на страницу в вики-системе, содержащую ответ
         score (int | None): оценка пользователем ответа
@@ -78,7 +77,6 @@ class QuestionAnswer(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     question: Mapped[str] = mapped_column(Text())
-    embedding: Mapped[Vector] = mapped_column(Vector(1024))
     answer: Mapped[Optional[str]] = mapped_column(Text())
     confluence_url: Mapped[Optional[str]] = mapped_column(Text(), index=True)
     score: Mapped[Optional[int]] = mapped_column()
@@ -322,7 +320,6 @@ def add_question_answer(
         question_answer = QuestionAnswer(
             question=question,
             answer=answer,
-            embedding=Vector(1024),
             confluence_url=confluence_url,
             user_id=user_id,
         )

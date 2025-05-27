@@ -29,7 +29,7 @@ services:
         image: virtassist/db-migrate:latest
         container_name: virtassist-db-migrate
         restart: no
-        command: alembic downgrade 3c9c99360a80
+        command: alembic upgrade 051032488686
         env_file:
             - .env.docker
         depends_on:

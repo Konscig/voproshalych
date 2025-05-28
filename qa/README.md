@@ -1,10 +1,7 @@
-# QA
+# Микросервис QA
 
-## uv
-
+## Создание виртуального окружения и установка зависимостей
 ```sh
 uv venv -p 3.10 --seed
 uv pip install -r requirements.txt
-# uv run save_models.py
-# uv run main.py
 ```

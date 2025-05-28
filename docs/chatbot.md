@@ -119,6 +119,49 @@
     Args:
         message (tg.types.Message): сообщение с вопросом пользователя
 
+### `async def send_to_stt(wav_path: str) -> str`
+Отправляет аудиофайл на распознавание речи в STT сервис
+
+    Args:
+        wav_path (str): путь к аудиофайлу в формате WAV
+
+    Returns:
+        str: распознанный текст из аудио
+
+### `async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str`
+Скачивает голосовое сообщение из Telegram и конвертирует его в WAV формат
+
+    Args:
+        file (tg.types.File): файл голосового сообщения из Telegram
+        user_id (int): id пользователя
+
+    Returns:
+        str: путь к конвертированному WAV файлу
+
+### `async def download_and_convert_vk(url: str, user_id: int) -> str`
+Скачивает голосовое сообщение из ВКонтакте и конвертирует его в WAV формат
+
+    Args:
+        url (str): URL голосового сообщения из ВКонтакте
+        user_id (int): id пользователя
+
+    Returns:
+        str: путь к конвертированному WAV файлу
+
+### `async def tg_voice_handler(message: tg.types.Message)`
+Обработчик голосовых сообщений в Telegram. Скачивает голосовое сообщение, конвертирует его в WAV,
+отправляет на распознавание речи и обрабатывает полученный текст как обычный вопрос
+
+    Args:
+        message (tg.types.Message): голосовое сообщение пользователя
+
+### `async def vk_voice_handler(message: VKMessage)`
+Обработчик голосовых сообщений во ВКонтакте. Скачивает голосовое сообщение, конвертирует его в WAV,
+отправляет на распознавание речи и обрабатывает полученный текст как обычный вопрос
+
+    Args:
+        message (VKMessage): голосовое сообщение пользователя
+
 ### `broadcast(request: web.Request) -> web.Response`
 Создает рассылку в ВК и/или ТГ
 

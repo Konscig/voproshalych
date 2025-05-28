@@ -560,7 +560,7 @@ async def tg_answer(message: tg.types.Message):
 
 @routes.post("/broadcast/")
 async def broadcast(request: web.Request) -> web.Response:
-    """Создает рассылку в ВК и/или ТГ
+    """Создает рассылку в ВК и/или ТГ, и обновляет клавиатуру
 
     Args:
         request (web.Request): запрос, содержащий `text`, булевые `tg`, `vk`
@@ -577,11 +577,20 @@ async def broadcast(request: web.Request) -> web.Response:
             raise Exception("в сообщении меньше трёх символов")
         vk_users, tg_users = get_subscribed_users(engine)
         vk_count, tg_count = 0, 0
+
+        notify_text_for_subscribed = Strings.Unsubscribe
+
+        vk_keyboard_to_send = vk_keyboard_choice(notify_text_for_subscribed)
+        tg_keyboard_to_send = tg_keyboard_choice(notify_text_for_subscribed)
+
         if data["vk"]:
             for user_id in vk_users:
                 try:
                     await vk_bot.api.messages.send(
-                        user_id=user_id, message=data["text"], random_id=0
+                        user_id=user_id,
+                        message=data["text"],
+                        keyboard=vk_keyboard_to_send,
+                        random_id=0,
                     )
                     vk_count += 1
                 except vk.VKAPIError:
@@ -589,7 +598,11 @@ async def broadcast(request: web.Request) -> web.Response:
         if data["tg"]:
             for user_id in tg_users:
                 try:
-                    await tg_bot.send_message(chat_id=user_id, text=data["text"])
+                    await tg_bot.send_message(
+                        chat_id=user_id,
+                        text=data["text"],
+                        reply_markup=tg_keyboard_to_send,
+                    )
                     tg_count += 1
                 except TUerror:
                     await asyncio.sleep(1)

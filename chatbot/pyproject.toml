@@ -3,7 +3,7 @@ name = "chatbot"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10.16"
+requires-python = ">=3.10.0"
 dependencies = [
     "ffmpeg-python>=0.2.0",
     "aiofiles>=24.1.0",

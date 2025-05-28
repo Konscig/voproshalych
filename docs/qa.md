@@ -29,6 +29,15 @@
     Returns:
         web.Response: ответ
 
+### `generate_greeting(request: web.Request) -> web.Response`
+Генерирует поздравления с использованием LLM
+
+    Args:
+        request (web.Request): запрос, содержащий `template`, `user_name`, `holiday_name`
+
+    Returns:
+        web.Response: ответ с поздравлением
+
 ### `reindex(request: web.Request) -> web.Response`
 Пересоздаёт векторный индекс текстов для ответов на вопросы
 

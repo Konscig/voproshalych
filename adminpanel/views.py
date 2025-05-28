@@ -10,7 +10,8 @@ from flask_login import (
 import requests
 from config import app
 from cluster_analysis import ClusterAnalysis
-from models import get_questions_count, get_questions_for_clusters, get_admins, Admin
+from models import get_questions_count, get_questions_for_clusters, get_admins, Admin, get_chunks_count, get_documents_count, get_last_sync_date, get_unique_docs_urls
+from datetime import datetime, timedelta
 
 
 login_manager = LoginManager()
@@ -180,5 +181,93 @@ def reindex_qa():
     Returns:
         str: статус отправки запроса
     """
-    requests.post(f"http://{app.config['QA_HOST']}/reindex/", timeout=600)
+    requests.post(f"http://{app.config['QA_HOST']}/reindex/", timeout=1000)
     return redirect(url_for("settings"))
+
+
+@app.post("/reembed")
+@login_required
+def reembed_qa():
+    """Функция отправляет POST-запрос на пересоздание векторных представлений вопросов в модуле QA
+
+    Returns:
+        str: статус отправки запроса
+    """
+    requests.post(f"http://{app.config['QA_HOST']}/reembed/", timeout=1000)
+    return redirect(url_for("settings"))
+
+
+@app.post("/check_score")
+@login_required
+def check_scores_qa():
+    """Функция отправляет POST-запрос на пересоздание векторных представлений вопросов в модуле QA
+
+    Returns:
+        str: статус отправки запроса
+    """
+    requests.post(f"http://{app.config['QA_HOST']}/check-score/", timeout=1000)
+    return redirect(url_for("settings"))
+
+
+
+
+@app.get("/service_stats")
+@login_required
+def service_stats() -> str:
+    """
+    Description:
+
+    Функция выводит статистику сервиса
+
+    Returns:
+    str: отрендеренная веб-страница с POST-запросом на сервер
+    """
+
+    if len(request.values.keys()) == 0:
+        time_start = str(date.today() - timedelta(days=30))
+        time_end = str(date.today() + timedelta(days=1))
+    else:
+        time_start = str(request.values.get("time_start"))
+        time_end = str(request.values.get("time_end"))
+
+    x_questions = get_questions_for_clusters(
+        time_start=time_start,
+        time_end=time_end,
+        have_not_answer=False,
+        have_low_score=True,
+        have_high_score=False,
+        have_not_score=False,
+    )
+
+    v_questions = get_questions_for_clusters(
+        time_start=time_start,
+        time_end=time_end,
+        have_not_answer=False,
+        have_low_score=False,
+        have_high_score=True,
+        have_not_score=False,
+    )
+
+    x_count = len(x_questions)
+    v_count = len(v_questions)
+    total = x_count + v_count
+    documents_count = get_documents_count()
+    chunks_count = get_chunks_count()
+    sync_date = get_last_sync_date()
+    documents = get_unique_docs_urls()
+
+    return render_template(
+        'service_stats.html',
+        page_title='Статистика сервиса',
+        documents=documents,
+        documents_count=documents_count,
+        chunks_count=chunks_count,
+        sync_date=sync_date,
+        x_count=x_count,
+        v_count=v_count,
+        x_questions=x_questions,
+        v_questions=v_questions,
+        time_start=time_start,
+        time_end=time_end,
+        question_counts=total
+    )

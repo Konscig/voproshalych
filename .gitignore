@@ -9,4 +9,5 @@ cache
 .pytest_cache
 node_modules
 database*.csv
+qa/research
 tmp

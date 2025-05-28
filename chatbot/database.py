@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, List
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Column,
@@ -7,6 +8,7 @@ from sqlalchemy import (
     Engine,
     ForeignKey,
     Text,
+    Boolean,
     Enum,
     Integer,
     func,
@@ -68,6 +70,7 @@ class QuestionAnswer(Base):
         user (User): пользователь, задавший вопрос
         created_at (datetime): время создания модели
         updated_at (datetime): время обновления модели
+        stop_point (bool): флаг, указывающий что это конечная точка диалога (True - диалог завершен, False - продолжается, по умолчанию False)
     """
 
     __tablename__ = "question_answer"
@@ -83,6 +86,7 @@ class QuestionAnswer(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    stop_point: Mapped[bool] = mapped_column(Boolean(), default=False)
 
 
 class HolidayTemplate(Base):
@@ -401,3 +405,99 @@ def get_today_holidays(engine: Engine) -> List[HolidayTemplate]:
                 holidays.append(holiday)
 
         return holidays
+
+
+def get_history_of_chat(
+    engine: Engine, user_id: int, time: int = 30, limit_pairs: int = 5
+) -> List[QuestionAnswer]:
+    """Получает историю чата с пользователем за последние время
+
+    Args:
+        user (User): пользователь, для которого получаем историю чата
+        session (Session): сессия базы данных
+        time (int): время в минутах, за которое получаем историю чата
+        limit_pairs (int): максимальное количество пар вопросов-ответов
+
+    Returns:
+       List[QuestionAnswer]: список пар вопросов-ответов и вопросов без ответов
+    """
+    with Session(engine) as session:
+        user = session.query(User).get(user_id)
+        if not user:
+            return []
+
+        now = datetime.now()
+        cutoff_time = now - timedelta(minutes=time)
+
+        recent_qa = (
+            session.query(QuestionAnswer)
+            .filter(
+                QuestionAnswer.user_id == user.id,
+                QuestionAnswer.created_at >= cutoff_time,
+            )
+            .order_by(QuestionAnswer.created_at.asc())
+            .all()
+        )
+
+        full_pairs = [qa for qa in recent_qa if qa.answer != ""]
+        if len(full_pairs) > limit_pairs:
+            full_pairs = full_pairs[-limit_pairs:]
+
+        unanswered = [qa for qa in recent_qa if qa.answer == ""]
+
+        result = full_pairs + unanswered
+        return result
+
+
+def filter_chat_history(
+    history: List[QuestionAnswer],
+) -> tuple[List[QuestionAnswer], List[QuestionAnswer]]:
+    """Фильтрует историю чата, оставляя:
+    - Все пары вопрос-ответ
+    - Неотвеченные вопросы, которые появились после последнего ответа.
+
+    Args:
+        history (List[QuestionAnswer]): Список вопросов и ответов из get_history_of_chat.
+
+    Returns:
+        Tuple[List[QuestionAnswer], List[QuestionAnswer]]:
+        (отвеченные_пары, актуальные_неотвеченные)
+    """
+    if not history:
+        return [], []
+
+    stop_indices = [i for i, qa in enumerate(history) if qa.stop_point]
+    last_stop_idx = stop_indices[-1] if stop_indices else -1
+
+    trimmed_history = history[last_stop_idx + 1 :] if last_stop_idx != -1 else history
+
+    pairs = [qa for qa in trimmed_history if qa.answer != ""]
+    unanswered = [qa for qa in trimmed_history if qa.answer == ""]
+
+    if not pairs:
+        return [], unanswered
+
+    last_answer_time = max(qa.created_at for qa in pairs)
+    filtered_unanswered = [qa for qa in unanswered if qa.created_at > last_answer_time]
+
+    return pairs, filtered_unanswered
+
+
+def set_stop_point(engine: Engine, user_id: int, valbool: bool):
+    """Функция устанавливает значение stop_point для последнего сообщения пользователя.
+
+    Args:
+        engine (Engine): подключение к БД
+        user_id (int): id пользователя
+        valbool (bool): значение для stop_point
+    """
+    with Session(engine) as session:
+        last_message = session.scalars(
+            select(QuestionAnswer)
+            .where(QuestionAnswer.user_id == user_id)
+            .order_by(QuestionAnswer.created_at.desc())
+        ).first()
+
+        if last_message is not None:
+            last_message.stop_point = valbool
+            session.commit()

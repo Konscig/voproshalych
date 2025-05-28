@@ -35,6 +35,9 @@ from database import (
     rate_answer,
     get_subscribed_users,
     get_today_holidays,
+    get_history_of_chat,
+    filter_chat_history,
+    set_stop_point,
 )
 from strings import Strings
 from datetime import datetime, timedelta
@@ -176,6 +179,8 @@ def vk_keyboard_choice(notify_text: str) -> str:
         .add(vk.Text(Strings.ConfluenceButton))
         .row()
         .add(vk.Text(notify_text))
+        .row()
+        .add(vk.Text(Strings.NewDialog))
     )
     return keyboard.get_json()
 
@@ -196,6 +201,7 @@ def tg_keyboard_choice(notify_text: str) -> tg.types.ReplyKeyboardMarkup:
         keyboard=[
             [tg.types.KeyboardButton(text=Strings.ConfluenceButton)],
             [tg.types.KeyboardButton(text=(notify_text))],
+            [tg.types.KeyboardButton(text=Strings.NewDialog)],
         ],
         resize_keyboard=True,
     )
@@ -335,6 +341,13 @@ async def vk_rate(message: VKMessage):
     """
 
     payload_data = json.loads(message.payload)
+    if payload_data["score"] == 5:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"http://{Config.QA_HOST}/answer_embed/",
+                json={"answer_id": payload_data["question_answer_id"]},
+            ):
+                pass
     if rate_answer(engine, payload_data["question_answer_id"], payload_data["score"]):
         await message.answer(message=Strings.ThanksForFeedback, random_id=0)
 
@@ -349,6 +362,13 @@ async def tg_rate(callback_query: tg.types.CallbackQuery):
     """
 
     score, question_answer_id = map(int, str(callback_query.data).split())
+    if score == 5:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"http://{Config.QA_HOST}/answer_embed/",
+                json={"answer_id": question_answer_id},
+            ):
+                pass
     if rate_answer(engine, question_answer_id, score):
         await callback_query.answer(text=Strings.ThanksForFeedback)
 
@@ -440,7 +460,35 @@ async def vk_voice_handler(message: VKMessage):
             await message.answer(f"Распознанный текст: {text}", random_id=0)
             break
 
-async def get_answer(question: str) -> tuple[str, str | None]:
+@dispatcher.message(tg.F.text.in_([Strings.NewDialog]))
+async def tg_new_dialog(message: tg.types.Message):
+    """Обработчик для начала нового диалога"""
+    user_id = get_user_id(engine, telegram_id=message.from_user.id)
+
+    if user_id is None:
+        await message.answer(text=Strings.NoneUserTelegram)
+        return
+
+    set_stop_point(engine, user_id, True)
+    await message.answer(text=Strings.DialogReset)
+
+
+@vk_bot.on.message(text=[Strings.NewDialog])
+async def vk_new_dialog(message: VKMessage):
+    user_id = get_user_id(engine, vk_id=message.from_id)
+
+    if user_id is None:
+        await message.answer(message=Strings.NoneUserVK, random_id=0)
+        return
+
+    set_stop_point(engine, user_id, True)
+    await message.answer(
+        message=Strings.DialogReset,
+        random_id=0,
+    )
+
+
+async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
     """Получение ответа на вопрос с использованием микросервиса
 
     Args:
@@ -449,11 +497,22 @@ async def get_answer(question: str) -> tuple[str, str | None]:
     Returns:
         tuple[str, str | None]: ответ на вопрос и ссылка на страницу в вики-системе
     """
-
+    chat_history = get_history_of_chat(engine, user_id)
+    answered_pairs, recent_unanswered = filter_chat_history(chat_history)
     question = question.strip().lower()
-    async with ClientSession() as session:
+
+    dialog_context = []
+    for qa in answered_pairs:
+        dialog_context.append(f"Q: {qa.question}")
+        dialog_context.append(f"A: {qa.answer}")
+
+    for unanswered_question in recent_unanswered:
+        dialog_context.append(f"Q: {unanswered_question.question}")
+
+    async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"http://{Config.QA_HOST}/qa/", json={"question": question}
+            f"http://{Config.QA_HOST}/qa/",
+            json={"question": question, "dialog_context": dialog_context},
         ) as response:
             if response.status == 200:
                 resp = await response.json()
@@ -496,7 +555,7 @@ async def vk_answer(message: VKMessage):
         await message.answer(message=Strings.SpamWarning, random_id=0)
         return
     processing = await message.answer(message=Strings.TryFindAnswer, random_id=0)
-    answer, confluence_url = await get_answer(message.text)
+    answer, confluence_url = await get_answer(message.text, user_id=user_id)
     question_answer_id = add_question_answer(
         engine, message.text, answer, confluence_url, user_id
     )
@@ -581,7 +640,7 @@ async def tg_answer(message: tg.types.Message):
         await message.answer(text=Strings.SpamWarning)
         return
     processing = await message.answer(Strings.TryFindAnswer)
-    answer, confluence_url = await get_answer(message.text)
+    answer, confluence_url = await get_answer(message.text, user_id=user_id)
     question_answer_id = add_question_answer(
         engine, message.text, answer, confluence_url, user_id
     )

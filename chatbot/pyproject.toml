@@ -52,4 +52,5 @@ dependencies = [
     "watchfiles>=0.18.1",
     "wrapt>=1.16.0",
     "yarl>=1.18.3",
+    "pgvector>=0.4.1",
 ]

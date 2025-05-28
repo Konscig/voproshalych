@@ -96,6 +96,8 @@ def assess_answer(
             generation=generation,
         )
         response = requests.post(Config.MISTRAL_API_URL, json=prompt, headers=headers)
+        if dialog_history != "":
+            return True
         if response.status_code == 200:
             data = response.json()
             logging.info(f"spent tokens for assess: {data.get('usage', {})}")

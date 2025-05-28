@@ -22,6 +22,22 @@ uv init --app
 uv run fastapi dev
 ```
 
+## Тестирование
+
+### Запуск тестов
+
+Запуск всех тестов:
+```sh
+uv run pytest
+```
+
+### Установка тестовых зависимостей
+
+Для установки всех зависимостей, включая тестовые:
+```sh
+uv pip install -e ".[test]"
+```
+
 ## API Эндпоинты
 
 ### POST /transcribe/
@@ -62,41 +78,14 @@ curl -X 'POST' \
 
 ### Сборка образов
 
-Сборка основного сервиса:
+Сборка сервиса:
 ```sh
 docker buildx build -t webmasha/stt-gam:0.1.0 --platform linux/arm64,linux/amd64 --push .
 ```
 
-Сборка тестового образа:
-```sh
-docker buildx build -t webmasha/stt-test:0.2.0 --platform linux/arm64,linux/amd64 --push test
-```
-
 ### Запуск с Docker
 
-Запуск основного сервиса:
+Запуск сервиса:
 ```sh
 docker run --name stt -it --rm -p 8000:8000 webmasha/stt-gam:0.1.0 uv run fastapi dev --host 0.0.0.0
-```
-
-Запуск тестов:
-```sh
-docker run --name test -it --rm webmasha/stt-test:0.2.0
-```
-
-### Docker Compose
-
-Запуск всех сервисов:
-```sh
-docker compose up -d && docker compose logs -f
-```
-
-Остановка всех сервисов:
-```sh
-docker compose down --remove-orphans
-```
-
-Запуск тестов в контейнере:
-```sh
-docker compose run -it --rm test-tel
 ```

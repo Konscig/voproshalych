@@ -4,6 +4,8 @@ import logging
 import math
 import os
 from multiprocessing import Process
+import tempfile
+from pathlib import Path
 
 import ffmpeg
 import aiofiles
@@ -38,6 +40,9 @@ from strings import Strings
 from datetime import datetime, timedelta
 
 STT_URL = Config.STT_URL
+
+VOICE_TEMP_DIR = Path(tempfile.gettempdir()) / "voice_messages"
+VOICE_TEMP_DIR.mkdir(exist_ok=True)
 
 def remove_file(path: str):
     try:
@@ -87,19 +92,22 @@ async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
     Returns:
         str: Путь к сконвертированному WAV-файлу
     """
+    ogg_path = VOICE_TEMP_DIR / f"voice_tg_{user_id}_{int(datetime.now().timestamp())}.oga"
+    wav_path = ogg_path.with_suffix('.wav')
 
-    ogg_path = f"voice_tg_{user_id}_{int(datetime.now().timestamp())}.oga"
-    wav_path = ogg_path.replace('.oga', '.wav')
-
-    await tg_bot.download_file(file.file_path, destination=ogg_path)
+    await tg_bot.download_file(file.file_path, destination=str(ogg_path))
 
     try:
-        ffmpeg.input(ogg_path).output(wav_path, format='wav').run(overwrite_output=True)
+        ffmpeg.input(str(ogg_path)).output(str(wav_path), format='wav').run(overwrite_output=True)
     except Exception as e:
         logging.error(f"TG conversion error: {e}")
+        if wav_path.exists():
+            wav_path.unlink()
+        raise
     finally:
-        remove_file(ogg_path)
-    return wav_path
+        if ogg_path.exists():
+            ogg_path.unlink()
+    return str(wav_path)
 
 
 async def download_and_convert_vk(url: str, user_id: int) -> str:
@@ -113,21 +121,26 @@ async def download_and_convert_vk(url: str, user_id: int) -> str:
     Returns:
         str: Путь к сконвертированному WAV-файлу
     """
+    ogg_path = VOICE_TEMP_DIR / f"voice_vk_{user_id}_{int(datetime.now().timestamp())}.ogg"
+    wav_path = ogg_path.with_suffix('.wav')
 
-    ogg_path = f"voice_vk_{user_id}_{int(datetime.now().timestamp())}.ogg"
-    wav_path = ogg_path.replace('.ogg', '.wav')
     async with vk_aiohttp.ClientSession() as session:
         resp = await session.get(url)
         content = await resp.read()
         async with aiofiles.open(ogg_path, 'wb') as f:
             await f.write(content)
+
     try:
-        ffmpeg.input(ogg_path).output(wav_path, format='wav').run(overwrite_output=True)
+        ffmpeg.input(str(ogg_path)).output(str(wav_path), format='wav').run(overwrite_output=True)
     except Exception as e:
         logging.error(f"VK conversion error: {e}")
+        if wav_path.exists():
+            wav_path.unlink()
+        raise
     finally:
-        remove_file(ogg_path)
-    return wav_path
+        if ogg_path.exists():
+            ogg_path.unlink()
+    return str(wav_path)
 
 class Permission(vk.ABCRule[VKMessage]):
     def __init__(self, user_ids: list):

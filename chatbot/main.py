@@ -65,7 +65,7 @@ def vk_keyboard_choice(notify_text: str) -> str:
     """
 
     keyboard = (
-        vk.Keyboard()
+        vk.Keyboard(one_time=True)
         .add(vk.Text(Strings.ConfluenceButton))
         .row()
         .add(vk.Text(notify_text))
@@ -94,6 +94,7 @@ def tg_keyboard_choice(notify_text: str) -> tg.types.ReplyKeyboardMarkup:
             [tg.types.KeyboardButton(text=Strings.NewDialog)],
         ],
         resize_keyboard=True,
+        one_time_keyboard=True,
     )
     return keyboard
 
@@ -322,11 +323,18 @@ async def tg_new_dialog(message: tg.types.Message):
     user_id = get_user_id(engine, telegram_id=message.from_user.id)
 
     if user_id is None:
-        await message.answer(text=Strings.NoneUserTelegram)
+        await message.answer(
+            text=Strings.NoneUserTelegram,
+        )
         return
 
     set_stop_point(engine, user_id, True)
-    await message.answer(text=Strings.DialogReset)
+    notify_text = (
+        Strings.Unsubscribe if check_subscribing(engine, user_id) else Strings.Subscribe
+    )
+    await message.answer(
+        text=Strings.DialogReset, reply_markup=tg_keyboard_choice(notify_text)
+    )
 
 
 @vk_bot.on.message(text=[Strings.NewDialog])
@@ -338,8 +346,12 @@ async def vk_new_dialog(message: VKMessage):
         return
 
     set_stop_point(engine, user_id, True)
+    notify_text = (
+        Strings.Unsubscribe if check_subscribing(engine, user_id) else Strings.Subscribe
+    )
     await message.answer(
         message=Strings.DialogReset,
+        keyboard=vk_keyboard_choice(notify_text),
         random_id=0,
     )
 
@@ -405,10 +417,18 @@ async def vk_answer(message: VKMessage):
         )
         return
     if len(message.text) < 4:
-        await message.answer(message=Strings.Less4Symbols, random_id=0)
+        await message.answer(
+            message=Strings.Less4Symbols,
+            keyboard=vk_keyboard_choice(notify_text),
+            random_id=0,
+        )
         return
     if check_spam(engine, user_id):
-        await message.answer(message=Strings.SpamWarning, random_id=0)
+        await message.answer(
+            message=Strings.SpamWarning,
+            keyboard=vk_keyboard_choice(notify_text),
+            random_id=0,
+        )
         return
     processing = await message.answer(message=Strings.TryFindAnswer, random_id=0)
     answer, confluence_url = await get_answer(message.text, user_id=user_id)
@@ -485,15 +505,26 @@ async def tg_answer(message: tg.types.Message):
         message (tg.types.Message): сообщение с вопросом пользователя
     """
 
-    if len(message.text) < 4:
-        await message.answer(text=Strings.Less4Symbols)
-        return
     user_id = get_user_id(engine, telegram_id=message.from_user.id)
+
     if user_id is None:
         await message.answer(text=Strings.NoneUserTelegram)
         return
+
+    notify_text = (
+        Strings.Unsubscribe if check_subscribing(engine, user_id) else Strings.Subscribe
+    )
+
+    if len(message.text) < 4:
+        await message.answer(
+            text=Strings.Less4Symbols, reply_markup=tg_keyboard_choice(notify_text)
+        )
+        return
+
     if check_spam(engine, user_id):
-        await message.answer(text=Strings.SpamWarning)
+        await message.answer(
+            text=Strings.SpamWarning, reply_markup=tg_keyboard_choice(notify_text)
+        )
         return
     processing = await message.answer(Strings.TryFindAnswer)
     answer, confluence_url = await get_answer(message.text, user_id=user_id)
@@ -502,7 +533,9 @@ async def tg_answer(message: tg.types.Message):
     )
     await message.bot.delete_message(message.chat.id, processing.message_id)
     if confluence_url is None:
-        await message.answer(text=Strings.NotFound)
+        await message.answer(
+            text=Strings.NotFound, reply_markup=tg_keyboard_choice(notify_text)
+        )
         return
     if len(answer) == 0:
         answer = Strings.NotAnswer
@@ -527,7 +560,7 @@ async def tg_answer(message: tg.types.Message):
 
 @routes.post("/broadcast/")
 async def broadcast(request: web.Request) -> web.Response:
-    """Создает рассылку в ВК и/или ТГ
+    """Создает рассылку в ВК и/или ТГ, и обновляет клавиатуру
 
     Args:
         request (web.Request): запрос, содержащий `text`, булевые `tg`, `vk`
@@ -544,11 +577,20 @@ async def broadcast(request: web.Request) -> web.Response:
             raise Exception("в сообщении меньше трёх символов")
         vk_users, tg_users = get_subscribed_users(engine)
         vk_count, tg_count = 0, 0
+
+        notify_text_for_subscribed = Strings.Unsubscribe
+
+        vk_keyboard_to_send = vk_keyboard_choice(notify_text_for_subscribed)
+        tg_keyboard_to_send = tg_keyboard_choice(notify_text_for_subscribed)
+
         if data["vk"]:
             for user_id in vk_users:
                 try:
                     await vk_bot.api.messages.send(
-                        user_id=user_id, message=data["text"], random_id=0
+                        user_id=user_id,
+                        message=data["text"],
+                        keyboard=vk_keyboard_to_send,
+                        random_id=0,
                     )
                     vk_count += 1
                 except vk.VKAPIError:
@@ -556,7 +598,11 @@ async def broadcast(request: web.Request) -> web.Response:
         if data["tg"]:
             for user_id in tg_users:
                 try:
-                    await tg_bot.send_message(chat_id=user_id, text=data["text"])
+                    await tg_bot.send_message(
+                        chat_id=user_id,
+                        text=data["text"],
+                        reply_markup=tg_keyboard_to_send,
+                    )
                     tg_count += 1
                 except TUerror:
                     await asyncio.sleep(1)

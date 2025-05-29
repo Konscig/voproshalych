@@ -9,6 +9,7 @@ from pathlib import Path
 
 import ffmpeg
 import aiofiles
+import aiohttp
 import aiogram as tg
 from aiogram import filters, F
 from aiogram.exceptions import TelegramUnauthorizedError as TUerror

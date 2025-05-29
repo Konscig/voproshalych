@@ -80,12 +80,13 @@ curl -X 'POST' \
 
 Сборка сервиса:
 ```sh
-docker buildx build -t webmasha/stt-gam:0.1.0 --platform linux/arm64,linux/amd64 --push .
+docker buildx create --use --name mybuilder
+docker buildx build -t webmasha/stt-service:0.1.0 --platform linux/arm64,linux/amd64 --push .
 ```
 
 ### Запуск с Docker
 
 Запуск сервиса:
 ```sh
-docker run --name stt -it --rm -p 8000:8000 webmasha/stt-gam:0.1.0 uv run fastapi dev --host 0.0.0.0
+docker run --name stt -it --rm -p 8000:8000 webmasha/stt-service:0.1.0 uv run fastapi dev --host 0.0.0.0
 ```

@@ -1,4 +1,4 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.12.10-slim-bookworm
 
 RUN apt-get update && \
     apt-get install -y ffmpeg git && \
@@ -13,7 +13,7 @@ WORKDIR /stt
 
 ENV UV_SYSTEM_PYTHON=1
 
-ADD *.toml *.lock ./
+ADD *.toml *.lock *.md ./
 RUN uv sync --frozen
 
 ADD am.py .

@@ -439,7 +439,15 @@ async def tg_voice_handler(message: tg.types.Message):
     wav = await download_and_convert_tg(file, message.from_user.id)
     text = await send_to_stt(wav)
     remove_file(wav)
+
+    if not text:
+        await message.reply("Не удалось распознать голосовое сообщение")
+        return
+
     await message.reply(f"Распознанный текст: {text}")
+
+    message.text = text
+    await tg_answer(message)
 
 @vk_bot.on.message(
     func=lambda m: m.attachments and any(att.type == "audio_message" for att in m.attachments)
@@ -457,8 +465,15 @@ async def vk_voice_handler(message: VKMessage):
             wav = await download_and_convert_vk(att.audio_message.link_ogg, message.from_id)
             text = await send_to_stt(wav)
             remove_file(wav)
+
+            if not text:
+                await message.answer("Не удалось распознать голосовое сообщение", random_id=0)
+                return
+
             await message.answer(f"Распознанный текст: {text}", random_id=0)
-            break
+
+            message.text = text
+            await vk_answer(message)
 
 @dispatcher.message(tg.F.text.in_([Strings.NewDialog]))
 async def tg_new_dialog(message: tg.types.Message):

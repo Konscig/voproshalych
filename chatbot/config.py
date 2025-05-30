@@ -18,3 +18,5 @@ class Config:
         if environ.get("CONFLUENCE_SPACES") is not None
         else []
     )
+    STT_HOST = environ.get("STT_HOST", "stt")
+    STT_URL = f"http://{STT_HOST}:8000/transcribe/"

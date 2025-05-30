@@ -69,7 +69,7 @@ tenacity==8.2.3
 threadpoolctl==3.4.0
 tokenizers==0.19.1
 tomli==2.0.1
-torch==2.2.2+cpu
+torch
 tqdm==4.66.2
 transformers==4.40.0
 typing-inspect==0.9.0

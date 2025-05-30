@@ -486,7 +486,6 @@ async def process_message_text(
         bot_instance (tg.Bot | vk.Bot): Экземпляр бота для отправки сообщений
         random_id (int, optional): ID для VK сообщений. По умолчанию 0.
     """
-    # Добавляем пользователя в базу данных
     if platform == 'telegram':
         is_user_added, user_id = add_user(engine, telegram_id=user_id)
     else:
@@ -529,7 +528,6 @@ async def process_message_text(
             )
         return
 
-    # Отправляем сообщение о поиске ответа
     if platform == 'telegram':
         processing = await bot_instance.send_message(chat_id=chat_id, text=Strings.TryFindAnswer)
     else:
@@ -544,7 +542,6 @@ async def process_message_text(
         engine, text, answer, confluence_url, user_id
     )
 
-    # Удаляем сообщение о поиске
     if platform == 'telegram':
         await bot_instance.delete_message(chat_id=chat_id, message_id=processing.message_id)
     else:
@@ -628,7 +625,6 @@ async def tg_voice_handler(message: tg.types.Message):
 
         await message.reply(f"Распознанный текст: {text}")
 
-        # Обрабатываем распознанный текст
         await process_message_text(
             text=text,
             user_id=message.from_user.id,
@@ -689,7 +685,6 @@ async def vk_voice_handler(message: VKMessage):
 
                 await message.answer(f"Распознанный текст: {text}", random_id=0)
 
-                # Обрабатываем распознанный текст
                 await process_message_text(
                     text=text,
                     user_id=message.from_id,

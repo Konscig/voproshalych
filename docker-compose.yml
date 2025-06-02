@@ -99,6 +99,10 @@ services:
         build: ./stt
         image: stt-service:0.1.0
         restart: unless-stopped
+        env_file:
+            - .env.docker
+        environment:
+            - HF_TOKEN=${HF_TOKEN}
         networks:
             - chatbot-conn
 

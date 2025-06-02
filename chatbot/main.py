@@ -623,8 +623,6 @@ async def tg_voice_handler(message: tg.types.Message):
             await message.reply("Не удалось распознать голосовое сообщение")
             return
 
-        await message.reply(f"Распознанный текст: {text}")
-
         await process_message_text(
             text=text,
             user_id=message.from_user.id,
@@ -682,8 +680,6 @@ async def vk_voice_handler(message: VKMessage):
                     logging.warning("Empty transcription received")
                     await message.answer("Не удалось распознать голосовое сообщение", random_id=0)
                     return
-
-                await message.answer(f"Распознанный текст: {text}", random_id=0)
 
                 await process_message_text(
                     text=text,

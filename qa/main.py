@@ -76,60 +76,6 @@ def get_answer(dialog_history: list, knowledge_base: str, question: str) -> str:
         return ""
 
 
-def transcribe(
-    request: web.Request,
-):  # сделать синхронным методом, принимать файл и возвращать текст
-    """_summary_
-
-    Args:
-        request (web.Request): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    reader = await request.multipart()
-    field = await reader.next()
-
-    logging.info(msg=f"{field}")
-
-    # Проверка, что поле существует и это файл
-    if field is None or not field.filename:
-        return web.json_response(
-            {"status": "error", "detail": "No file part in the request"}, status=400
-        )
-
-    filename = field.filename
-    temp_path = f"temp_{filename}"
-
-    try:
-        # Сохраняем файл во временное хранилище
-        async with aiofiles.open(temp_path, "wb") as f:
-            while True:
-                chunk = await field.read_chunk()  # читаем по частям
-                if not chunk:
-                    break
-                await f.write(chunk)
-
-        # Распознаём аудио
-        text = transcribe_audio(model, temp_path)
-        print(f"Полученный текст: {text}")
-
-        return web.json_response(
-            {"status": "success", "transcription": text}, status=200
-        )
-
-    except FileNotFoundError as e:
-        return web.json_response({"status": "error", "detail": str(e)}, status=404)
-
-    except Exception as e:
-        logging.exception("Ошибка при распознавании файла")
-        return web.json_response({"status": "error", "detail": str(e)}, status=500)
-
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-
-
 def assess_answer(
     dialog_history: list,
     question: str,

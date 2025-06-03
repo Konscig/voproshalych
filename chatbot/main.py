@@ -492,15 +492,15 @@ async def tg_answer(message: tg.types.Message):
     if user_id is None:
         await message.answer(text=Strings.NoneUserTelegram)
         return
-    if check_spam(engine, user_id):
-        await message.answer(text=Strings.SpamWarning)
-        return
-    processing = await message.answer(Strings.TryFindAnswer)
+    # if check_spam(engine, user_id):
+    #     await message.answer(text=Strings.SpamWarning)
+    #     return
+    # processing = await message.answer(Strings.TryFindAnswer)
     answer, confluence_url = await get_answer(message.text, user_id=user_id)
     question_answer_id = add_question_answer(
         engine, message.text, answer, confluence_url, user_id
     )
-    await message.bot.delete_message(message.chat.id, processing.message_id)
+    # await message.bot.delete_message(message.chat.id, processing.message_id)
     if confluence_url is None:
         await message.answer(text=Strings.NotFound)
         return

@@ -48,6 +48,7 @@ STT_URL = Config.STT_URL
 VOICE_TEMP_DIR = Path(tempfile.gettempdir()) / "voice_messages"
 VOICE_TEMP_DIR.mkdir(exist_ok=True)
 
+
 def remove_file(path: str):
     try:
         os.remove(path)
@@ -67,22 +68,24 @@ async def send_to_stt(wav_path: str) -> str:
     """
 
     form = FormData()
-    async with aiofiles.open(wav_path, 'rb') as f:
+    async with aiofiles.open(wav_path, "rb") as f:
         wav_bytes = await f.read()
     form.add_field(
-        name='file',
+        name="file",
         value=wav_bytes,
         filename=os.path.basename(wav_path),
-        content_type='audio/wav'
+        content_type="audio/wav",
     )
     async with ClientSession() as session:
-        async with session.post(STT_URL, data=form) as resp:
+        async with session.post(
+            f"http://{Config.QA_HOST}/qa?audio=1/", data=form
+        ) as resp:
             if resp.status == 200:
                 result = await resp.json()
-                return result.get('transcription', '')
+                return result.get("transcription", "")
             else:
                 logging.error(f"STT service returned status {resp.status}")
-                return ''
+                return ""
 
 
 async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
@@ -96,13 +99,17 @@ async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
     Returns:
         str: Путь к сконвертированному WAV-файлу
     """
-    ogg_path = VOICE_TEMP_DIR / f"voice_tg_{user_id}_{int(datetime.now().timestamp())}.oga"
-    wav_path = ogg_path.with_suffix('.wav')
+    ogg_path = (
+        VOICE_TEMP_DIR / f"voice_tg_{user_id}_{int(datetime.now().timestamp())}.oga"
+    )
+    wav_path = ogg_path.with_suffix(".wav")
 
     await tg_bot.download_file(file.file_path, destination=str(ogg_path))
 
     try:
-        ffmpeg.input(str(ogg_path)).output(str(wav_path), format='wav').run(overwrite_output=True)
+        ffmpeg.input(str(ogg_path)).output(str(wav_path), format="wav").run(
+            overwrite_output=True
+        )
     except Exception as e:
         logging.error(f"TG conversion error: {e}")
         if wav_path.exists():
@@ -125,17 +132,21 @@ async def download_and_convert_vk(url: str, user_id: int) -> str:
     Returns:
         str: Путь к сконвертированному WAV-файлу
     """
-    ogg_path = VOICE_TEMP_DIR / f"voice_vk_{user_id}_{int(datetime.now().timestamp())}.ogg"
-    wav_path = ogg_path.with_suffix('.wav')
+    ogg_path = (
+        VOICE_TEMP_DIR / f"voice_vk_{user_id}_{int(datetime.now().timestamp())}.ogg"
+    )
+    wav_path = ogg_path.with_suffix(".wav")
 
     async with vk_aiohttp.ClientSession() as session:
         resp = await session.get(url)
         content = await resp.read()
-        async with aiofiles.open(ogg_path, 'wb') as f:
+        async with aiofiles.open(ogg_path, "wb") as f:
             await f.write(content)
 
     try:
-        ffmpeg.input(str(ogg_path)).output(str(wav_path), format='wav').run(overwrite_output=True)
+        ffmpeg.input(str(ogg_path)).output(str(wav_path), format="wav").run(
+            overwrite_output=True
+        )
     except Exception as e:
         logging.error(f"VK conversion error: {e}")
         if wav_path.exists():
@@ -145,6 +156,7 @@ async def download_and_convert_vk(url: str, user_id: int) -> str:
         if ogg_path.exists():
             ogg_path.unlink()
     return str(wav_path)
+
 
 class Permission(vk.ABCRule[VKMessage]):
     def __init__(self, user_ids: list):
@@ -449,6 +461,7 @@ async def tg_start(message: tg.types.Message):
             text=Strings.FirstMessage, reply_markup=tg_keyboard_choice(notify_text)
         )
 
+
 @vk_bot.on.message(text=[Strings.Start, Strings.StartEnglish])
 async def vk_start(message: VKMessage):
     """Обработчик события (для чат-бота ВКонтакте), при котором пользователь отправляет
@@ -468,13 +481,14 @@ async def vk_start(message: VKMessage):
             random_id=0,
         )
 
+
 async def process_message_text(
     text: str,
     user_id: int,
     chat_id: int,
     platform: str,
     bot_instance: tg.Bot | vk.Bot,
-    random_id: int = 0
+    random_id: int = 0,
 ) -> None:
     """Универсальная функция для обработки текстовых сообщений
 
@@ -486,7 +500,7 @@ async def process_message_text(
         bot_instance (tg.Bot | vk.Bot): Экземпляр бота для отправки сообщений
         random_id (int, optional): ID для VK сообщений. По умолчанию 0.
     """
-    if platform == 'telegram':
+    if platform == "telegram":
         is_user_added, user_id = add_user(engine, telegram_id=user_id)
     else:
         is_user_added, user_id = add_user(engine, vk_id=user_id)
@@ -496,45 +510,41 @@ async def process_message_text(
     )
 
     if len(text) < 4:
-        if platform == 'telegram':
+        if platform == "telegram":
             await bot_instance.send_message(chat_id=chat_id, text=Strings.Less4Symbols)
         else:
             await bot_instance.api.messages.send(
-                user_id=chat_id,
-                message=Strings.Less4Symbols,
-                random_id=random_id
+                user_id=chat_id, message=Strings.Less4Symbols, random_id=random_id
             )
         return
 
     if user_id is None:
-        if platform == 'telegram':
-            await bot_instance.send_message(chat_id=chat_id, text=Strings.NoneUserTelegram)
+        if platform == "telegram":
+            await bot_instance.send_message(
+                chat_id=chat_id, text=Strings.NoneUserTelegram
+            )
         else:
             await bot_instance.api.messages.send(
-                user_id=chat_id,
-                message=Strings.NoneUserVK,
-                random_id=random_id
+                user_id=chat_id, message=Strings.NoneUserVK, random_id=random_id
             )
         return
 
     if check_spam(engine, user_id):
-        if platform == 'telegram':
+        if platform == "telegram":
             await bot_instance.send_message(chat_id=chat_id, text=Strings.SpamWarning)
         else:
             await bot_instance.api.messages.send(
-                user_id=chat_id,
-                message=Strings.SpamWarning,
-                random_id=random_id
+                user_id=chat_id, message=Strings.SpamWarning, random_id=random_id
             )
         return
 
-    if platform == 'telegram':
-        processing = await bot_instance.send_message(chat_id=chat_id, text=Strings.TryFindAnswer)
+    if platform == "telegram":
+        processing = await bot_instance.send_message(
+            chat_id=chat_id, text=Strings.TryFindAnswer
+        )
     else:
         processing = await bot_instance.api.messages.send(
-            user_id=chat_id,
-            message=Strings.TryFindAnswer,
-            random_id=random_id
+            user_id=chat_id, message=Strings.TryFindAnswer, random_id=random_id
         )
 
     answer, confluence_url = await get_answer(text, user_id=user_id)
@@ -542,30 +552,28 @@ async def process_message_text(
         engine, text, answer, confluence_url, user_id
     )
 
-    if platform == 'telegram':
-        await bot_instance.delete_message(chat_id=chat_id, message_id=processing.message_id)
+    if platform == "telegram":
+        await bot_instance.delete_message(
+            chat_id=chat_id, message_id=processing.message_id
+        )
     else:
         await bot_instance.api.messages.delete(
-            message_ids=[processing.message_id],
-            peer_id=chat_id,
-            delete_for_all=True
+            message_ids=[processing.message_id], peer_id=chat_id, delete_for_all=True
         )
 
     if confluence_url is None:
-        if platform == 'telegram':
+        if platform == "telegram":
             await bot_instance.send_message(chat_id=chat_id, text=Strings.NotFound)
         else:
             await bot_instance.api.messages.send(
-                user_id=chat_id,
-                message=Strings.NotFound,
-                random_id=random_id
+                user_id=chat_id, message=Strings.NotFound, random_id=random_id
             )
         return
 
     if len(answer) == 0:
         answer = Strings.NotAnswer
 
-    if platform == 'telegram':
+    if platform == "telegram":
         keyboard = tg.types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -586,15 +594,24 @@ async def process_message_text(
     else:
         keyboard = (
             vk.Keyboard(inline=True)
-            .add(vk.Text("👎", payload={"score": 1, "question_answer_id": question_answer_id}))
-            .add(vk.Text("❤", payload={"score": 5, "question_answer_id": question_answer_id}))
+            .add(
+                vk.Text(
+                    "👎", payload={"score": 1, "question_answer_id": question_answer_id}
+                )
+            )
+            .add(
+                vk.Text(
+                    "❤", payload={"score": 5, "question_answer_id": question_answer_id}
+                )
+            )
         )
         await bot_instance.api.messages.send(
             user_id=chat_id,
             message=f"{answer}\n\n{Strings.SourceURL} {confluence_url}",
             keyboard=keyboard.get_json(),
-            random_id=random_id
+            random_id=random_id,
         )
+
 
 @dispatcher.message(F.voice)
 async def tg_voice_handler(message: tg.types.Message):
@@ -627,14 +644,17 @@ async def tg_voice_handler(message: tg.types.Message):
             text=text,
             user_id=message.from_user.id,
             chat_id=message.chat.id,
-            platform='telegram',
-            bot_instance=tg_bot
+            platform="telegram",
+            bot_instance=tg_bot,
         )
         logging.info("Voice message processing completed successfully")
 
     except Exception as e:
-        logging.error(f"Error processing voice message in Telegram: {str(e)}", exc_info=True)
+        logging.error(
+            f"Error processing voice message in Telegram: {str(e)}", exc_info=True
+        )
         await message.reply("Произошла ошибка при обработке голосового сообщения")
+
 
 @dispatcher.message()
 async def tg_answer(message: tg.types.Message):
@@ -647,12 +667,14 @@ async def tg_answer(message: tg.types.Message):
         text=message.text,
         user_id=message.from_user.id,
         chat_id=message.chat.id,
-        platform='telegram',
-        bot_instance=tg_bot
+        platform="telegram",
+        bot_instance=tg_bot,
     )
 
+
 @vk_bot.on.message(
-    func=lambda m: m.attachments and any(att.type == "audio_message" for att in m.attachments)
+    func=lambda m: m.attachments
+    and any(att.type == "audio_message" for att in m.attachments)
 )
 async def vk_voice_handler(message: VKMessage):
     """
@@ -665,9 +687,13 @@ async def vk_voice_handler(message: VKMessage):
         logging.info("Starting VK voice message processing")
         for att in message.attachments:
             if att.type == "audio_message":
-                logging.info(f"Found audio message attachment: {att.audio_message.link_ogg}")
+                logging.info(
+                    f"Found audio message attachment: {att.audio_message.link_ogg}"
+                )
 
-                wav = await download_and_convert_vk(att.audio_message.link_ogg, message.from_id)
+                wav = await download_and_convert_vk(
+                    att.audio_message.link_ogg, message.from_id
+                )
                 logging.info(f"Converted to WAV: {wav}")
 
                 text = await send_to_stt(wav)
@@ -678,23 +704,28 @@ async def vk_voice_handler(message: VKMessage):
 
                 if not text:
                     logging.warning("Empty transcription received")
-                    await message.answer("Не удалось распознать голосовое сообщение", random_id=0)
+                    await message.answer(
+                        "Не удалось распознать голосовое сообщение", random_id=0
+                    )
                     return
 
                 await process_message_text(
                     text=text,
                     user_id=message.from_id,
                     chat_id=message.peer_id,
-                    platform='vk',
+                    platform="vk",
                     bot_instance=vk_bot,
-                    random_id=0
+                    random_id=0,
                 )
                 logging.info("Voice message processing completed successfully")
                 break
 
     except Exception as e:
         logging.error(f"Error processing voice message in VK: {str(e)}", exc_info=True)
-        await message.answer("Произошла ошибка при обработке голосового сообщения", random_id=0)
+        await message.answer(
+            "Произошла ошибка при обработке голосового сообщения", random_id=0
+        )
+
 
 @vk_bot.on.message()
 async def vk_answer(message: VKMessage):
@@ -707,10 +738,11 @@ async def vk_answer(message: VKMessage):
         text=message.text,
         user_id=message.from_id,
         chat_id=message.peer_id,
-        platform='vk',
+        platform="vk",
         bot_instance=vk_bot,
-        random_id=0
+        random_id=0,
     )
+
 
 @dispatcher.message(tg.F.text.in_([Strings.NewDialog]))
 async def tg_new_dialog(message: tg.types.Message):
@@ -763,7 +795,7 @@ async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"http://{Config.QA_HOST}/qa/",
+            f"http://{Config.QA_HOST}/qa?audio=0/",
             json={"question": question, "dialog_context": dialog_context},
         ) as response:
             if response.status == 200:
@@ -1027,6 +1059,7 @@ def launch_greeting_service():
     asyncio.set_event_loop(loop)
     loop.run_until_complete(check_and_send_greetings())
     loop.close()
+
 
 if __name__ == "__main__":
     loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]

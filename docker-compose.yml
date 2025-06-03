@@ -65,8 +65,8 @@ services:
                 condition: service_healthy
             qa:
                 condition: service_started
-            stt:
-                condition: service_started
+            # stt:
+            #     condition: service_started
             db-migrate:
                 condition: service_completed_successfully
         networks:
@@ -95,16 +95,16 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
-    stt:
-        build: ./stt
-        image: stt-service:0.1.0
-        restart: unless-stopped
-        env_file:
-            - .env.docker
-        environment:
-            - HF_TOKEN=${HF_TOKEN}
-        networks:
-            - chatbot-conn
+    # stt:
+    #     build: ./stt
+    #     image: stt-service:0.1.0
+    #     restart: unless-stopped
+    #     env_file:
+    #         - .env.docker
+    #     environment:
+    #         - HF_TOKEN=${HF_TOKEN}
+    #     networks:
+    #         - chatbot-conn
 
 volumes:
     db-data:

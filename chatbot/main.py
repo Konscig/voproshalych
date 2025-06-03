@@ -368,7 +368,8 @@ async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
     async with aiohttp.ClientSession() as session:
         async with session.post(
             f"http://{Config.QA_HOST}/qa/",
-            json={"question": question, "dialog_context": dialog_context},
+            # json={"question": question, "dialog_context": dialog_context},
+            json={"question": question, "dialog_context": ""},
         ) as response:
             if response.status == 200:
                 resp = await response.json()

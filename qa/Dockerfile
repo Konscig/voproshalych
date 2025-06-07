@@ -17,3 +17,5 @@ COPY ./save_models.py .
 RUN python save_models.py
 
 COPY . /usr/src/app/
+
+EXPOSE 8080

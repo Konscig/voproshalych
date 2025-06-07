@@ -484,6 +484,19 @@ async def reembed(request: web.Request) -> web.Response:
         return web.Response(text=str(e), status=500)
 
 
+@routes.get("/health")
+async def health_check(request: web.Request) -> web.Response:
+    """Проверка работоспособности сервиса
+
+    Args:
+        request (web.Request): запрос
+
+    Returns:
+        web.Response: ответ со статусом 200 если сервис работает
+    """
+    return web.Response(status=200)
+
+
 if __name__ == "__main__":
     with Session(engine) as session:
         questions = session.scalars(select(Chunk)).first()

@@ -56,17 +56,16 @@ def remove_file(path: str):
         pass
 
 
-async def send_to_stt(wav_path: str) -> str:
+async def send_wav_to_qa(wav_path: str) -> str:
     """
-    Отправляет WAV-файл в микросервис распознавания речи (STT) и возвращает текстовую расшифровку
+    Отправляет WAV-файл в QA сервис для обработки голосового сообщения
 
     Args:
         wav_path (str): Путь к WAV-файлу с голосовым сообщением
 
     Returns:
-        str: Распознанный текст, полученный от микросервиса STT (или пустая строка в случае ошибки)
+        str: Распознанный текст, полученный от QA сервиса (или пустая строка в случае ошибки)
     """
-
     form = FormData()
     async with aiofiles.open(wav_path, "rb") as f:
         wav_bytes = await f.read()
@@ -78,13 +77,13 @@ async def send_to_stt(wav_path: str) -> str:
     )
     async with ClientSession() as session:
         async with session.post(
-            f"http://{Config.QA_HOST}/qa?audio=1/", data=form
-        ) as resp:
-            if resp.status == 200:
-                result = await resp.json()
-                return result.get("transcription", "")
+            f"http://{Config.QA_HOST}/qa/?audio=1", data=form
+        ) as response:
+            if response.status == 200:
+                result = await response.json()
+                return result.get("answer", "")
             else:
-                logging.error(f"STT service returned status {resp.status}")
+                logging.error(f"QA service returned status {response.status}")
                 return ""
 
 
@@ -616,7 +615,7 @@ async def process_message_text(
 @dispatcher.message(F.voice)
 async def tg_voice_handler(message: tg.types.Message):
     """
-    Обрабатывает голосовое сообщение из Telegram: скачивает, конвертирует, распознаёт и отвечает текстом
+    Обрабатывает голосовое сообщение из Telegram: скачивает, конвертирует и отправляет в QA сервис
 
     Args:
         message (tg.types.Message): Входящее сообщение с голосом от пользователя Telegram
@@ -629,15 +628,15 @@ async def tg_voice_handler(message: tg.types.Message):
         wav = await download_and_convert_tg(file, message.from_user.id)
         logging.info(f"Converted to WAV: {wav}")
 
-        text = await send_to_stt(wav)
-        logging.info(f"STT result: {text}")
+        text = await send_wav_to_qa(wav)
+        logging.info(f"QA service result: {text}")
 
         remove_file(wav)
         logging.info("Temporary files cleaned up")
 
         if not text:
-            logging.warning("Empty transcription received")
-            await message.reply("Не удалось распознать голосовое сообщение")
+            logging.warning("Empty response received from QA service")
+            await message.reply("Не удалось обработать голосовое сообщение")
             return
 
         await process_message_text(
@@ -678,7 +677,7 @@ async def tg_answer(message: tg.types.Message):
 )
 async def vk_voice_handler(message: VKMessage):
     """
-    Обрабатывает голосовое сообщение из ВКонтакте: скачивает, конвертирует, распознаёт и отвечает текстом
+    Обрабатывает голосовое сообщение из ВКонтакте: скачивает, конвертирует и отправляет в QA сервис
 
     Args:
         message (VKMessage): Входящее сообщение от пользователя ВКонтакте с вложенным аудио-сообщением
@@ -696,16 +695,16 @@ async def vk_voice_handler(message: VKMessage):
                 )
                 logging.info(f"Converted to WAV: {wav}")
 
-                text = await send_to_stt(wav)
-                logging.info(f"STT result: {text}")
+                text = await send_wav_to_qa(wav)
+                logging.info(f"QA service result: {text}")
 
                 remove_file(wav)
                 logging.info("Temporary files cleaned up")
 
                 if not text:
-                    logging.warning("Empty transcription received")
+                    logging.warning("Empty response received from QA service")
                     await message.answer(
-                        "Не удалось распознать голосовое сообщение", random_id=0
+                        "Не удалось обработать голосовое сообщение", random_id=0
                     )
                     return
 

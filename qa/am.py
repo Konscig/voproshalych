@@ -43,7 +43,6 @@ def transcribe_audio(model, wav_path: str) -> str:
             print("Получен пустой результат транскрибации")
             return ""
 
-        # Форматируем транскрипцию с временными метками
         formatted_transcription = []
         for utterance in recognition_result:
             transcription = utterance["transcription"]

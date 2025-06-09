@@ -3,9 +3,10 @@
 ## Описание
 Микросервис, предоставляющий API для:
  * генерации ответа на вопрос, опираясь на документы из вики-системы;
- * обновления векторного индекса текстов документов из вики-системы.
+ * обновления векторного индекса текстов документов из вики-системы;
+ * обработки голосовых сообщений и их транскрибации.
 
- > [!IMPORTANT]
+> [!IMPORTANT]
 > Информация о настройке взаимодействия с вики-системой Confluence представлена в [confluence-integration.md](confluence-integration.md).
 
 ## [main](../qa/main.py)
@@ -18,16 +19,16 @@
         question (str): вопрос пользователя
 
     Returns:
-        str: экземпляр класса Chunk — фрагмент документа
+        str: ответ на вопрос
 
 ### `qa(request: web.Request) -> web.Response`
-Возвращает ответ на вопрос пользователя и ссылку на источник
+Возвращает ответ на вопрос пользователя и ссылку на источник. Поддерживает как текстовые, так и голосовые вопросы.
 
     Args:
-        request (web.Request): запрос, содержащий `question`
+        request (web.Request): запрос, содержащий `question` или аудиофайл
 
     Returns:
-        web.Response: ответ
+        web.Response: ответ с текстом ответа и ссылкой на источник
 
 ### `generate_greeting(request: web.Request) -> web.Response`
 Генерирует поздравления с использованием LLM
@@ -70,6 +71,21 @@
         created_at (datetime): время создания модели
         updated_at (datetime): время обновления модели
 
+### `class QuestionAnswer(Base)`
+Вопрос пользователя с ответом на него
+
+    Args:
+        id (int): id ответа
+        question (str): вопрос пользователя
+        embedding (Vector): векторное представление текста вопроса размерностью 1024
+        answer (str | None): ответ на вопрос пользователя
+        confluence_url (str | None): ссылка на страницу в вики-системе, содержащую ответ
+        score (int | None): оценка пользователем ответа
+        user_id (int): id пользователя, задавшего вопрос
+        user (User): пользователь, задавший вопрос
+        created_at (datetime): время создания модели
+        updated_at (datetime): время обновления модели
+
 ## [confluence_retrieving](../qa/confluence_retrieving.py)
 
 ### `get_document_content_by_id(confluence: Confluence, page_id: str) -> tuple[str | None, str | None]`
@@ -101,10 +117,23 @@
     Returns:
         Chunk | None: экземпляр класса Chunk — фрагмент документа
 
-## [tests](../qa/tests.py)
+## [conftest](../qa/conftest.py)
+### `load_env()`
+Фикстура для загрузки переменных окружения из корневого .env файла. Автоматически применяется ко всем тестам.
 
+### `client()`
+Фикстура для создания тестового клиента aiohttp. Создает сессию для выполнения HTTP-запросов в тестах.
+
+### `test_audio_file()`
+Фикстура для тестового аудиофайла. Создает временный WAV файл для тестирования и удаляет его после завершения теста.
+
+## [tests](../qa/tests.py)
 ### `test_llm()`
 тест взаимодействия с LLM
 
 ### `test_confluence()`
 тест взаимодействия с Confluence
+
+## [test_audio](../qa/test_audio.py)
+### `test_transcribe_audio()`
+Тест функции транскрибации аудиофайла с использованием модели STT.

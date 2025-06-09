@@ -564,8 +564,6 @@ async def tg_voice_handler(message: tg.types.Message):
     """
     try:
         logger.info(f"=== Starting Telegram voice message processing from user {message.from_user.id} ===")
-
-        # Add user to database first
         is_user_added, user_id = add_user(engine, telegram_id=message.from_user.id)
         if user_id is None:
             logger.error(f"Failed to add/get user {message.from_user.id} to database")
@@ -663,7 +661,6 @@ async def tg_answer(message: tg.types.Message):
     Args:
         message (tg.types.Message): сообщение с вопросом пользователя
     """
-    # Skip voice messages as they are handled by tg_voice_handler
     if message.voice:
         logger.info(f"Skipping voice message in text handler for user {message.from_user.id}")
         return

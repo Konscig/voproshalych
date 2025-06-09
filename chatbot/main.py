@@ -572,6 +572,9 @@ async def tg_voice_handler(message: tg.types.Message):
 
         logger.info(f"Voice message details: file_id={message.voice.file_id}, duration={message.voice.duration}")
 
+        processing = await message.reply(Strings.TryFindAnswer)
+        logger.info("Sent processing message")
+
         file = await tg_bot.get_file(message.voice.file_id)
         logger.info(f"Got file info: {file.file_path}")
 
@@ -587,6 +590,7 @@ async def tg_voice_handler(message: tg.types.Message):
 
         if not answer:
             logger.warning("Empty response received from QA service")
+            await message.bot.delete_message(message.chat.id, processing.message_id)
             await message.reply("Не удалось обработать голосовое сообщение")
             return
 
@@ -597,6 +601,7 @@ async def tg_voice_handler(message: tg.types.Message):
 
         if confluence_url is None:
             logger.warning("No confluence URL in response")
+            await message.bot.delete_message(message.chat.id, processing.message_id)
             await message.reply(Strings.NotFound)
             return
 
@@ -617,6 +622,7 @@ async def tg_voice_handler(message: tg.types.Message):
             ]
         )
         logger.info(f"Sending voice message answer to user {message.from_user.id}")
+        await message.bot.delete_message(message.chat.id, processing.message_id)
         await message.reply(
             text=f"{answer}\n\n{Strings.SourceURL} {confluence_url}",
             reply_markup=keyboard,
@@ -737,6 +743,9 @@ async def vk_voice_handler(message: VKMessage):
                     f"Found audio message attachment: {att.audio_message.link_ogg}"
                 )
 
+                processing = await message.answer(message=Strings.TryFindAnswer, random_id=0)
+                logging.info("Sent processing message")
+
                 wav = await download_and_convert_vk(
                     att.audio_message.link_ogg, message.from_id
                 )
@@ -750,6 +759,12 @@ async def vk_voice_handler(message: VKMessage):
 
                 if not answer:
                     logging.warning("Empty response received from QA service")
+                    if processing.message_id is not None:
+                        await vk_bot.api.messages.delete(
+                            message_ids=[processing.message_id],
+                            peer_id=message.peer_id,
+                            delete_for_all=True,
+                        )
                     await message.answer(
                         "Не удалось обработать голосовое сообщение", random_id=0
                     )
@@ -760,6 +775,12 @@ async def vk_voice_handler(message: VKMessage):
                 )
 
                 if confluence_url is None:
+                    if processing.message_id is not None:
+                        await vk_bot.api.messages.delete(
+                            message_ids=[processing.message_id],
+                            peer_id=message.peer_id,
+                            delete_for_all=True,
+                        )
                     await message.answer(
                         message=Strings.NotFound,
                         random_id=0,
@@ -782,6 +803,12 @@ async def vk_voice_handler(message: VKMessage):
                         )
                     )
                 )
+                if processing.message_id is not None:
+                    await vk_bot.api.messages.delete(
+                        message_ids=[processing.message_id],
+                        peer_id=message.peer_id,
+                        delete_for_all=True,
+                    )
                 await message.answer(
                     message=f"{answer}\n\n{Strings.SourceURL} {confluence_url}",
                     keyboard=keyboard.get_json(),

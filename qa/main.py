@@ -282,7 +282,7 @@ async def qa(request: web.Request) -> web.Response:
             dialog_history=dialog_context, question=question, answer=db_answer
         )
         if verdict:
-            return web.json_response({"answer": db_answer, "confluence_url": url})
+            return web.json_response({"answer": db_answer, "confluence_url": url, "question": question})
         else:
             logging.error(f"Answer {db_answer} were banned for question {question}")
             return web.Response(text="Answer banned", status=404)
@@ -324,7 +324,7 @@ async def qa(request: web.Request) -> web.Response:
     )
     if verdict:
         return web.json_response(
-            {"answer": answer, "confluence_url": chunk.confluence_url}
+            {"answer": answer, "confluence_url": chunk.confluence_url, "question": question}
         )
     if not verdict:
         logging.error(f"Answer {answer} were banned for question {question}")

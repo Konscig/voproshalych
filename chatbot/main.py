@@ -66,7 +66,7 @@ def remove_file(path: str):
         pass
 
 
-async def send_wav_to_qa(wav_path: str) -> tuple[str, str | None]:
+async def send_wav_to_qa(wav_path: str) -> tuple[str, str | None, str]:
     """
     Отправляет WAV-файл в QA сервис для обработки голосового сообщения
 
@@ -74,7 +74,7 @@ async def send_wav_to_qa(wav_path: str) -> tuple[str, str | None]:
         wav_path (str): Путь к WAV-файлу с голосовым сообщением
 
     Returns:
-        tuple[str, str | None]: Ответ на вопрос и ссылка на источник
+        tuple[str, str | None, str]: Ответ на вопрос, ссылка на источник и транскрибированный текст
     """
     form = FormData()
     async with aiofiles.open(wav_path, "rb") as f:
@@ -91,10 +91,10 @@ async def send_wav_to_qa(wav_path: str) -> tuple[str, str | None]:
         ) as response:
             if response.status == 200:
                 result = await response.json()
-                return result.get("answer", ""), result.get("confluence_url")
+                return result.get("answer", ""), result.get("confluence_url"), result.get("question", "голосовое сообщение")
             else:
                 logging.error(f"QA service returned status {response.status}")
-                return "", None
+            return "", None, "голосовое сообщение"
 
 
 async def download_and_convert_tg(file: tg.types.File, user_id: int) -> str:
@@ -582,20 +582,21 @@ async def tg_voice_handler(message: tg.types.Message):
         logger.info(f"Converted to WAV: {wav}")
 
         logger.info("Sending WAV to QA service...")
-        answer, confluence_url = await send_wav_to_qa(wav)
-        logger.info(f"QA service response - answer length: {len(answer) if answer else 0}, url: {confluence_url}")
-
-        remove_file(wav)
-        logger.info("Temporary files cleaned up")
+        answer, confluence_url, transcribed_text = await send_wav_to_qa(wav)
+        logger.info(f"QA service response - answer length: {len(answer) if answer else 0}, url: {confluence_url}, transcribed text: {transcribed_text}")
 
         if not answer:
             logger.warning("Empty response received from QA service")
             await message.bot.delete_message(message.chat.id, processing.message_id)
             await message.reply("Не удалось обработать голосовое сообщение")
+            remove_file(wav)
             return
 
+        remove_file(wav)
+        logger.info("Temporary files cleaned up")
+
         question_answer_id = add_question_answer(
-            engine, "голосовое сообщение", answer, confluence_url, user_id
+            engine, transcribed_text, answer, confluence_url, user_id
         )
         logger.info(f"Saved to database with ID: {question_answer_id}")
 
@@ -751,11 +752,8 @@ async def vk_voice_handler(message: VKMessage):
                 )
                 logging.info(f"Converted to WAV: {wav}")
 
-                answer, confluence_url = await send_wav_to_qa(wav)
-                logging.info(f"QA service result: answer={answer}, url={confluence_url}")
-
-                remove_file(wav)
-                logging.info("Temporary files cleaned up")
+                answer, confluence_url, transcribed_text = await send_wav_to_qa(wav)
+                logging.info(f"QA service result: answer={answer}, url={confluence_url}, transcribed text={transcribed_text}")
 
                 if not answer:
                     logging.warning("Empty response received from QA service")
@@ -768,11 +766,16 @@ async def vk_voice_handler(message: VKMessage):
                     await message.answer(
                         "Не удалось обработать голосовое сообщение", random_id=0
                     )
+                    remove_file(wav)
                     return
 
+                remove_file(wav)
+                logging.info("Temporary files cleaned up")
+
                 question_answer_id = add_question_answer(
-                    engine, "голосовое сообщение", answer, confluence_url, message.from_id
+                    engine, transcribed_text, answer, confluence_url, message.from_id
                 )
+                logging.info(f"Saved to database with ID: {question_answer_id}")
 
                 if confluence_url is None:
                     if processing.message_id is not None:

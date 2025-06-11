@@ -596,7 +596,7 @@ async def tg_voice_handler(message: tg.types.Message):
         logger.info("Temporary files cleaned up")
 
         question_answer_id = add_question_answer(
-            engine, transcribed_text, answer, confluence_url, user_id
+            engine, transcribed_text, answer, confluence_url, user_id, is_voice=True
         )
         logger.info(f"Saved to database with ID: {question_answer_id}")
 
@@ -773,7 +773,7 @@ async def vk_voice_handler(message: VKMessage):
                 logging.info("Temporary files cleaned up")
 
                 question_answer_id = add_question_answer(
-                    engine, transcribed_text, answer, confluence_url, message.from_id
+                    engine, transcribed_text, answer, confluence_url, message.from_id, is_voice=True
                 )
                 logging.info(f"Saved to database with ID: {question_answer_id}")
 

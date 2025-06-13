@@ -34,7 +34,7 @@ langchain-core==0.1.45
 langchain-text-splitters==0.0.1
 langsmith==0.1.49
 lxml==5.2.1
-MarkupSafe==2.1.5
+MarkupSafe
 marshmallow==3.21.1
 mpmath
 multidict==6.0.5

@@ -1,4 +1,5 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
+aiofiles==23.2.1
 aiohttp==3.9.5
 aiosignal==1.3.1
 annotated-types==0.6.0
@@ -15,6 +16,7 @@ exceptiongroup==1.2.1
 filelock==3.13.4
 frozenlist==1.4.1
 fsspec==2024.3.1
+gigaam[longform] @ git+https://github.com/salute-developers/GigaAM.git
 greenlet==3.0.3
 h11==0.14.0
 httpcore==1.0.5
@@ -51,6 +53,11 @@ pydantic==2.7.0
 pydantic_core==2.18.1
 pypdf==4.2.0
 pytest==8.1.1
+pytest-asyncio==0.23.5
+pytest-aiohttp==1.0.5
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-timeout==2.2.0
 python-dotenv==1.0.1
 PyYAML==6.0.1
 regex==2024.4.16
@@ -69,11 +76,12 @@ tenacity==8.2.3
 threadpoolctl==3.4.0
 tokenizers==0.19.1
 tomli==2.0.1
-torch==2.2.2+cpu
+torch
 tqdm==4.66.2
 transformers==4.40.0
 typing-inspect==0.9.0
 typing_extensions==4.11.0
 urllib3==2.2.1
+uvicorn==0.27.1
 wrapt==1.16.0
 yarl==1.9.4

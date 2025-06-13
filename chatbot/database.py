@@ -71,6 +71,7 @@ class QuestionAnswer(Base):
         created_at (datetime): время создания модели
         updated_at (datetime): время обновления модели
         stop_point (bool): флаг, указывающий что это конечная точка диалога (True - диалог завершен, False - продолжается, по умолчанию False)
+        is_voice (bool): флаг, указывающий что вопрос был задан голосовым сообщением (True - голосовое, False - текстовое, по умолчанию False)
     """
 
     __tablename__ = "question_answer"
@@ -81,6 +82,7 @@ class QuestionAnswer(Base):
     confluence_url: Mapped[Optional[str]] = mapped_column(Text(), index=True)
     score: Mapped[Optional[int]] = mapped_column()
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+    is_voice: Mapped[bool] = mapped_column(Boolean(), default=False)
 
     user: Mapped["User"] = relationship(back_populates="question_answers")
 
@@ -301,7 +303,7 @@ def check_spam(engine: Engine, user_id: int) -> bool:
 
 
 def add_question_answer(
-    engine: Engine, question: str, answer: str, confluence_url: str | None, user_id: int
+    engine: Engine, question: str, answer: str, confluence_url: str | None, user_id: int, is_voice: bool = False
 ) -> int:
     """Функция добавления в БД вопроса пользователя с ответом на него
 
@@ -311,6 +313,7 @@ def add_question_answer(
         answer (str): ответ на вопрос пользователя
         confluence_url (str | None): ссылка на страницу в вики-системе, содержащую ответ
         user_id (int): id пользователя
+        is_voice (bool): флаг, указывающий что вопрос был задан голосовым сообщением
 
     Returns:
         int: id вопроса с ответом на него
@@ -322,6 +325,7 @@ def add_question_answer(
             answer=answer,
             confluence_url=confluence_url,
             user_id=user_id,
+            is_voice=is_voice,
         )
         session.add(question_answer)
         session.flush()

@@ -36,7 +36,7 @@ langsmith==0.1.49
 lxml==5.2.1
 MarkupSafe==2.1.5
 marshmallow==3.21.1
-mpmath==1.3.0
+mpmath
 multidict==6.0.5
 mypy-extensions==1.0.0
 networkx==3.3

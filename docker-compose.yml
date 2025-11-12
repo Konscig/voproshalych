@@ -2,8 +2,8 @@ version: '3.8'
 services:
     db:
         build: ./db
-        image: virtassist/db:latest
-        container_name: virtassist-db
+        image: vopromax/db:latest
+        container_name: vopromax-db
         restart: unless-stopped
         environment:
             - TZ=${TZ}
@@ -26,8 +26,8 @@ services:
         build:
             context: ./db
             dockerfile: Dockerfile-migrate
-        image: virtassist/db-migrate:latest
-        container_name: virtassist-db-migrate
+        image: vopromax/db-migrate:latest
+        container_name: vopromax-db-migrate
         restart: no
         command: alembic upgrade head
         env_file:
@@ -39,8 +39,8 @@ services:
             - chatbot-conn
     qa:
         build: ./qa
-        image: virtassist/qa:latest
-        container_name: virtassist-qa
+        image: vopromax/qa:latest
+        container_name: vopromax-qa
         restart: unless-stopped
         command: sh -c "cron && python main.py"
         env_file:
@@ -53,8 +53,8 @@ services:
 
     chatbot:
         build: ./chatbot
-        image: virtassist/chatbot:latest
-        container_name: virtassist-chatbot
+        image: vopromax/chatbot:latest
+        container_name: vopromax-chatbot
         restart: unless-stopped
         command: python main.py
         env_file:
@@ -63,27 +63,6 @@ services:
             db:
                 condition: service_healthy
             qa:
-                condition: service_started
-            db-migrate:
-                condition: service_completed_successfully
-        networks:
-            - chatbot-conn
-    adminpanel:
-        build: ./adminpanel
-        image: virtassist/adminpanel:latest
-        container_name: virtassist-adminpanel
-        command: gunicorn --bind 0.0.0.0:80 --timeout 1200 wsgi:app
-        restart: unless-stopped
-        ports:
-            - 80:80
-        env_file:
-            - .env.docker
-        depends_on:
-            db:
-                condition: service_healthy
-            qa:
-                condition: service_started
-            chatbot:
                 condition: service_started
             db-migrate:
                 condition: service_completed_successfully

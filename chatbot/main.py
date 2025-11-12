@@ -32,7 +32,6 @@ from strings import Strings
 routes = web.RouteTableDef()
 engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
-# --- Max messenger settings ---
 MAX_API_BASE = Config.MAX_API_BASE
 MAX_ACCESS_TOKEN = Config.MAX_ACCESS_TOKEN
 

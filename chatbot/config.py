@@ -18,3 +18,7 @@ class Config:
         if environ.get("CONFLUENCE_SPACES") is not None
         else []
     )
+    # Настройки для Max messenger
+    MAX_API_BASE = environ.get("MAX_API_BASE", "https://platform-api.max.ru")
+    MAX_ACCESS_TOKEN = environ.get("MAX_ACCESS_TOKEN")  # Токен бота Max
+    BROADCAST_SECRET = environ.get("BROADCAST_SECRET")  # Секрет для защищенного /broadcast

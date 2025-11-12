@@ -82,4 +82,3 @@ Chatbot взаимодействует с API [вики-системы Confluenc
 1. [Интеграция с Confluence + инструкция по наполнению пространства](confluence-integration.md)
 2. [Микросервис Chatbot](chatbot.md)
 3. [Микросервис QA](qa.md)
-4. [Микросервис Adminpanel](adminpanel.md)

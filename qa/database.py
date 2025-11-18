@@ -277,3 +277,6 @@ def delete_score(engine: Engine, qa_id: int) -> None:
                 .values(score=None)
             )
             session.commit()
+
+
+# Привет семен

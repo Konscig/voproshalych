@@ -194,8 +194,6 @@ async def find_similar_question(
             np.linalg.norm(question_embedding) * np.linalg.norm(embedding)
         )
 
-        logging.info(f"Cosine distance for QA ID {qa_id}: {cosine_distance}")
-
         if cosine_distance < best_cosine_distance:
             best_cosine_distance = cosine_distance
             best_match = answer_text

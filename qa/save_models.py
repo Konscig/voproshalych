@@ -1,7 +1,12 @@
 from sentence_transformers import SentenceTransformer
+from huggingface_hub import snapshot_download
 
-model_checkpoint = "nizamovtimur/multilingual-e5-large-wikiutmn"
-save_path = "saved_models/multilingual-e5-large-wikiutmn"
+# Скачиваем модель с mirror
+save_path = snapshot_download(
+    repo_id="nizamovtimur/multilingual-e5-large-wikiutmn",
+    local_dir="saved_models/multilingual-e5-large-wikiutmn",
+    endpoint="https://hf-mirror.com",
+)
 
-model = SentenceTransformer(model_checkpoint)
-model.save(save_path)
+# Загружаем модель из локальной директории
+model = SentenceTransformer(save_path)

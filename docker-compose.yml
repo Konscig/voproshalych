@@ -89,6 +89,24 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
+
+    go_bot:
+        build: ./chatbot/max
+        image: virtassist/go-bot:latest
+        container_name: virtassist-go-bot
+        restart: unless-stopped
+        env_file:
+            - .env.docker
+        depends_on:
+            db:
+                condition: service_healthy
+            qa:
+                condition: service_started
+            db-migrate:
+                condition: service_completed_successfully
+        networks:
+            - chatbot-conn
+
 volumes:
     db-data:
 

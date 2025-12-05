@@ -1,7 +1,7 @@
 .idea
 [.][v]env
 .env*
-!.env.example
+.env.docker
 saved_models
 faiss_index
 __pycache__

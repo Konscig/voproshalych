@@ -1,6 +1,7 @@
 from os import environ
 from dotenv import load_dotenv
 from time import sleep
+import logging
 
 load_dotenv(dotenv_path="../.env")
 
@@ -62,7 +63,7 @@ class Config:
 
     You are a careful and understanding evaluator of answers in a university assistant system.
 
-    Your goal is to assess whether the given answer is reasonably relevant and helpful in response to the student’s question.
+    Your goal is to assess whether the given answer is reasonably relevant and helpful in response to the student's question.
 
     Inputs:
     - Student question.
@@ -70,8 +71,8 @@ class Config:
     - Relevant knowledge base content (may be empty).
 
     Guidelines:
-    1. Evaluate if the answer provides meaningful help related to the question’s intent.
-    2. It’s okay if the wording differs from the question — what matters is the core idea and usefulness.
+    1. Evaluate if the answer provides meaningful help related to the question's intent.
+    2. It's okay if the wording differs from the question — what matters is the core idea and usefulness.
     3. Only answer "No" if the answer clearly misses the point, is irrelevant, or contains invented information.
     4. If the knowledge base is empty but the answer still offers reasonable help, consider it relevant.
     5. Remember the answer is generated automatically; allow some flexibility for interpretation.
@@ -128,11 +129,11 @@ class Config:
     - Score **5** = user found the answer **relevant and helpful**.
 
     Instructions:
-    1. **Be understanding** — it's okay if the answer isn’t perfect, as long as it’s **reasonably helpful** or **addresses the student’s intent**.
+    1. **Be understanding** — it's okay if the answer isn't perfect, as long as it's **reasonably helpful** or **addresses the student's intent**.
     2. The assistant does not invent info and only answers based on the knowledge base — judge with that in mind.
     3. Use your judgment: would a typical student feel this answer helped? If yes — support the 5.
-    4. If the answer **misses the point**, **is clearly wrong**, or **the knowledge base didn’t support it**, then 1 is reasonable.
-    5. If you’re unsure, assume goodwill and lean toward accepting the score.
+    4. If the answer **misses the point**, **is clearly wrong**, or **the knowledge base didn't support it**, then 1 is reasonable.
+    5. If you're unsure, assume goodwill and lean toward accepting the score.
 
     Respond:
     - `Yes` — if the score matches the overall quality and helpfulness of the answer.
@@ -148,9 +149,11 @@ class Config:
             dict: payload для LLM-модели.
         """
         if not cls.MISTRAL_API:
+            logging.error("MISTRAL_API environment variable is not set")
             raise ValueError(
                 "API-ключ для Mistral не найден. Убедитесь, что MISTRAL_API установлен."
             )
+        logging.debug(f"Mistral API key loaded: {cls.MISTRAL_API[:5]}...")
         return {
             "Authorization": f"Bearer {cls.MISTRAL_API}",
             "Content-Type": "application/json",

@@ -5,6 +5,8 @@ services:
         image: virtassist/db:latest
         container_name: virtassist-db
         restart: unless-stopped
+        env_file:
+            - .env.docker
         environment:
             - TZ=${TZ}
             - POSTGRES_DB=${POSTGRES_DB}
@@ -53,10 +55,9 @@ services:
 
     chatbot:
         build: ./chatbot
-        image: virtassist/chatbot:latest
+        image: virtassist/chatbot:0.1.0
         container_name: virtassist-chatbot
         restart: unless-stopped
-        command: python main.py
         env_file:
             - .env.docker
         depends_on:
@@ -64,10 +65,15 @@ services:
                 condition: service_healthy
             qa:
                 condition: service_started
+            stt:
+                condition: service_healthy
             db-migrate:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
+        volumes:
+            - ./chatbot/main.py:/chatbot/main.py
+
     adminpanel:
         build: ./adminpanel
         image: virtassist/adminpanel:latest
@@ -89,6 +95,24 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
+    stt:
+        build: ./stt
+        image: virtassist/stt:0.1.0
+        container_name: virtassist-stt
+        restart: unless-stopped
+        env_file:
+            - .env.docker
+        environment:
+            - HF_TOKEN=${HF_TOKEN}
+        networks:
+            - chatbot-conn
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 300s
+
 volumes:
     db-data:
 

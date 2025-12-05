@@ -31,7 +31,9 @@ pythonpath = ["."]
 filterwarnings = [
     "ignore::DeprecationWarning:pydub.*:",
     "ignore::DeprecationWarning:websockets.*:",
-    "ignore::UserWarning:gigaam.*:"
+    "ignore::UserWarning:gigaam.*:",
+    "ignore::SyntaxWarning:pyannote.*:",
+    "ignore::SyntaxWarning:pydub.*:"
 ]
 
 [project.optional-dependencies]

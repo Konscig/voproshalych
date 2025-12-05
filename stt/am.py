@@ -5,6 +5,9 @@ import gigaam
 
 load_dotenv()
 
+os.environ["HUGGINGFACE_HUB_CACHE"] = "/huggingface_cache"
+os.environ["HF_HOME"] = "/huggingface_cache"
+
 warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.simplefilter(action="ignore", category=UserWarning)
 
@@ -13,8 +16,7 @@ if not hf_token:
     print("ВНИМАНИЕ: HF_TOKEN не найден в переменных окружения")
 else:
     print(f"HF_TOKEN найден: {hf_token[:4]}...{hf_token[-4:]}")
-
-os.environ["HF_TOKEN"] = hf_token
+    os.environ["HF_TOKEN"] = hf_token
 
 model_type = os.getenv("GIGAAM_MODEL_TYPE", "rnnt")
 device = os.getenv("GIGAAM_DEVICE", "cpu")

@@ -12,12 +12,18 @@ EXPOSE 8000
 WORKDIR /stt
 
 ENV UV_SYSTEM_PYTHON=1
+ENV HUGGINGFACE_HUB_CACHE=/huggingface_cache
+ENV HF_HOME=/huggingface_cache
 
 ADD *.toml *.lock *.md ./
 RUN uv sync --frozen
 
-ADD am.py .
+ADD download_model.py .
+ARG HF_TOKEN
+RUN --mount=type=cache,target=/huggingface_cache,sharing=locked \
+    HF_TOKEN=$HF_TOKEN uv run python download_model.py
 
+ADD am.py .
 ADD app.py .
 
-CMD uv run fastapi dev --host 0.0.0.0
+CMD ["uv", "run", "fastapi", "dev", "--host", "0.0.0.0"]

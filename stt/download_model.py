@@ -4,8 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-os.environ["HUGGINGFACE_HUB_CACHE"] = "/huggingface_cache"
-os.environ["HF_HOME"] = "/huggingface_cache"
+
 
 hf_token = os.getenv("HF_TOKEN", "")
 if hf_token:

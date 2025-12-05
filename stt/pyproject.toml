@@ -33,7 +33,9 @@ filterwarnings = [
     "ignore::DeprecationWarning:websockets.*:",
     "ignore::UserWarning:gigaam.*:",
     "ignore::SyntaxWarning:pyannote.*:",
-    "ignore::SyntaxWarning:pydub.*:"
+    "ignore::SyntaxWarning:pydub.*:",
+    "ignore::DeprecationWarning:pyannote.core.notebook.*",
+    "ignore::UserWarning:pytorch_lightning.*"
 ]
 
 [project.optional-dependencies]

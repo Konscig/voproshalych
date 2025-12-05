@@ -5,8 +5,7 @@ import gigaam
 
 load_dotenv()
 
-os.environ["HUGGINGFACE_HUB_CACHE"] = "/huggingface_cache"
-os.environ["HF_HOME"] = "/huggingface_cache"
+
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.simplefilter(action="ignore", category=UserWarning)
@@ -60,4 +59,4 @@ def transcribe_audio(model, wav_path: str) -> str:
     except Exception as e:
         print(f"Ошибка при транскрибации: {str(e)}")
         print(f"Текущий HF_TOKEN: {os.getenv('HF_TOKEN', 'не установлен')}")
-        return ""
+        raise e

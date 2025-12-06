@@ -10,7 +10,7 @@ import (
 	maxbot "github.com/max-messenger/max-bot-api-client-go"
 	"github.com/max-messenger/max-bot-api-client-go/schemes"
 
-	"github.com/Bolshevichok/vopromax/chatbot/storage"
+	"github.com/Konscig/voproshalych/chatbot/max/storage"
 )
 
 // Bot wires external services and reacts to incoming MAX updates.

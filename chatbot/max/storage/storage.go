@@ -61,6 +61,11 @@ func New(dsn string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// NewWithDB creates a Store using an already opened gorm.DB (for tests)
+func NewWithDB(db *gorm.DB) *Store {
+	return &Store{db: db}
+}
+
 // EnsureUser creates a record for the given MAX id if it doesn't exist.
 func (s *Store) EnsureUser(ctx context.Context, maxID int64) (bool, int64, error) {
 	var user User

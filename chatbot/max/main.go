@@ -11,7 +11,7 @@ import (
 	"github.com/joho/godotenv"
 	maxbot "github.com/max-messenger/max-bot-api-client-go"
 
-	"github.com/Bolshevichok/vopromax/chatbot/storage"
+	"github.com/Konscig/voproshalych/chatbot/max/storage"
 )
 
 func main() {

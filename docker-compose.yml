@@ -40,7 +40,10 @@ services:
         networks:
             - chatbot-conn
     qa:
-        build: ./qa
+        build:
+            context: ./qa
+            args:
+                - HF_TOKEN=${HF_TOKEN}
         image: virtassist/qa:latest
         container_name: virtassist-qa
         restart: unless-stopped
@@ -77,8 +80,6 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
-        volumes:
-            - ./chatbot/main.py:/chatbot/main.py
 
     adminpanel:
         build: ./adminpanel

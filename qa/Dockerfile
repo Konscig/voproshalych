@@ -1,5 +1,8 @@
 FROM python:3.10-slim-bookworm
 
+ARG HF_TOKEN
+ENV HF_TOKEN=${HF_TOKEN}
+
 WORKDIR /usr/src/app
 
 ENV PYTHONDONTWRITEBYTECODE 1

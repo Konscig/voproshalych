@@ -17,3 +17,6 @@ pgvector
 pytest
 aiofiles
 gigaam[longform]
+numpy==1.24.4
+onnxruntime
+pyannote.audio

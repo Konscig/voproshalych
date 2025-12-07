@@ -15,3 +15,5 @@ sqlalchemy
 psycopg2-binary
 pgvector
 pytest
+aiofiles
+gigaam[longform]

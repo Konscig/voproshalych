@@ -1,8 +1,10 @@
 from contextlib import redirect_stderr
 import io
+import os
 import logging
 import numpy as np
 from aiohttp import web
+import aiofiles
 import requests
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
@@ -18,6 +20,7 @@ from database import (
     delete_score,
 )
 from confluence_retrieving import get_chunk, reindex_confluence
+from am import model, transcribe_audio
 from time import sleep
 
 routes = web.RouteTableDef()
@@ -222,10 +225,50 @@ async def qa(request: web.Request) -> web.Response:
     Returns:
         web.Response: ответ
     """
-    data = await request.json()
-    question = data.get("question", "")
-    dialog_context = data.get("dialog_context", [])
+    is_audio = request.query.get("audio") == "1"
 
+    if is_audio:
+        reader = await request.multipart()
+        field = await reader.next()
+        logging.info(msg=f"{field}")
+
+        if field is None or not field.filename:
+            return web.json_response(
+                {"status": "error", "detail": "No file part in the request"}, status=400
+            )
+
+        filename = field.filename
+        temp_path = f"temp_{filename}"
+
+        try:
+            async with aiofiles.open(temp_path, "wb") as f:
+                while True:
+                    audio_chunk = await field.read_chunk()
+                    if not audio_chunk:
+                        break
+                    await f.write(audio_chunk)
+
+            question = transcribe_audio(model, temp_path)
+            dialog_context = []
+            logging.info(f"Received audio, transcribed question: '{question}'")
+        except FileNotFoundError as e:
+            return web.json_response({"status": "error", "detail": str(e)}, status=404)
+
+        except Exception as e:
+            logging.exception("Ошибка при распознавании файла")
+            return web.json_response({"status": "error", "detail": str(e)}, status=500)
+
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    else:
+        try:
+            data = await request.json()
+        except Exception:
+            return web.Response(text="Invalid JSON", status=400)
+        question = data.get("question", "")
+        dialog_context = data.get("dialog_context", [])
+        logging.info(f"Received question: '{question}'")
     logging.info(f"Received question: '{question}'")
 
     result = await find_similar_question(encoder_model=encoder_model, question=question)
@@ -237,7 +280,7 @@ async def qa(request: web.Request) -> web.Response:
             dialog_history=dialog_context, question=question, answer=db_answer
         )
         if verdict:
-            return web.json_response({"answer": db_answer, "confluence_url": url})
+            return web.json_response({"answer": db_answer, "confluence_url": url, "question": question})
         else:
             logging.error(f"Answer {db_answer} were banned for question {question}")
             return web.Response(text="Answer banned", status=404)
@@ -279,7 +322,7 @@ async def qa(request: web.Request) -> web.Response:
     )
     if verdict:
         return web.json_response(
-            {"answer": answer, "confluence_url": chunk.confluence_url}
+            {"answer": answer, "confluence_url": chunk.confluence_url, "question": question}
         )
     if not verdict:
         logging.error(f"Answer {answer} were banned for question {question}")
@@ -437,6 +480,19 @@ async def reembed(request: web.Request) -> web.Response:
     except Exception as e:
         logging.error("FAILED TO CREATED EMBEDDING, ERROR: " + str(e))
         return web.Response(text=str(e), status=500)
+
+
+@routes.get("/health")
+async def health_check(request: web.Request) -> web.Response:
+    """Проверка работоспособности сервиса
+
+    Args:
+        request (web.Request): запрос
+
+    Returns:
+        web.Response: ответ со статусом 200 если сервис работает
+    """
+    return web.Response(status=200)
 
 
 if __name__ == "__main__":

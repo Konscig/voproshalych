@@ -94,6 +94,7 @@ class TestDBFunctions:
             self.test_answer,
             self.test_confluence_url,
             user_id,
+            is_voice=False
         )
         assert answer_id is not None
         assert rate_answer(self.engine, answer_id, 1) == True
@@ -107,6 +108,7 @@ class TestDBFunctions:
             assert answer.confluence_url == self.test_confluence_url
             assert answer.score == 1
             assert answer.user_id == user_id
+            assert answer.is_voice == False
         assert rate_answer(self.engine, answer_id, 5) == True
         with Session(self.engine) as session:
             answer = session.scalar(

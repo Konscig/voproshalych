@@ -30,6 +30,7 @@ from sqlalchemy import create_engine
 import vkbottle as vk
 from vkbottle.bot import Message as VKMessage
 from vkbottle.http import aiohttp as vk_aiohttp
+from vkbottle_types.objects import MessagesMessageAttachmentType
 
 from config import Config
 from confluence_interaction import (
@@ -295,9 +296,10 @@ async def vk_handler(message: VKMessage):
     Args:
         message (VKMessage): сообщение, отправленное пользователем при запросе справочной информации
     """
-
+    logging.info(f"ENTERING vk_handler for message from {message.from_id}")
     question_types = make_markup_by_confluence()
     await vk_send_confluence_keyboard(message, question_types)
+    logging.info(f"EXITING vk_handler for message from {message.from_id}")
 
 
 @dispatcher.message(tg.F.text.in_([Strings.ConfluenceButton]))
@@ -326,12 +328,13 @@ async def vk_confluence_parse(message: VKMessage):
     Args:
         message (VKMessage): сообщение пользователя
     """
-
+    logging.info(f"ENTERING vk_confluence_parse for message from {message.from_id}")
     parse = parse_confluence_by_page_id(json.loads(message.payload)["conf_id"])
     if isinstance(parse, list):
         await vk_send_confluence_keyboard(message, parse)
     elif isinstance(parse, str):
         await message.answer(message=parse, random_id=0)
+    logging.info(f"EXITING vk_confluence_parse for message from {message.from_id}")
 
 
 @dispatcher.callback_query(lambda c: c.data.startswith("conf_id"))
@@ -362,7 +365,7 @@ async def vk_rate(message: VKMessage):
     Args:
         message (VKMessage): сообщение пользователя
     """
-
+    logging.info(f"ENTERING vk_rate for message from {message.from_id}")
     payload_data = json.loads(message.payload)
     if payload_data["score"] == 5:
         async with aiohttp.ClientSession() as session:
@@ -373,6 +376,7 @@ async def vk_rate(message: VKMessage):
                 pass
     if rate_answer(engine, payload_data["question_answer_id"], payload_data["score"]):
         await message.answer(message=Strings.ThanksForFeedback, random_id=0)
+    logging.info(f"EXITING vk_rate for message from {message.from_id}")
 
 
 @dispatcher.callback_query()
@@ -404,10 +408,11 @@ async def vk_subscribe(message: VKMessage):
     Args:
         message (VKMessage): сообщение пользователя
     """
-
+    logging.info(f"ENTERING vk_subscribe for message from {message.from_id}")
     user_id = get_user_id(engine, vk_id=message.from_id)
     if user_id is None:
         await message.answer(message=Strings.NoneUserVK, random_id=0)
+        logging.info(f"EXITING vk_subscribe for message from {message.from_id} (user not found)")
         return
     is_subscribed = subscribe_user(engine, user_id)
     if is_subscribed:
@@ -422,6 +427,7 @@ async def vk_subscribe(message: VKMessage):
             keyboard=vk_keyboard_choice(Strings.Subscribe),
             random_id=0,
         )
+    logging.info(f"EXITING vk_subscribe for message from {message.from_id}")
 
 
 @dispatcher.message(tg.F.text.in_([Strings.Subscribe, Strings.Unsubscribe]))
@@ -473,10 +479,12 @@ async def tg_new_dialog(message: tg.types.Message):
 
 @vk_bot.on.message(text=[Strings.NewDialog])
 async def vk_new_dialog(message: VKMessage):
+    logging.info(f"ENTERING vk_new_dialog for message from {message.from_id}")
     user_id = get_user_id(engine, vk_id=message.from_id)
 
     if user_id is None:
         await message.answer(message=Strings.NoneUserVK, random_id=0)
+        logging.info(f"EXITING vk_new_dialog for message from {message.from_id} (user not found)")
         return
 
     set_stop_point(engine, user_id, True)
@@ -488,6 +496,7 @@ async def vk_new_dialog(message: VKMessage):
         keyboard=vk_keyboard_choice(notify_text),
         random_id=0,
     )
+    logging.info(f"EXITING vk_new_dialog for message from {message.from_id}")
 
 async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
     """Получение ответа на вопрос с использованием микросервиса
@@ -522,19 +531,147 @@ async def get_answer(question: str, user_id: int) -> tuple[str, str | None]:
                 return ("", None)
 
 
-@vk_bot.on.message()
-async def vk_answer(message: VKMessage):
-    """Обработчик события (для чат-бота ВКонтакте), при котором пользователь задаёт
-    вопрос чат-боту
+def log_and_check_attachments(m: VKMessage) -> bool:
+    logging.info(f"Checking attachments for message from {m.from_id}.")
+    if not m.attachments:
+        return False
 
-    После отображения ответа на вопрос чат-бот отправляет inline-кнопки для оценивания
-    ответа
+    for att in m.attachments:
+        logging.info(f"Attachment dict: {att.__dict__}")
+        if att.type == MessagesMessageAttachmentType.AUDIO_MESSAGE:
+            return True
+
+    return False
+
+@vk_bot.on.message(
+    func=log_and_check_attachments
+)
+async def vk_voice_handler(message: VKMessage):
+    """
+    Обрабатывает голосовое сообщение из ВКонтакте: скачивает, конвертирует и отправляет в QA сервис
 
     Args:
-        message (VKMessage): сообщение пользователя с вопросом
+        message (VKMessage): Входящее сообщение от пользователя ВКонтакте с вложенным аудио-сообщением
     """
+    logging.info(f"ENTERING vk_voice_handler for message from {message.from_id}")
+    try:
+        logging.info("Starting VK voice message processing")
+        for att in message.attachments:
+            if (
+                att.type == MessagesMessageAttachmentType.AUDIO_MESSAGE
+                and att.audio_message
+                and att.audio_message.link_ogg
+            ):
+                logging.info(
+                    f"Found audio message attachment: {att.audio_message.link_ogg}"
+                )
+                processing = await message.answer(message=Strings.TryFindAnswer, random_id=0)
+                logging.info("Sent processing message")
+
+                logging.info("Downloading and converting VK voice message")
+                wav = await download_and_convert_vk(
+                    att.audio_message.link_ogg, message.from_id
+                )
+                logging.info(f"Converted to WAV: {wav}")
+
+                logging.info("Sending WAV to QA service")
+                answer, confluence_url, transcribed_text = await send_wav_to_qa(wav)
+                logging.info(f"QA service result: answer_len={len(answer) if answer else 0}, url={confluence_url}, transcribed_text={transcribed_text}")
+
+                if not answer:
+                    logging.warning("Empty response received from QA service")
+                    if processing.message_id is not None:
+                        await vk_bot.api.messages.delete(
+                            message_ids=[processing.message_id],
+                            peer_id=message.peer_id,
+                            delete_for_all=True,
+                        )
+                    await message.answer(
+                        "Не удалось обработать голосовое сообщение", random_id=0
+                    )
+                    remove_file(wav)
+                    logging.info(f"EXITING vk_voice_handler for message from {message.from_id} (empty QA response)")
+                    return
+
+                remove_file(wav)
+                logging.info("Temporary files cleaned up")
+
+                # Get or create internal user ID based on VK ID
+                internal_user_id = get_user_id(engine, vk_id=message.from_id)
+                if internal_user_id is None:
+                    _, internal_user_id = add_user(engine, vk_id=message.from_id)
+
+                # Save question/answer to DB
+                question_answer_id = add_question_answer(
+                    engine,
+                    transcribed_text,
+                    answer,
+                    confluence_url,
+                    internal_user_id,   # <--- ВОТ ЭТО ГЛАВНОЕ!
+                    is_voice=True
+                )
+                logging.info(f"Saved to database with ID: {question_answer_id} (internal_user_id={internal_user_id})")
+
+                if confluence_url is None:
+                    if processing.message_id is not None:
+                        await vk_bot.api.messages.delete(
+                            message_ids=[processing.message_id],
+                            peer_id=message.peer_id,
+                            delete_for_all=True,
+                        )
+                    await message.answer(
+                        message=Strings.NotFound,
+                        random_id=0,
+                    )
+                    logging.info(f"EXITING vk_voice_handler for message from {message.from_id} (no confluence url)")
+                    return
+
+                if len(answer) == 0:
+                    answer = Strings.NotAnswer
+
+                keyboard = (
+                    vk.Keyboard(inline=True)
+                    .add(
+                        vk.Text(
+                            "👎", payload={"score": 1, "question_answer_id": question_answer_id}
+                        )
+                    )
+                    .add(
+                        vk.Text(
+                            "❤", payload={"score": 5, "question_answer_id": question_answer_id}
+                        )
+                    )
+                )
+                if processing.message_id is not None:
+                    await vk_bot.api.messages.delete(
+                        message_ids=[processing.message_id],
+                        peer_id=message.peer_id,
+                        delete_for_all=True,
+                    )
+                await message.answer(
+                    message=f"{answer}\n\n{Strings.SourceURL} {confluence_url}",
+                    keyboard=keyboard.get_json(),
+                    random_id=0,
+                )
+                logging.info("Voice message processing completed successfully")
+                break
+    except Exception as e:
+        logging.error(f"Error processing voice message in VK: {str(e)}", exc_info=True)
+        await message.answer(
+            "Произошла ошибка при обработке голосового сообщения", random_id=0
+        )
+    logging.info(f"EXITING vk_voice_handler for message from {message.from_id}")
+
+
+@vk_bot.on.message()
+async def vk_answer(message: VKMessage):
+    logging.info(f"ENTERING vk_answer for message from {message.from_id}")
+    if not message.text:
+        logging.info(f"EXITING vk_answer for message from {message.from_id} (no text)")
+        return
 
     is_user_added, user_id = add_user(engine, vk_id=message.from_id)
+    logging.info(f"User added: {is_user_added}, user_id: {user_id}")
     notify_text = (
         Strings.Unsubscribe if check_subscribing(engine, user_id) else Strings.Subscribe
     )
@@ -548,6 +685,7 @@ async def vk_answer(message: VKMessage):
             keyboard=vk_keyboard_choice(notify_text),
             random_id=0,
         )
+        logging.info(f"EXITING vk_answer for message from {message.from_id} (start message)")
         return
     if len(message.text) < 4:
         await message.answer(
@@ -555,6 +693,7 @@ async def vk_answer(message: VKMessage):
             keyboard=vk_keyboard_choice(notify_text),
             random_id=0,
         )
+        logging.info(f"EXITING vk_answer for message from {message.from_id} (message too short)")
         return
     if check_spam(engine, user_id):
         await message.answer(
@@ -562,9 +701,14 @@ async def vk_answer(message: VKMessage):
             keyboard=vk_keyboard_choice(notify_text),
             random_id=0,
         )
+        logging.info(f"EXITING vk_answer for message from {message.from_id} (spam detected)")
         return
+
+    logging.info(f"Processing text message from {message.from_id}: {message.text}")
     processing = await message.answer(message=Strings.TryFindAnswer, random_id=0)
     answer, confluence_url = await get_answer(message.text, user_id=user_id)
+    logging.info(f"Got answer from QA service: answer_len={len(answer) if answer else 0}, url={confluence_url}")
+
     question_answer_id = add_question_answer(
         engine, message.text, answer, confluence_url, user_id
     )
@@ -580,6 +724,7 @@ async def vk_answer(message: VKMessage):
             keyboard=vk_keyboard_choice(notify_text),
             random_id=0,
         )
+        logging.info(f"EXITING vk_answer for message from {message.from_id} (not found)")
         return
     if len(answer) == 0:
         answer = Strings.NotAnswer
@@ -601,6 +746,8 @@ async def vk_answer(message: VKMessage):
         ),
         random_id=0,
     )
+    logging.info(f"EXITING vk_answer for message from {message.from_id} (sent answer)")
+
 
 @dispatcher.message(F.voice)
 async def tg_voice_handler(message: tg.types.Message):
@@ -786,136 +933,6 @@ async def tg_answer(message: tg.types.Message):
     await message.answer(
         text=f"{answer}\n\n{Strings.SourceURL} {confluence_url}",
         reply_markup=keyboard,
-    )
-
-
-@vk_bot.on.message(
-    func=lambda m: m.attachments
-    and any(att.type == "audio_message" for att in m.attachments)
-)
-async def vk_voice_handler(message: VKMessage):
-    """
-    Обрабатывает голосовое сообщение из ВКонтакте: скачивает, конвертирует и отправляет в QA сервис
-
-    Args:
-        message (VKMessage): Входящее сообщение от пользователя ВКонтакте с вложенным аудио-сообщением
-    """
-    try:
-        logging.info("Starting VK voice message processing")
-        for att in message.attachments:
-            if att.type == "audio_message":
-                logging.info(
-                    f"Found audio message attachment: {att.audio_message.link_ogg}"
-                )
-
-                processing = await message.answer(message=Strings.TryFindAnswer, random_id=0)
-                logging.info("Sent processing message")
-
-                wav = await download_and_convert_vk(
-                    att.audio_message.link_ogg, message.from_id
-                )
-                logging.info(f"Converted to WAV: {wav}")
-
-                answer, confluence_url, transcribed_text = await send_wav_to_qa(wav)
-                logging.info(f"QA service result: answer={answer}, url={confluence_url}, transcribed text={transcribed_text}")
-
-                if not answer:
-                    logging.warning("Empty response received from QA service")
-                    if processing.message_id is not None:
-                        await vk_bot.api.messages.delete(
-                            message_ids=[processing.message_id],
-                            peer_id=message.peer_id,
-                            delete_for_all=True,
-                        )
-                    await message.answer(
-                        "Не удалось обработать голосовое сообщение", random_id=0
-                    )
-                    remove_file(wav)
-                    return
-
-                remove_file(wav)
-                logging.info("Temporary files cleaned up")
-
-                question_answer_id = add_question_answer(
-                    engine, transcribed_text, answer, confluence_url, message.from_id, is_voice=True
-                )
-                logging.info(f"Saved to database with ID: {question_answer_id}")
-
-                if confluence_url is None:
-                    if processing.message_id is not None:
-                        await vk_bot.api.messages.delete(
-                            message_ids=[processing.message_id],
-                            peer_id=message.peer_id,
-                            delete_for_all=True,
-                        )
-                    await message.answer(
-                        message=Strings.NotFound,
-                        random_id=0,
-                    )
-                    return
-
-                if len(answer) == 0:
-                    answer = Strings.NotAnswer
-
-                keyboard = (
-                    vk.Keyboard(inline=True)
-                    .add(
-                        vk.Text(
-                            "👎", payload={"score": 1, "question_answer_id": question_answer_id}
-                        )
-                    )
-                    .add(
-                        vk.Text(
-                            "❤", payload={"score": 5, "question_answer_id": question_answer_id}
-                        )
-                    )
-                )
-                if processing.message_id is not None:
-                    await vk_bot.api.messages.delete(
-                        message_ids=[processing.message_id],
-                        peer_id=message.peer_id,
-                        delete_for_all=True,
-                    )
-                await message.answer(
-                    message=f"{answer}\n\n{Strings.SourceURL} {confluence_url}",
-                    keyboard=keyboard.get_json(),
-                    random_id=0,
-                )
-                logging.info("Voice message processing completed successfully")
-                break
-
-    except Exception as e:
-        logging.error(f"Error processing voice message in VK: {str(e)}", exc_info=True)
-        await message.answer(
-            "Произошла ошибка при обработке голосового сообщения", random_id=0
-        )
-
-
-@dispatcher.message(tg.F.text.in_([Strings.NewDialog]))
-async def tg_new_dialog(message: tg.types.Message):
-    """Обработчик для начала нового диалога"""
-    user_id = get_user_id(engine, telegram_id=message.from_user.id)
-
-    if user_id is None:
-        await message.answer(text=Strings.NoneUserTelegram)
-        return
-
-    set_stop_point(engine, user_id, True)
-    await message.answer(text=Strings.DialogReset)
-
-
-@vk_bot.on.message(text=[Strings.NewDialog])
-async def vk_new_dialog(message: VKMessage):
-    user_id = get_user_id(engine, vk_id=message.from_id)
-
-    if user_id is None:
-        await message.answer(message=Strings.NoneUserVK, random_id=0)
-        return
-
-    set_stop_point(engine, user_id, True)
-    await message.answer(
-        message=Strings.DialogReset,
-        random_id=0,
     )
 
 

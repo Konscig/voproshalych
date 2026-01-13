@@ -11,6 +11,7 @@ build:
     - docker build --network host --file db/Dockerfile-migrate -t virtassist/db-migrate:latest ./db
     - docker build --network host -t virtassist/qa:latest ./qa
     - docker build --network host -t virtassist/chatbot:latest ./chatbot
+    - docker build --network host -t virtassist/max:latest ./max
     - docker build --network host -t virtassist/adminpanel:latest ./adminpanel
   only:
     - main

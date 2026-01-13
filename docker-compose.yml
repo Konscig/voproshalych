@@ -90,10 +90,10 @@ services:
         networks:
             - chatbot-conn
 
-    go_bot:
-        build: ./chatbot/max
-        image: virtassist/go-bot:latest
-        container_name: virtassist-go-bot
+    max:
+        build: ./max
+        image: virtassist/max:latest
+        container_name: virtassist-max
         restart: unless-stopped
         env_file:
             - .env.docker

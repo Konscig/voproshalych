@@ -59,9 +59,10 @@ class Chunk(Base):
     """Фрагмент документа из вики-системы
 
     Args:
-        confluence_url (str): ссылка на источник
+        url (str): ссылка на источник
         text (str): текст фрагмента
         embedding (Vector): векторное представление текста фрагмента размерностью 1024
+        source_type (str): тип источника (confluence, news, events, employees, etc.)
         created_at (datetime): время создания модели
         updated_at (datetime): время обновления модели
     """
@@ -69,9 +70,10 @@ class Chunk(Base):
     __tablename__ = "chunk"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    confluence_url: Mapped[str] = mapped_column(Text(), index=True)
+    url: Mapped[str] = mapped_column(Text(), index=True)
     text: Mapped[str] = mapped_column(Text())
     embedding: Mapped[Vector] = mapped_column(Vector(1024))
+    source_type: Mapped[str] = mapped_column()
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -237,11 +239,11 @@ def get_all_questions_with_score(
 
 
 def get_document_by_url(engine: Engine, url: str) -> str | None:
-    """Собирает документ из чанков по ссылке на Confluence
+    """Собирает документ из чанков по ссылке на источник
 
     Args:
         engine (Engine): подключение к БД
-        url (str): ссылка на Confluence
+        url (str): ссылка на источник
 
     Returns:
         str | None: полный текст документа или None, если документ не найден
@@ -252,7 +254,7 @@ def get_document_by_url(engine: Engine, url: str) -> str | None:
     with Session(engine) as session:
         document = session.execute(
             select(func.string_agg(Chunk.text, "\n\n").label("full_text")).where(
-                Chunk.confluence_url == url, Chunk.text != None
+                Chunk.url == url, Chunk.text != None
             )
         ).scalar_one_or_none()
 

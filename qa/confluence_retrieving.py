@@ -98,11 +98,13 @@ def reindex_confluence(
     with Session(engine) as session:
         session.query(Chunk).delete()
         for chunk in all_splits:
+            page_link = chunk.metadata["page_link"]
             session.add(
                 Chunk(
-                    confluence_url=chunk.metadata["page_link"],
+                    url=page_link,
                     text=chunk.page_content,
                     embedding=encoder_model.encode(chunk.page_content),
+                    source_type="confluence",
                 )
             )
         session.commit()

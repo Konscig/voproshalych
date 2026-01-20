@@ -18,6 +18,7 @@ from database import (
     delete_score,
 )
 from confluence_retrieving import get_chunk, reindex_confluence
+from utmn_retrieving import reindex_utmn, reindex_utmn_async_wrapper, check_utmn_index
 from time import sleep
 
 routes = web.RouteTableDef()
@@ -31,6 +32,8 @@ text_splitter = RecursiveCharacterTextSplitter(
 encoder_model = SentenceTransformer(
     "saved_models/multilingual-e5-large-wikiutmn", device="cpu"
 )  # type: ignore
+
+# Инициализация источника новостей
 
 
 def get_answer(dialog_history: list, knowledge_base: str, question: str) -> str:
@@ -279,7 +282,7 @@ async def qa(request: web.Request) -> web.Response:
     )
     if verdict:
         return web.json_response(
-            {"answer": answer, "confluence_url": chunk.confluence_url}
+            {"answer": answer, "confluence_url": chunk.url}
         )
     if not verdict:
         logging.error(f"Answer {answer} were banned for question {question}")
@@ -348,6 +351,33 @@ async def reindex(request: web.Request) -> web.Response:
         )
         return web.Response(status=200)
     except Exception as e:
+        return web.Response(text=str(e), status=500)
+
+
+@routes.post("/reindex-utmn/")
+async def reindex_utmn_endpoint(request: web.Request) -> web.Response:
+    """Пересоздаёт векторный индекс всех источников с сайта ТюмГУ (async)
+
+    Args:
+        request (web.Request): запрос
+
+    Returns:
+        web.Response: ответ
+    """
+
+    try:
+        from utmn_retrieving import reindex_utmn_async
+        await reindex_utmn_async(
+            engine=engine,
+            text_splitter=text_splitter,
+            encoder_model=encoder_model,
+            max_pages=10,  # Парсить максимум 10 страниц
+            max_concurrent_employees=15,  # 15 параллельных запросов для сотрудников
+            max_concurrent_news_events=10,  # 10 параллельных для новостей/событий
+        )
+        return web.Response(status=200)
+    except Exception as e:
+        logging.error(f"Failed to reindex UTMN sources: {e}")
         return web.Response(text=str(e), status=500)
 
 
@@ -443,9 +473,22 @@ if __name__ == "__main__":
     with Session(engine) as session:
         questions = session.scalars(select(Chunk)).first()
         if questions is None:
+            logging.warning("Database is empty, starting initial indexing...")
+            # Индексируем Confluence
             reindex_confluence(
                 engine=engine, text_splitter=text_splitter, encoder_model=encoder_model
             )
+            # Индексируем UTMN источники (async)
+            reindex_utmn_async_wrapper(
+                engine=engine, text_splitter=text_splitter, encoder_model=encoder_model, max_pages=5
+            )
+        else:
+            # Проверяем, есть ли UTMN чанки
+            if not check_utmn_index(engine):
+                logging.warning("No UTMN chunks found, indexing UTMN sources...")
+                reindex_utmn_async_wrapper(
+                    engine=engine, text_splitter=text_splitter, encoder_model=encoder_model, max_pages=5
+                )
 
     logging.basicConfig(
         level=logging.DEBUG,

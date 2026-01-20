@@ -51,7 +51,6 @@ def upgrade() -> None:
         SET source_type = CASE
             WHEN url LIKE 'https://www.utmn.ru/news/stories/%' THEN 'news'
             WHEN url LIKE 'https://www.utmn.ru/news/events/%' THEN 'events'
-            WHEN url LIKE 'https://www.utmn.ru/o-tyumgu/sotrudniki/%' THEN 'employees'
             WHEN url LIKE 'https://www.utmn.ru/o-tyumgu/struktura-universiteta/%' THEN 'structure'
             WHEN url LIKE 'https://www.utmn.ru/kontakty%' THEN 'contacts'
             WHEN url LIKE 'https://www.utmn.ru/rss/%' THEN 'rss'

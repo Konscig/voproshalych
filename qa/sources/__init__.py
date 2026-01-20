@@ -6,7 +6,6 @@
 - Структура университета (ректорат, проректоры)
 - Новости (с пагинацией)
 - События и мероприятия
-- RSS-лента
 """
 
 from .utmn_base_source import UTMNBaseSource
@@ -14,7 +13,6 @@ from .utmn_contacts_source import UTMNContactsSource
 from .utmn_structure_source import UTMNStructureSource
 from .utmn_news_source import UTMNNewsSource
 from .utmn_events_source import UTMNEventsSource
-from .utmn_rss_source import UTMNRssSource
 from .utmn_combined_source import UTMNCombinedSource
 
 __all__ = [
@@ -23,6 +21,5 @@ __all__ = [
     'UTMNStructureSource',
     'UTMNNewsSource',
     'UTMNEventsSource',
-    'UTMNRssSource',
     'UTMNCombinedSource'
 ]

@@ -9,7 +9,6 @@ from sources.utmn_structure_source import UTMNStructureSource
 from sources.utmn_employees_source import UTMNEmployeesSource
 from sources.utmn_news_source import UTMNNewsSource
 from sources.utmn_events_source import UTMNEventsSource
-from sources.utmn_rss_source import UTMNRssSource
 from sources.utmn_combined_source import UTMNCombinedSource
 
 
@@ -116,25 +115,6 @@ class TestUTMNEventsSource:
     def test_get_events_urls(self, source):
         urls = source._get_all_events_urls()
         assert len(urls) > 0
-
-    def test_fetch_documents(self, source):
-        docs = source.fetch_documents()
-        assert len(docs) > 0
-
-
-class TestUTMNRssSource:
-    """Тесты RSS модуля"""
-
-    @pytest.fixture
-    def source(self):
-        return UTMNRssSource(delay=0)
-
-    def test_init(self, source):
-        assert source.base_url == "https://www.utmn.ru"
-
-    def test_parse_rss_feed(self, source):
-        items = source.parse_rss_feed()
-        assert len(items) > 0
 
     def test_fetch_documents(self, source):
         docs = source.fetch_documents()

@@ -17,7 +17,6 @@ from .utmn_contacts_source import UTMNContactsSource
 from .utmn_structure_source import UTMNStructureSource
 from .utmn_news_source import UTMNNewsSource
 from .utmn_events_source import UTMNEventsSource
-from .utmn_rss_source import UTMNRssSource
 
 
 # Confluence импортируем отдельно
@@ -32,7 +31,7 @@ class UTMNCombinedSource:
 
     Агрегирует данные из всех источников:
     - Confluence (если доступен)
-    - Web-парсеры на requests (Contacts, Structure, News, Events, RSS)
+    - Web-парсеры на requests (Contacts, Structure, News, Events)
     """
 
     def __init__(self, base_url: str = "https://www.utmn.ru", delay: float = 1.0, use_confluence: bool = True):
@@ -51,7 +50,6 @@ class UTMNCombinedSource:
         self.structure_source = UTMNStructureSource(base_url, delay)
         self.news_source = UTMNNewsSource(base_url, delay)
         self.events_source = UTMNEventsSource(base_url, delay)
-        self.rss_source = UTMNRssSource(base_url, delay)
 
         # Confluence (опционально)
         self.confluence_source = None
@@ -65,7 +63,7 @@ class UTMNCombinedSource:
     def close(self):
         """Закрывает все источники"""
         for source in [self.contacts_source, self.structure_source,
-                       self.news_source, self.events_source, self.rss_source]:
+                       self.news_source, self.events_source]:
             if hasattr(source, 'close'):
                 source.close()
 
@@ -117,14 +115,6 @@ class UTMNCombinedSource:
         except Exception as e:
             logging.error(f"Failed to fetch events: {e}")
 
-        # RSS
-        try:
-            docs = self.rss_source.fetch_documents()
-            all_documents.extend(docs)
-            logging.info(f"RSS: {len(docs)} documents")
-        except Exception as e:
-            logging.error(f"Failed to fetch RSS: {e}")
-
         # Confluence
         if self.confluence_source:
             logging.info("=" * 60)
@@ -172,14 +162,13 @@ class UTMNCombinedSource:
             self._fetch_structure_async(),
             self._fetch_news_async(max_pages=max_pages, max_concurrent=max_concurrent_news_events),
             self._fetch_events_async(max_pages=max_pages, max_concurrent=max_concurrent_news_events),
-            self._fetch_rss_async(),
         ]
 
         # Ждем завершения всех задач
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Обрабатываем результаты
-        sources = ['Contacts', 'Structure', 'News', 'Events', 'RSS']
+        sources = ['Contacts', 'Structure', 'News', 'Events']
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logging.error(f"Failed to fetch {sources[i]}: {result}")
@@ -243,12 +232,4 @@ class UTMNCombinedSource:
             )
         except Exception as e:
             logging.error(f"Failed to fetch events: {e}")
-            return []
-
-    async def _fetch_rss_async(self) -> List[Document]:
-        """Парсит RSS (async)"""
-        try:
-            return await self.rss_source.fetch_documents_async()
-        except Exception as e:
-            logging.error(f"Failed to fetch RSS: {e}")
             return []

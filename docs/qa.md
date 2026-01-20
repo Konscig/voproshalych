@@ -108,3 +108,101 @@
 
 ### `test_confluence()`
 тест взаимодействия с Confluence
+
+## [utmn_retrieving](../qa/utmn_retrieving.py)
+
+### `reindex_utmn(engine, text_splitter, encoder_model, max_pages=5)`
+Пересоздаёт векторный индекс текстов из UTMN источников (синхронная версия)
+
+    Args:
+        engine (Engine): экземпляр подключения к БД
+        text_splitter (RecursiveCharacterTextSplitter): разделитель текста на фрагменты
+        encoder_model (SentenceTransformer): модель получения векторных представлений
+        max_pages (int): максимальное количество страниц для источников с пагинацией
+
+### `reindex_utmn_async(engine, text_splitter, encoder_model, max_pages=5, max_concurrent_news_events=10)`
+Пересоздаёт векторный индекс текстов из UTMN источников (async версия с батчевым кодированием)
+
+    Args:
+        engine (Engine): экземпляр подключения к БД
+        text_splitter (RecursiveCharacterTextSplitter): разделитель текста на фрагменты
+        encoder_model (SentenceTransformer): модель получения векторных представлений
+        max_pages (int): максимальное количество страниц для источников с пагинацией
+        max_concurrent_news_events (int): макс. одновременных запросов для новостей/событий
+
+    **Оптимизации:**
+    - Батчевое кодирование (batch_size=32) для 3-5x ускорения
+    - tqdm прогресс-бар для видимости процесса
+    - Промежуточные коммиты каждые 500 чанков
+
+### `reindex_utmn_async_wrapper(engine, text_splitter, encoder_model, max_pages=5, max_concurrent_news_events=10)`
+Wrapper для вызова async функции из sync кода
+
+## UTMN Источники
+
+Модуль `qa/sources/` содержит парсеры официального сайта Тюменского государственного университета (utmn.ru).
+
+### Доступные источники
+
+| Источник | Файл | Описание |
+|----------|------|----------|
+| Контакты | `utmn_contacts_source.py` | Контакты и реквизиты |
+| Структура | `utmn_structure_source.py` | Ректорат, проректоры |
+| Сотрудники | `utmn_employees_source.py` | Телефонный справочник (опционально) |
+| Новости | `utmn_news_source.py` | Новости с пагинацией |
+| События | `utmn_events_source.py` | События и мероприятия |
+| RSS | `utmn_rss_source.py` | RSS-лента |
+| Комбо | `utmn_combined_source.py` | Агрегация всех источников |
+
+### UTMNCombinedSource
+
+Комбинированный источник для агрегации данных из всех UTMN источников.
+
+```python
+from sources.utmn_combined_source import UTMNCombinedSource
+
+# Инициализация
+source = UTMNCombinedSource(
+    base_url="https://www.utmn.ru",
+    delay=0.3,
+    use_confluence=False
+)
+
+# Синхронный парсинг
+documents = source.fetch_all_documents(max_pages=5)
+
+# Async парсинг (рекомендуется)
+documents = await source.fetch_all_documents_async(
+    max_pages=5,
+    max_concurrent_news_events=10
+)
+
+# Закрытие
+source.close()
+```
+
+### Производительность
+
+| Метрика | До | После | Ускорение |
+|---------|----|----|----|----|
+| Парсинг | ~4-5 мин | <30 сек | 10x |
+| Дата-фильтрация | ~140 запросов | 0 | ∞ |
+| Кодирование | ~1.8 ч | ~20-30 мин | 3-5x |
+
+### Результаты парсинга
+
+**Ветка feat/utmn-parsers-with-employees** (полное решение):
+- Сотрудники: 2699 документов
+- Новости: 135 документов
+- События: 26 документов
+- **Итого: ~2860 документов**
+
+**Ветка feat/utmn-parsers-clean** (без сотрудников):
+- Контакты: ~5-10 документов
+- Структура: ~20-30 документов
+- Новости: 135 документов
+- События: 26 документов
+- RSS: ~10-20 документов
+- **Итого: ~200-250 документов**
+
+Подробнее см. `docs/03_utmn_parsers_solution.md` в персональном репозитории.

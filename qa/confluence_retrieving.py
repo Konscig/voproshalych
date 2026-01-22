@@ -83,8 +83,11 @@ def reindex_confluence(
             page["content"]["id"] for page in pages if "content" in page.keys()
         ]
         count_start += limit
+    logging.info(f"Total pages: {len(page_ids)}")
     documents = []
-    for page_id in page_ids:
+    for i, page_id in enumerate(page_ids):
+        if i > 0 and i % 100 == 0:
+            logging.info(f"Processing: {i}/{len(page_ids)}")
         children = confluence.cql(f"parent={page_id}")["results"]
         if len(children) > 0:
             continue
@@ -94,7 +97,9 @@ def reindex_confluence(
         documents.append(
             Document(page_content=page_content, metadata={"page_link": page_link})
         )
+    logging.info(f"Documents to index: {len(documents)}")
     all_splits = text_splitter.split_documents(documents)
+    logging.info(f"Chunks created: {len(all_splits)}")
     with Session(engine) as session:
         session.query(Chunk).delete()
         for chunk in all_splits:

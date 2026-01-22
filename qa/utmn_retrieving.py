@@ -170,26 +170,19 @@ async def reindex_utmn_async(
         logging.info(f"Encoding {len(chunk_texts)} chunks in batches of {batch_size}...")
 
         # Батчевое кодирование (быстро!)
-        from tqdm import tqdm
-
         all_embeddings = []
-        with tqdm(total=len(chunk_texts), desc="Creating embeddings", unit="chunk") as pbar:
-            for i in range(0, len(chunk_texts), batch_size):
-                batch_texts = chunk_texts[i:i+batch_size]
-                batch_embeddings = encoder_model.encode(
-                    batch_texts,
-                    batch_size=batch_size,
-                    show_progress_bar=False
-                )
-                all_embeddings.extend(batch_embeddings)
+        for i in range(0, len(chunk_texts), batch_size):
+            batch_texts = chunk_texts[i:i+batch_size]
+            batch_embeddings = encoder_model.encode(
+                batch_texts,
+                batch_size=batch_size,
+                show_progress_bar=False
+            )
+            all_embeddings.extend(batch_embeddings)
 
-                # Обновляем прогресс
-                pbar.update(len(batch_texts))
-
-                # Промежуточный прогресс в логах
-                progress_pct = ((i + len(batch_texts)) / len(chunk_texts)) * 100
-                if (i + len(batch_texts)) % 100 == 0 or (i + len(batch_texts)) == len(chunk_texts):
-                    logging.info(f"Progress: {progress_pct:.1f}% ({i + len(batch_texts)}/{len(chunk_texts)} chunks encoded)")
+            # Промежуточный прогресс в логах
+            if (i + len(batch_texts)) % 100 == 0 or (i + len(batch_texts)) == len(chunk_texts):
+                logging.info(f"Encoded {i + len(batch_texts)}/{len(chunk_texts)} chunks")
 
         # Удаляем старые записи UTMN из БД (по префиксу utmn_ в url)
         with Session(engine) as session:

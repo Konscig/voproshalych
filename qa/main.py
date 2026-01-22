@@ -1,6 +1,7 @@
 from contextlib import redirect_stderr
 import io
 import logging
+import time
 import numpy as np
 from aiohttp import web
 import requests
@@ -20,6 +21,13 @@ from database import (
 from confluence_retrieving import get_chunk, reindex_confluence
 from utmn_retrieving import reindex_utmn, reindex_utmn_async_wrapper, check_utmn_index
 from time import sleep
+
+# Настройка логирования (в начале файла, до индексации)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
+)
 
 routes = web.RouteTableDef()
 engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
@@ -470,6 +478,16 @@ async def reembed(request: web.Request) -> web.Response:
 
 
 if __name__ == "__main__":
+    # Ожидание готовности БД (миграции должны завершиться)
+    for attempt in range(30):
+        try:
+            with Session(engine) as session:
+                session.scalars(select(Chunk)).first()
+            break
+        except Exception:
+            if attempt < 29:
+                time.sleep(2)
+
     with Session(engine) as session:
         questions = session.scalars(select(Chunk)).first()
         if questions is None:
@@ -490,11 +508,6 @@ if __name__ == "__main__":
                     engine=engine, text_splitter=text_splitter, encoder_model=encoder_model, max_pages=5
                 )
 
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler()],
-    )
     app = web.Application()
     app.add_routes(routes)
     web.run_app(app)

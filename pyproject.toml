@@ -18,6 +18,7 @@ dependencies = [
     "psycopg2-binary",
     "pgvector",
     "pytest",
+    "alembic>=1.18.4",
 ]
 
 [tool.black]

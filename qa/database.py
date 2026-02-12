@@ -6,6 +6,7 @@ from sqlalchemy import (
     Text,
     Column,
     DateTime,
+    create_engine,
     func,
     ForeignKey,
     BigInteger,

@@ -1,0 +1,25 @@
+[project]
+name = "voproshalych"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv",
+    "aiohttp",
+    "langchain",
+    "langchain-community",
+    "atlassian-python-api",
+    "beautifulsoup4",
+    "lxml",
+    "pypdf",
+    "sentence-transformers",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "pgvector",
+    "pytest",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py312']

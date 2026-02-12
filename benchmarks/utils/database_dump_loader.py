@@ -4,7 +4,7 @@
 таблицы для работы системы бенчарков.
 """
 
-import os
+import io
 import logging
 import gzip
 import tarfile
@@ -126,52 +126,120 @@ class DatabaseDumpLoader:
             return False
 
     def _load_tar_dump(self) -> bool:
-        """Загрузить tar дамп."""
+        """Загрузить tar дамп.
+
+        Returns:
+            True если дамп загружен успешно
+        """
         try:
             logger.info(f"Загрузка tar дампа: {self.dump_path}")
 
             if self.dump_path.endswith(".tar.gz"):
                 tar = tarfile.open(self.dump_path, "r:gz")
             else:
-                tar = tarfile.open(self.dump_path, "r")
+                logger.error(f"Неизвестный формат дампа: {self.dump_path}")
+                return False
 
             with self.Session() as session:
                 connection = session.connection()
                 try:
-                    for member in tar.getmembers():
-                        if member.name.endswith(".sql"):
-                            logger.info(f"Загрузка файла: {member.name}")
-                            f = tar.extractfile(member)
-                            sql_content = f.read().decode("utf-8")
+                    # Получаем список файлов в архиве
+                    members = tar.getmembers()
+
+                    # Фильтруем только SQL файлы
+                    sql_files = [m for m in members if m.name.endswith(".sql")]
+                    logger.info(f"Найдено {len(sql_files)} SQL файлов в архиве")
+
+                    # Для каждого SQL файла
+                    for member in sql_files:
+                        logger.info(f"Загрузка файла: {member.name}")
+
+                        if member.name.endswith(".gz"):
+                            # Файл сжатый gzip
+                            with gzip.open(member, "rt", encoding="utf-8") as f:
+                                sql_content = f.read()
+
                             connection.connection.execute(text(sql_content))
-                    connection.commit()
-                    logger.info(f"Tar дамп загружен ({tar.getmembers()} файлов)")
-                    return True
-                finally:
-                    connection.close()
+
+                            logger.info("Gzip дамп загружен успешно")
+                            return True
+                        else:
+                            # Обычный SQL файл
+                            with open(member, "r", encoding="utf-8") as f:
+                                sql_content = f.read()
+
+                                connection.connection.execute(text(sql_content))
+
+                                logger.info("SQL дамп загружен успешно")
+                                return True
+                except Exception as e:
+                    logger.error(f"Ошибка загрузки дампа из архива: {e}")
+                    return False
         except Exception as e:
-            logger.error(f"Ошибка загрузки tar дампа: {e}")
+            logger.error(f"Ошибка загрузки дампа: {e}")
             return False
 
     def _load_dump_directory(self) -> bool:
-        """Загрузить дамп из директории."""
+        """Загрузить дамп из директории.
+
+        Returns:
+            True если дамп загружен успешно, иначе False
+        """
         try:
             logger.info(f"Загрузка дампа из директории: {self.dump_path}")
 
-            sql_files = []
-            for filename in os.listdir(self.dump_path):
-                filepath = os.path.join(self.dump_path, filename)
+            if not os.path.isdir(self.dump_path):
+                logger.error(f"Дамп не найден: {self.dump_path}")
+                return False
 
+            # Проверяем, что это директория, а не обычный файл
+            if os.path.isfile(self.dump_path):
+                return self._load_dump_file()
+
+            # Это директория с архивом
+            sql_files = []
+
+            # Рекурсивно ищем SQL файлы с расширением .sql
+            for filename in os.listdir(self.dump_path):
                 if filename.endswith(".sql"):
-                    sql_files.append(filepath)
-                elif filename.endswith(".gz") and filename.endswith(".sql.gz"):
-                    sql_files.append(filepath)
-                elif filename.endswith(".tar") or filename.endswith(".tar.gz"):
-                    sql_files.append(filepath)
+                    sql_files.append(os.path.join(self.dump_path, filename))
+                elif filename.endswith(".gz") and filename.endswith(".sql"):
+                    sql_files.append(os.path.join(self.dump_path, filename))
 
             if not sql_files:
                 logger.error("SQL файлы не найдены в директории дампа")
                 return False
+
+            logger.info(f"Найдено {len(sql_files)} SQL файлов в директории дампа")
+
+            with self.Session() as session:
+                connection = session.connection()
+                try:
+                    connection.connection.execute(text("SET client_encoding to 'UTF8'"))
+
+                    # Для каждого SQL файла
+                    for sql_file in sql_files:
+                        logger.info(f"Загрузка файла: {sql_file}")
+
+                        if sql_file.endswith(".gz"):
+                            with gzip.open(sql_file, "rt", encoding="utf-8") as f:
+                                sql_content = f.read()
+                        else:
+                            with open(sql_file, "r", encoding="utf-8") as f:
+                                sql_content = f.read()
+
+                        connection.connection.execute(text(sql_content))
+
+                    connection.commit()
+                    logger.info(
+                        f"Загружено {len(sql_files)} файлов из директории дампа"
+                    )
+                    return True
+                finally:
+                    connection.close()
+        except Exception as e:
+            logger.error(f"Ошибка загрузки дампа из директории: {e}")
+            return False
 
             with self.Session() as session:
                 connection = session.connection()

@@ -8,7 +8,11 @@
 import argparse
 import logging
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from qa.config import Config
 from qa.database import create_engine
@@ -75,7 +79,7 @@ def main():
     engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
     # Загружаем модель эмбеддингов
-    model_path = "saved_models/multilingual-e5-large-wikiutmn"
+    model_path = "nizamovtimur/multilingual-e5-large-wikiutmn"
     encoder = SentenceTransformer(model_path, device="cpu")
 
     # Загружаем данные

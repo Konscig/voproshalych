@@ -10,10 +10,25 @@ cache
 node_modules
 database*.csv
 qa/research
+
+# === Временные файлы для бенчарков (прокомментированы) ===
+# pyproject.toml    - зависимости проекта для бенчарков
+# main.py         - заглушка для запуска
+# .venv/          - виртуальное окружение для бенчарков
+# .pytest_cache/   - кеш pytest для бенчарков
+# Рекомендация: изолировать эти файлы в директорию benchmarks/
+
+# === Отчёты бенчарков ===
 benchmarks/reports/
+benchmarks/SUMMARY.md
+
+# === Данные бенчарков ===
 benchmarks/data/raw/
 benchmarks/data/cleaned/
 benchmarks/data/annotated/
 benchmarks/data/dump/
 benchmarks/data/final/
-benchmarks/SUMMARY.md
+benchmarks/data/static/
+
+# === Архитектурные снепшоты ===
+benchmarks/architecture_snapshots/

@@ -8,31 +8,98 @@
 import argparse
 import logging
 import sys
+import os
+import subprocess
+from pathlib import Path
+from sys import path as sys_path
 
-from benchmarks.utils.database_dump_loader import DatabaseDumpLoader
+project_root = Path(__file__).parent.parent
+sys_path.insert(0, str(project_root))
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
+logger = logging.getLogger(__name__)
+
+
+def drop_tables(database_url: str) -> bool:
+    """Удалить существующие таблицы.
+
+    Args:
+        database_url: URL подключения к PostgreSQL
+
+    Returns:
+        True если успешно
+    """
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.orm import Session
+
+    try:
+        engine = create_engine(database_url)
+        with Session(engine) as session:
+            session.execute(text("DROP TABLE IF EXISTS question_answer CASCADE"))
+            session.execute(text("DROP TABLE IF EXISTS chunk CASCADE"))
+            session.execute(text("DROP TABLE IF EXISTS holiday CASCADE"))
+            session.execute(text("DROP TABLE IF EXISTS admin CASCADE"))
+            session.commit()
+            logger.info("Таблицы удалены")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка удаления таблиц: {e}")
+        return False
+
+
+def load_dump_main(database_url: str, dump_path: str) -> bool:
+    """Главная функция для загрузки дампа.
+
+    Args:
+        database_url: URL подключения к PostgreSQL
+        dump_path: Путь к дампу
+
+    Returns:
+        True если дамп загружен успешно
+    """
+    try:
+        logger.info(f"Загрузка дампа: {dump_path}")
+
+        cmd = ["psql", "-d", database_url, "-f", dump_path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            logger.info("Дамп загружен успешно")
+            return True
+        else:
+            logger.error(f"Ошибка загрузки дампа: {result.stderr}")
+            return False
+    except Exception as e:
+        logger.error(f"Ошибка загрузки дампа: {e}")
+        return False
+
 
 def main():
     """Главная функция CLI скрипта."""
     parser = argparse.ArgumentParser(
-        description="Автоматическая загрузка дампа БД для бенчмарков"
+        description="Автоматическая загрузка дампа БД для бенчарков"
     )
 
     parser.add_argument(
         "--dump",
         type=str,
-        help="Путь к файлу дампа (.sql, .sql.gz, .tar, .tar.gz)",
+        help="Путь к файлу дампа (.sql, .sql.gz, .tar, .tar.gz, .dump)",
     )
 
     parser.add_argument(
         "--dump-dir",
         type=str,
         help="Путь к директории с дампами",
+    )
+
+    parser.add_argument(
+        "--drop-tables",
+        action="store_true",
+        help="Удалить существующие таблицы перед загрузкой дампа",
     )
 
     args = parser.parse_args()
@@ -43,73 +110,28 @@ def main():
         sys.exit(1)
 
     # Получаем URL БД из окружения
-    import os
-    from os import environ
-
-    database_url = environ.get(
-        "BENCHMARK_DATABASE_URL", environ.get("POSTGRES_DB_URL", "")
+    database_url = (
+        f"postgresql://{os.environ.get('POSTGRES_USER', 'voproshalych')}:"
+        f"{os.environ.get('POSTGRES_PASSWORD', 'voproshalych_password')}@"
+        f"{os.environ.get('POSTGRES_HOST', 'localhost:5432')}/"
+        f"{os.environ.get('POSTGRES_DB', 'virtassist')}"
     )
-
-    if not database_url:
-        # Формируем URL по умолчанию
-        database_url = (
-            f"postgresql://{environ.get('POSTGRES_USER', 'user')}:"
-            f"{environ.get('POSTGRES_PASSWORD', 'password')}@"
-            f"{environ.get('POSTGRES_HOST', 'localhost')}/"
-            f"{environ.get('POSTGRES_DB', 'voproshalych')}"
-        )
 
     logger.info(f"URL БД: {database_url}")
 
-    # Создаём загрузчик
-    dump_path = args.dump if args.dump else args.dump_dir
-    loader = DatabaseDumpLoader(database_url, dump_path)
+    if args.drop_tables:
+        logger.info("Удаление существующих таблиц...")
+        drop_tables(database_url)
+        sys.exit(0)
 
-    # Подключаемся к БД
-    loader.connect()
-
-    # Проверяем текущее состояние таблиц
-    logger.info("Проверяем текущее состояние таблиц...")
-    stats_before = loader.check_tables()
-    logger.info(f"Статистика до загрузки:")
-    logger.info(f"  question_answer: {stats_before.get('question_answer_total', 0)}")
-    logger.info(f"  chunk: {stats_before.get('chunk_total', 0)}")
-    logger.info(f"  QA с эмбеддингами: {stats_before.get('qa_embeddings', 0)}")
-    logger.info(f"  Чанки с эмбеддингами: {stats_before.get('chunk_embeddings', 0)}")
-
-    # Загружаем дамп
-    logger.info(f"Загрузка дампа: {dump_path}")
-    success = loader.load_dump()
+    success = load_dump_main(database_url, args.dump if args.dump else args.dump_dir)
 
     if success:
-        # Проверяем состояние после загрузки
-        logger.info("Проверяем состояние после загрузки...")
-        stats_after = loader.check_tables()
-        logger.info(f"Статистика после загрузки:")
-        logger.info(f"  question_answer: {stats_after.get('question_answer_total', 0)}")
-        logger.info(f"  chunk: {stats_after.get('chunk_total', 0)}")
-        logger.info(f"  QA с эмбеддингами: {stats_after.get('qa_embeddings', 0)}")
-        logger.info(f"  Чанки с эмбеддингами: {stats_after.get('chunk_embeddings', 0)}")
-
-        # Сравниваем
-        qa_added = stats_after.get("question_answer_total", 0) - stats_before.get(
-            "question_answer_total", 0
-        )
-        chunk_added = stats_after.get("chunk_total", 0) - stats_before.get(
-            "chunk_total", 0
-        )
-        logger.info(f"\nДобавлено записей:")
-        logger.info(f"  question_answer: {qa_added}")
-        logger.info(f"  chunk: {chunk_added}")
-
-        logger.info("\n✅ Дамп загружен успешно!")
+        logger.info("✅ Дамп загружен успешно!")
         logger.info("Система бенчарков готова к работе.")
     else:
-        logger.error("\n❌ Ошибка загрузки дампа")
+        logger.error("❌ Ошибка загрузки дампа")
         sys.exit(1)
-
-    # Закрываем подключение
-    loader.close()
 
 
 if __name__ == "__main__":

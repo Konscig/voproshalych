@@ -12,4 +12,8 @@ database*.csv
 qa/research
 benchmarks/reports/
 benchmarks/data/static/
-
+benchmarks/data/raw/
+benchmarks/data/cleaned/
+benchmarks/data/annotated/
+benchmarks/data/dump/
+benchmarks/data/final/

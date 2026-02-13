@@ -4,6 +4,7 @@
 таблицы для работы системы бенчарков.
 """
 
+import os
 import io
 import logging
 import gzip
@@ -77,10 +78,58 @@ class DatabaseDumpLoader:
             return self._load_gz_dump()
         elif self.dump_path.endswith(".sql"):
             return self._load_sql_dump()
+        elif self.dump_path.endswith(".dump"):
+            return self._load_plain_dump()
         elif self.dump_path.endswith(".tar") or self.dump_path.endswith(".tar.gz"):
             return self._load_tar_dump()
         else:
             logger.error(f"Неизвестный формат дампа: {self.dump_path}")
+            return False
+
+    def _load_plain_dump(self) -> bool:
+        """Загрузить обычный дамп (без сжатия).
+
+        Returns:
+            True если дамп загружен успешно
+        """
+        try:
+            logger.info(f"Загрузка дампа: {self.dump_path}")
+
+            with open(self.dump_path, "r", encoding="utf-8") as f:
+                sql_content = f.read()
+
+            with self.Session() as session:
+                connection = session.connection()
+                try:
+                    connection.connection.execute(text(sql_content))
+                    connection.commit()
+                    logger.info("Дамп загружен успешно")
+                    return True
+                finally:
+                    connection.close()
+        except Exception as e:
+            logger.error(f"Ошибка загрузки дампа: {e}")
+            return False
+
+    def _load_sql_dump(self) -> bool:
+        """Загрузить SQL дамп."""
+        try:
+            logger.info(f"Загрузка SQL дампа: {self.dump_path}")
+
+            with open(self.dump_path, "r", encoding="utf-8") as f:
+                sql_content = f.read()
+
+            with self.Session() as session:
+                connection = session.connection()
+                try:
+                    connection.connection.execute(text(sql_content))
+                    connection.commit()
+                    logger.info("SQL дамп загружен успешно")
+                    return True
+                finally:
+                    connection.close()
+        except Exception as e:
+            logger.error(f"Ошибка загрузки SQL дампа: {e}")
             return False
 
     def _load_gz_dump(self) -> bool:
@@ -317,3 +366,120 @@ class DatabaseDumpLoader:
         if self.engine:
             self.engine.dispose()
             logger.info("Подключение к БД закрыто")
+
+
+def check_tables_from_loader(database_url: str) -> dict:
+    """Проверить состояние таблиц напрямую (без создания экземпляра класса).
+
+    Args:
+        database_url: URL подключения к PostgreSQL
+
+    Returns:
+        Словарь с статистикой по таблицам
+    """
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.orm import Session
+
+    try:
+        engine = create_engine(database_url)
+        with Session(engine) as session:
+            stats = {
+                "question_answer_total": 0,
+                "chunk_total": 0,
+                "qa_embeddings": 0,
+                "chunk_embeddings": 0,
+                "qa_coverage_percent": 0,
+                "chunk_coverage_percent": 0,
+            }
+
+            try:
+                qa_count = session.execute(
+                    text("SELECT COUNT(*) FROM question_answer")
+                ).scalar()
+                stats["question_answer_total"] = qa_count
+            except Exception:
+                pass
+
+            try:
+                chunk_count = session.execute(
+                    text("SELECT COUNT(*) FROM chunk")
+                ).scalar()
+                stats["chunk_total"] = chunk_count
+            except Exception:
+                pass
+
+            try:
+                qa_embeddings_count = session.execute(
+                    text(
+                        "SELECT COUNT(*) FROM question_answer WHERE embedding IS NOT NULL"
+                    )
+                ).scalar()
+                stats["qa_embeddings"] = qa_embeddings_count
+                if qa_count > 0:
+                    stats["qa_coverage_percent"] = qa_embeddings_count / qa_count * 100
+            except Exception:
+                pass
+
+            try:
+                chunk_embeddings_count = session.execute(
+                    text("SELECT COUNT(*) FROM chunk WHERE embedding IS NOT NULL")
+                ).scalar()
+                stats["chunk_embeddings"] = chunk_embeddings_count
+                if chunk_count > 0:
+                    stats["chunk_coverage_percent"] = (
+                        chunk_embeddings_count / chunk_count * 100
+                    )
+            except Exception:
+                pass
+
+            logger.info(f"Статистика таблиц: {stats}")
+            return stats
+    except Exception as e:
+        logger.error(f"Ошибка проверки таблиц: {e}")
+        return {"error": str(e)}
+
+
+def load_dump_main(database_url: str, dump_path: str) -> bool:
+    """Главная функция для загрузки дампа.
+
+    Args:
+        database_url: URL подключения к PostgreSQL
+        dump_path: Путь к дампу
+
+    Returns:
+        True если дамп загружен успешно
+    """
+    loader = DatabaseDumpLoader(database_url, dump_path)
+
+    loader.connect()
+
+    if loader.load_dump():
+        loader.check_tables()
+        loader.close()
+        return True
+    else:
+        loader.close()
+        return False
+
+
+def load_dump_main(database_url: str, dump_path: str) -> bool:
+    """Главная функция для загрузки дампа.
+
+    Args:
+        database_url: URL подключения к PostgreSQL
+        dump_path: Путь к дампу
+
+    Returns:
+        True если дамп загружен успешно
+    """
+    loader = DatabaseDumpLoader(database_url, dump_path)
+
+    loader.connect()
+
+    if loader.load_dump():
+        loader.check_tables()
+        loader.close()
+        return True
+    else:
+        loader.close()
+        return False

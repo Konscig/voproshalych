@@ -54,7 +54,7 @@ class RetrievalBenchmark:
         # Получаем все вопросы с эмбеддингами
         with Session(self.engine) as session:
             questions_with_embeddings = session.scalars(
-                select(QuestionAnswer).where(QuestionAnswer.embedding.isnot(None))
+                select(QuestionAnswer).where(QuestionAnswer.embedding.is_not(None))
             ).all()
 
             # Формируем список вопросов с эмбеддингами
@@ -78,7 +78,7 @@ class RetrievalBenchmark:
             similar = self._find_similar_questions_tier_1(
                 question_embedding, qa_list, top_k
             )
-            retrieved_urls = [item["url"] for item in similar if item["url"]]
+            retrieved_urls = [item["url"] for item in similar if item.get("url")]
             retrieved_results[question] = retrieved_urls
 
         # Вычисляем метрики
@@ -128,10 +128,10 @@ class RetrievalBenchmark:
         retrieved_results = {}
         for question in test_questions:
             question_embedding = self.encoder.encode(question)
-            similar_chunks = self._find_similar_chunks_tier_2(
+            similar = self._find_similar_chunks_tier_2(
                 question_embedding, chunk_list, top_k
             )
-            retrieved_urls = [item["url"] for item in similar_chunks]
+            retrieved_urls = [item["url"] for item in similar]
             retrieved_results[question] = retrieved_urls
 
         # Вычисляем метрики

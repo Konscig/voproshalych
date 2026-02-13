@@ -153,4 +153,10 @@ def compute_retrieval_metrics(
         results["ndcg@10"].append(ndcg_at_k(retrieved, relevant, 10))
 
     # Усреднить значения
-    return {k: np.mean(v) for k, v in results.items()}
+    final_results = {}
+    for k, v in results.items():
+        if not v:
+            final_results[k] = 0.0
+        else:
+            final_results[k] = np.mean(v)
+    return final_results

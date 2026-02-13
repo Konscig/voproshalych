@@ -215,7 +215,7 @@ class BenchmarkDashboard:
                         return metric_value
 
                     benchmark_dropdown.change(
-                        fn=lambda b, m: update_metrics(b, "recall@1"),
+                        fn=lambda b: update_metrics(b, "recall@1"),
                         inputs=[benchmark_dropdown],
                         outputs=[metric_value],
                     )
@@ -237,8 +237,8 @@ class BenchmarkDashboard:
 
                 history_plot = gr.LinePlot(
                     label="История",
-                    x_label="Дата",
-                    y_label="Значение",
+                    x="Дата",
+                    y="Значение",
                 )
 
                 def update_history_plot(metric_name):
@@ -279,8 +279,8 @@ class BenchmarkDashboard:
 
                 comparison_plot = gr.LinePlot(
                     label="Сравнение метрик",
-                    x_label="Бенчмарк",
-                    y_label="Значение",
+                    x="Бенчмарк",
+                    y="Значение",
                 )
 
                 def update_comparison_plot(tier1_gs, tier1_qw, tier2_gs):

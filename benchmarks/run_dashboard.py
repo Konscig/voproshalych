@@ -9,12 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Определяем директории
-project_root = Path(__file__).parent
-benchmarks_dir = project_root / "Submodules" / "voproshalych" / "benchmarks"
-
-# Запускаем дашборд из директории benchmarks
-dashboard_path = benchmarks_dir / "dashboard.py"
+# Определяем директорию с дашбордом (текущая директория benchmarks/)
+dashboard_path = Path(__file__).parent / "dashboard.py"
 
 print(f"Запуск дашборда: {dashboard_path}")
 
@@ -23,18 +19,15 @@ if not dashboard_path.exists():
     sys.exit(1)
 
 try:
-    # Запускаем streamlit
+    # Запускаем Python-модуль напрямую
     result = subprocess.run(
-        ["streamlit", "run", str(dashboard_path)],
+        [sys.executable, "-m", "benchmarks.dashboard"],
         check=True,
-        capture_output=True,
-        text=True,
+        capture_output=False,
     )
 
-    print(result.stdout)
-
     if result.returncode != 0:
-        print(f"❌ Ошибка запуска: {result.stderr}")
+        print(f"❌ Ошибка запуска")
         sys.exit(result.returncode)
 
 except Exception as e:

@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 
 try:
     import gradio as gr
+
     GRADIO_AVAILABLE = True
 except ImportError:
     GRADIO_AVAILABLE = False
@@ -49,11 +50,11 @@ class BenchmarkDashboard:
 
         # Загружаем JSON файлы
         for filename in os.listdir(self.reports_dir):
-            if filename.endswith('.json'):
+            if filename.endswith(".json"):
                 filepath = os.path.join(self.reports_dir, filename)
 
                 try:
-                    with open(filepath, 'r', encoding='utf-8') as f:
+                    with open(filepath, "r", encoding="utf-8") as f:
                         data = json.load(f)
                         metrics[filename] = data
                 except Exception as e:
@@ -106,8 +107,8 @@ class BenchmarkDashboard:
         benchmarks = set()
 
         for filename in self.metrics_data.keys():
-            if filename.startswith('retrieval_tier'):
-                benchmark = filename.split('_')[2]
+            if filename.startswith("retrieval_tier"):
+                benchmark = filename.split("_")[2]
                 benchmarks.add(benchmark)
 
         return sorted(list(benchmarks))
@@ -125,8 +126,8 @@ class BenchmarkDashboard:
 
         for filename, data in self.metrics_data.items():
             if metric_name in data:
-                timestamp = data.get('timestamp', '')
-                date_str = timestamp.split('T')[0] if timestamp else 'unknown'
+                timestamp = data.get("timestamp", "")
+                date_str = timestamp.split("T")[0] if timestamp else "unknown"
                 history[date_str] = data[metric_name]
 
         return history
@@ -154,20 +155,28 @@ class BenchmarkDashboard:
                 with gr.Row():
                     with gr.Column():
                         gr.Markdown("#### 📈 Текущие метрики")
-                        
+
                         benchmark_list = self.get_benchmark_list()
                         benchmark_dropdown = gr.Dropdown(
                             choices=benchmark_list,
                             label="Бенчмарк",
-                            value=benchmark_list[0] if benchmark_list else None
+                            value=benchmark_list[0] if benchmark_list else None,
                         )
 
                         metric_names = [
-                            "recall@1", "recall@3", "recall@5", "recall@10",
-                            "precision@1", "precision@3", "precision@5", "precision@10",
-                            "mrr", "ndcg@5", "ndcg@10"
+                            "recall@1",
+                            "recall@3",
+                            "recall@5",
+                            "recall@10",
+                            "precision@1",
+                            "precision@3",
+                            "precision@5",
+                            "precision@10",
+                            "mrr",
+                            "ndcg@5",
+                            "ndcg@10",
                         ]
-                        
+
                         metric_dropdown = gr.Dropdown(
                             choices=metric_names,
                             label="Метрика",
@@ -183,7 +192,7 @@ class BenchmarkDashboard:
 
                     with gr.Column():
                         gr.Markdown("#### 📋 Список метрик")
-                        
+
                         metric_table = gr.Dataframe(
                             label="Все метрики",
                             headers=["Метрика", "Значение"],
@@ -194,27 +203,27 @@ class BenchmarkDashboard:
                         metric_file = f"retrieval_tier1_{benchmark}_*.json"
                         value = self.get_metric_value(metric, metric_file)
                         metric_value.value = value
-                        
+
                         # Обновляем таблицу
                         metrics_data = []
                         for m in metric_names:
                             m_value = self.get_metric_value(m, metric_file)
                             metrics_data.append([m, f"{m_value:.4f}"])
-                        
+
                         metric_table.value = metrics_data
 
                         return metric_value
 
                     benchmark_dropdown.change(
                         fn=lambda b, m: update_metrics(b, "recall@1"),
-                        inputs=[benchmark_dropdown]
-                        outputs=[metric_value]
+                        inputs=[benchmark_dropdown],
+                        outputs=[metric_value],
                     )
-                    
+
                     metric_dropdown.change(
                         fn=update_metrics,
                         inputs=[benchmark_dropdown, metric_dropdown],
-                        outputs=[metric_value]
+                        outputs=[metric_value],
                     )
 
             with gr.Tab("История"):
@@ -234,18 +243,15 @@ class BenchmarkDashboard:
 
                 def update_history_plot(metric_name):
                     history = self.get_metric_history(metric_name)
-                    
+
                     if not history:
                         return None
-                    
+
                     dates = sorted(history.keys())
                     values = [history[d] for d in dates]
-                    
-                    data = {
-                        "Дата": dates,
-                        metric_name: values
-                    }
-                    
+
+                    data = {"Дата": dates, metric_name: values}
+
                     return data
 
                 metric_history_dropdown.change(
@@ -256,10 +262,6 @@ class BenchmarkDashboard:
 
             with gr.Tab("Сравнение"):
                 gr.Markdown("### 🔍 Сравнение бенчмарков")
-
-                benchmark_comparison = gr.CheckboxGroup(
-                    label="Выберите бенчмарки для сравнения",
-                )
 
                 with gr.Row():
                     b1 = gr.Checkbox(
@@ -293,23 +295,31 @@ class BenchmarkDashboard:
                     if not selected:
                         return None
 
-                    metric_name = gr.Textbox(value="recall@1")
-                    
-                    data = {
-                        "Бенчмарк": [],
-                        metric_name.value: []
-                    }
+                    metric_name = "recall@1"
+                    data = {"Бенчмарк": [], metric_name: []}
 
                     for benchmark in selected:
-                        value = self.get_metric_value(metric_name.value, f"*{benchmark}*")
+                        value = self.get_metric_value(metric_name, f"*{benchmark}*")
                         data["Бенчмарк"].append(benchmark)
-                        data[metric_name.value].append(value)
+                        data[metric_name].append(value)
 
                     return data
 
-                b1.change(fn=update_comparison_plot)
-                b2.change(fn=update_comparison_plot)
-                b3.change(fn=update_comparison_plot)
+                b1.change(
+                    fn=update_comparison_plot,
+                    inputs=[b1, b2, b3],
+                    outputs=[comparison_plot],
+                )
+                b2.change(
+                    fn=update_comparison_plot,
+                    inputs=[b1, b2, b3],
+                    outputs=[comparison_plot],
+                )
+                b3.change(
+                    fn=update_comparison_plot,
+                    inputs=[b1, b2, b3],
+                    outputs=[comparison_plot],
+                )
 
             with gr.Tab("Автозагрузка дампа"):
                 gr.Markdown("### 🔄 Автоматическая загрузка дампа БД")
@@ -344,21 +354,23 @@ class BenchmarkDashboard:
 
                 def check_database_stats():
                     try:
-                        from benchmarks.utils.database_dump_loader import DatabaseDumpLoader
+                        from benchmarks.utils.database_dump_loader import (
+                            DatabaseDumpLoader,
+                        )
                         from os import environ
-                        
+
                         database_url = (
                             f"postgresql://{environ.get('POSTGRES_USER', 'user')}:"
                             f"{environ.get('POSTGRES_PASSWORD', 'password')}@"
                             f"{environ.get('POSTGRES_HOST', 'localhost')}/"
                             f"{environ.get('POSTGRES_DB', 'voproshalych')}"
                         )
-                        
+
                         loader = DatabaseDumpLoader(database_url, "")
                         loader.connect()
                         stats = loader.check_tables()
                         loader.close()
-                        
+
                         return (
                             f"✅ Статистика загружена:\n\n"
                             f"**question_answer:** {stats.get('question_answer_total', 0)} записей\n"
@@ -373,7 +385,7 @@ class BenchmarkDashboard:
 
                 check_stats_btn.click(
                     fn=check_database_stats,
-                    outputs=[gr.Textbox(label="Результат", visible=True)]
+                    outputs=[gr.Textbox(label="Результат", visible=True)],
                 )
 
         return demo

@@ -11,3 +11,5 @@ node_modules
 database*.csv
 qa/research
 benchmarks/reports/
+benchmarks/data/static/
+

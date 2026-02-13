@@ -5,7 +5,7 @@
 - Tier 2: Поиск чанков из Confluence базы знаний
 """
 
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
@@ -19,19 +19,24 @@ class RetrievalBenchmark:
     """Бенчмарк для оценки качества поиска.
 
     Attributes:
-        engine: Движок базы данных SQLAlchemy
+        engine: Движок базы данных SQLAlchemy (для бенчмарков с БД)
+        qa_list: Список вопросов с эмбеддингами (для статичных датасетов)
         encoder: Модель для генерации эмбеддингов
     """
 
-    def __init__(self, engine: Engine, encoder: SentenceTransformer):
+    def __init__(
+        self, engine: Engine, encoder: SentenceTransformer, qa_list: List[Dict] = None
+    ):
         """Инициализировать бенчмарк поиска.
 
         Args:
             engine: Движок базы данных
             encoder: Модель для генерации эмбеддингов
+            qa_list: Предварительно загруженный список QA с эмбеддингами (для статичных датасетов)
         """
         self.engine = engine
         self.encoder = encoder
+        self.qa_list = qa_list
 
     def run_tier_1(
         self,
@@ -41,7 +46,8 @@ class RetrievalBenchmark:
     ) -> Dict[str, float]:
         """Выполнить бенчмарк Tier 1 (поиск похожих вопросов).
 
-        Тестирует поиск похожих вопросов из таблицы question_answer.
+        Тестирует поиск похожих вопросов из таблицы question_answer
+        или из статичного списка QA с эмбеддингами.
 
         Args:
             test_questions: Список тестовых вопросов
@@ -51,25 +57,27 @@ class RetrievalBenchmark:
         Returns:
             Словарь с вычисленными метриками
         """
-        # Получаем все вопросы с эмбеддингами
-        with Session(self.engine) as session:
-            questions_with_embeddings = session.scalars(
-                select(QuestionAnswer).where(QuestionAnswer.embedding.is_not(None))
-            ).all()
+        # Используем предварительно загруженный список или загружаем из БД
+        qa_list = []
+        if self.qa_list:
+            qa_list = self.qa_list
+        else:
+            with Session(self.engine) as session:
+                questions_with_embeddings = session.scalars(
+                    select(QuestionAnswer).where(QuestionAnswer.embedding.is_not(None))
+                ).all()
 
-            # Формируем список вопросов с эмбеддингами
-            qa_list = []
-            for qa in questions_with_embeddings:
-                if qa.embedding is not None and len(qa.embedding) > 0:
-                    qa_list.append(
-                        {
-                            "id": qa.id,
-                            "question": qa.question,
-                            "answer": qa.answer,
-                            "url": qa.confluence_url,
-                            "embedding": qa.embedding,
-                        }
-                    )
+                for qa in questions_with_embeddings:
+                    if qa.embedding is not None and len(qa.embedding) > 0:
+                        qa_list.append(
+                            {
+                                "id": qa.id,
+                                "question": qa.question,
+                                "answer": qa.answer,
+                                "url": qa.confluence_url,
+                                "embedding": qa.embedding,
+                            }
+                        )
 
         # Для каждого тестового вопроса ищем похожие
         retrieved_results = {}

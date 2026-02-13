@@ -19,7 +19,7 @@ from qa.database import create_engine
 from sentence_transformers import SentenceTransformer
 
 from benchmarks.models.retrieval_benchmark import RetrievalBenchmark
-from benchmarks.utils.data_loader import DataLoader
+from benchmarks.utils.static_data_loader import StaticDataLoader
 from benchmarks.utils.report_generator import ReportGenerator
 
 logging.basicConfig(
@@ -82,8 +82,8 @@ def main():
     model_path = "nizamovtimur/multilingual-e5-large-wikiutmn"
     encoder = SentenceTransformer(model_path, device="cpu")
 
-    # Загружаем данные
-    loader = DataLoader(engine)
+    # Загружаем данные (из статичных файлов с генерацией эмбеддингов)
+    loader = StaticDataLoader(encoder=encoder)
 
     if args.dataset == "golden_set":
         questions = loader.load_golden_set()
@@ -109,8 +109,8 @@ def main():
 
     logging.info(f"Запуск бенчмарка Tier {args.tier} с {len(test_questions)} вопросами")
 
-    # Создаём бенчмарк
-    benchmark = RetrievalBenchmark(engine, encoder)
+    # Создаём бенчмарк с предварительным списком QA
+    benchmark = RetrievalBenchmark(engine, encoder, qa_list=questions)
 
     # Запускаем бенчмарк
     if args.tier == 1:

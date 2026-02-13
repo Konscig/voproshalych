@@ -44,41 +44,87 @@ benchmarks/
 │   ├── database_dump_loader.py
 │   └── report_generator.py
 ├── reports/                     # Отчёты бенчарков
-├── architecture_snapshots/        # Версии архитектуры
 └── generate_embeddings.py         # CLI: генерация эмбеддингов
 ```
 
+## Режимы работы
+
+### Режим 1: Без запуска проекта (CLI с готовыми датасетами)
+
+**Когда использовать:**
+- Если датасеты уже экспортированы (в `benchmarks/data/static/`)
+- Если не требуется генерация эмбеддингов
+- Если не нужно обновлять данные
+
+**План действий:**
+```bash
+cd Submodules/voproshalych
+
+# 1. Проверка покрытия эмбеддингов
+uv run python benchmarks/generate_embeddings.py --check-coverage
+
+# 2. Запуск бенчарков
+uv run python benchmarks/run_benchmarks.py --tier 1 --dataset golden_set
+uv run python benchmarks/run_benchmarks.py --tier 2 --dataset golden_set
+
+# 3. Просмотр результатов
+ls benchmarks/reports/*.md
+```
+
+**Преимущества:**
+- ✅ Не нужно запускать Docker
+- ✅ Работает с пустой локальной БД
+- ✅ Использует готовые датасеты
+
+**Ограничения:**
+- ❌ Датасеты не обновляются автоматически
+- ❌ Требуется ручная генерация эмбеддингов
+
+### Режим 2: С запуском проекта (Docker + автоматическая загрузка дампа)
+
+**Когда использовать:**
+- Если нужны свежие данные из продакшн БД
+- Если нужно протестировать с актуальной базой знаний
+- Если требуется интеграция с QA-сервисом
+
+**План действий:**
+```bash
+cd Submodules/voproshalych
+
+# 1. Подготовка дампа БД (если есть)
+# Сохранить дамп из серверной БД в benchmarks/data/dump/virtassist_backup.dump
+
+# 2. Создать файл .env с переменными окружения
+cp .env.example .env
+# Отредактировать POSTGRES_PASSWORD и другие параметры
+
+# 3. Загрузка дампа
+uv run python benchmarks/load_database_dump.py --drop-tables --dump benchmarks/data/dump/virtassist_backup.dump
+
+# 4. Запуск бенчарков
+uv run python benchmarks/run_benchmarks.py --tier 1 --dataset golden_set
+uv run python benchmarks/run_benchmarks.py --tier 2 --dataset golden_set
+```
+
+**Преимущества:**
+- ✅ Свежие данные из продакшн БД
+- ✅ Полная интеграция с QA-сервисом
+- ✅ Автоматическая загрузка дампа
+
+**Ограничения:**
+- ⚠️ Требуется запуск Docker (ресурсы)
+- ⚠️ Время на развёртывание контейнеров
+- ⚠️ Необходим доступ к серверной БД для дампа
+
 ## Использование
-
-### Генерация эмбеддингов
-
-```bash
-# Проверить покрытие
-uv run python generate_embeddings.py --check-coverage
-
-# Сгенерировать для всех
-uv run python generate_embeddings.py --all
-
-# Сгенерировать для score=5
-uv run python generate_embeddings.py --score 5
-```
-
-### Запуск бенчарков
-
-```bash
-# Tier 1 (поиск похожих вопросов)
-uv run python run_benchmarks.py --tier 1 --dataset golden_set
-uv run python run_benchmarks.py --tier 1 --dataset low_quality
-
-# Tier 2 (поиск чанков)
-uv run python run_benchmarks.py --tier 2 --dataset golden_set
-uv run python run_benchmarks.py --tier 2 --dataset questions_with_url
-```
 
 ### Интерактивный дашборд
 
 ```bash
-uv run streamlit run dashboard.py
+# Запуск дашборда
+uv run streamlit run benchmarks/dashboard.py
+
+# Дашборд доступен на http://localhost:8501
 ```
 
 **Возможности дашборда:**
@@ -87,11 +133,36 @@ uv run streamlit run dashboard.py
 - Графики метрик по времени
 - Фильтрация по датасетам и типам бенчарков
 
+### Генерация эмбеддингов
+
+```bash
+# Проверить покрытие
+uv run python benchmarks/generate_embeddings.py --check-coverage
+
+# Сгенерировать для всех
+uv run python benchmarks/generate_embeddings.py --all
+
+# Сгенерировать для score=5
+uv run python benchmarks/generate_embeddings.py --score 5
+```
+
+### Запуск бенчарков
+
+```bash
+# Tier 1 (поиск похожих вопросов)
+uv run python benchmarks/run_benchmarks.py --tier 1 --dataset golden_set
+uv run python benchmarks/run_benchmarks.py --tier 1 --dataset low_quality
+
+# Tier 2 (поиск чанков)
+uv run python benchmarks/run_benchmarks.py --tier 2 --dataset golden_set
+uv run python benchmarks/run_benchmarks.py --tier 2 --dataset questions_with_url
+```
+
 ### Загрузка дампа БД
 
 ```bash
 # Загрузить дамп с удалением таблиц
-uv run python load_database_dump.py --drop-tables --dump benchmarks/data/dump/virtassist_backup.dump
+uv run python benchmarks/load_database_dump.py --drop-tables --dump benchmarks/data/dump/virtassist_backup.dump
 ```
 
 ## Метрики
@@ -112,18 +183,6 @@ uv run python load_database_dump.py --drop-tables --dump benchmarks/data/dump/vi
 | Recall@10 | ≥70% | ≥50% | ≥30% | <30% |
 | Precision@5 | ≥50% | ≥40% | ≥30% | <30% |
 
-## Текущие результаты
-
-**База данных:** 5247 вопросов, 202 чанков
-**Покрытие эмбеддингами:** 4.78%
-
-| Бенчмарк | Датасет | Вопросов | MRR | Recall@1 | Precision@1 |
-|-----------|----------|----------|-----|----------|------------|
-| Tier 1 | Golden Set | 278 | 0.86 | 84% | 84% |
-| Tier 1 | Low Quality | 200 | 0.81 | 79% | 79% |
-| Tier 2 | Golden Set | 278 | 0.59 | 54% | 54% |
-| Tier 2 | Low Quality | 200 | 0.33 | 26% | 26% |
-
 ## Статус реализации
 
 ### Полностью реализовано
@@ -132,7 +191,6 @@ uv run python load_database_dump.py --drop-tables --dump benchmarks/data/dump/vi
 - ✅ Бенчмарк Tier 2 (поиск чанков)
 - ✅ Вычисление метрик (Recall, Precision, MRR, NDCG)
 - ✅ Генерация отчётов (Markdown, JSON)
-- ✅ Интерактивный дашборд
 - ✅ Статичные датасеты
 - ✅ Загрузка дампа БД
 

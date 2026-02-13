@@ -2,10 +2,16 @@
 """Скрипт для запуска дашборда бенчарков.
 
 Использование:
-    python run_dashboard.py
+    python benchmarks/run_dashboard.py
 """
 
 import sys
+from pathlib import Path
+
+# Добавляем родительскую директорию в sys.path
+current_dir = Path(__file__).parent
+project_root = current_dir.parent
+sys.path.insert(0, str(project_root))
 
 try:
     from benchmarks.dashboard import main
@@ -17,4 +23,5 @@ except ImportError as e:
     print(
         "Убедитесь, что вы запускаете этот скрипт из директории Submodules/voproshalych"
     )
+    print("Или запустите напрямую: python benchmarks/dashboard.py")
     sys.exit(1)

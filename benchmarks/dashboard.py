@@ -9,7 +9,11 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
-import gradio as gr
+try:
+    import gradio as gr
+    GRADIO_AVAILABLE = True
+except ImportError:
+    GRADIO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +136,15 @@ class BenchmarkDashboard:
 
         Returns:
             Объект интерфейса Gradio
+
+        Raises:
+            ImportError: Если gradio не установлен
         """
+        if not GRADIO_AVAILABLE:
+            raise ImportError(
+                "Gradio не установлен. Установите его с помощью: pip install gradio"
+            )
+
         with gr.Blocks(title="Дашборд метрик бенчарков") as demo:
             gr.Markdown("# 📊 Дашборд метрик бенчарков Вопрошалыча")
 
@@ -369,6 +381,11 @@ class BenchmarkDashboard:
 
 def main():
     """Главная функция для запуска дашборда."""
+    if not GRADIO_AVAILABLE:
+        print("❌ Gradio не установлен!")
+        print("Установите его с помощью: pip install gradio")
+        return
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",

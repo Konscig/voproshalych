@@ -44,94 +44,24 @@ benchmarks/
 │   ├── database_dump_loader.py
 │   └── report_generator.py
 ├── reports/                     # Отчёты бенчарков
+│   └── summaries/                    # Саммари запусков
+│       ├── README.md              # Шаблон для саммари
+│       └── YYYY-MM-DD_*.md            # Саммари по датам
+└── SUMMARY.md                  # Шаблон для анализа саммари
+└── architecture_snapshots/        # Версии архитектуры
+│       └── README.md              # Правила версионирования
+│       └── 2026-02-13_Architecture_Audit.md
 └── generate_embeddings.py         # CLI: генерация эмбеддингов
+└── run_benchmarks.py               # CLI: запуск бенчарков
+└── load_database_dump.py         # CLI: загрузка дампа
+└── run_dashboard.py                # Скрипт для дашборда
+└── DASHBORAD.md                  # Документация по дашборду
+└── README.md                       # Документация бенчарков
+└── 01_Изоляция_проектных_файлов_в_директорию_бенчарков.md # Анализ изоляции
+└── architecture_snapshots/       # Версии архитектуры
 ```
-
-## Режимы работы
-
-### Режим 1: Без запуска проекта (CLI с готовыми датасетами)
-
-**Когда использовать:**
-- Если датасеты уже экспортированы (в `benchmarks/data/static/`)
-- Если не требуется генерация эмбеддингов
-- Если не нужно обновлять данные
-
-**План действий:**
-```bash
-cd Submodules/voproshalych
-
-# 1. Проверка покрытия эмбеддингов
-uv run python benchmarks/generate_embeddings.py --check-coverage
-
-# 2. Запуск бенчарков
-uv run python benchmarks/run_benchmarks.py --tier 1 --dataset golden_set
-uv run python benchmarks/run_benchmarks.py --tier 2 --dataset golden_set
-
-# 3. Просмотр результатов
-ls benchmarks/reports/*.md
-```
-
-**Преимущества:**
-- ✅ Не нужно запускать Docker
-- ✅ Работает с пустой локальной БД
-- ✅ Использует готовые датасеты
-
-**Ограничения:**
-- ❌ Датасеты не обновляются автоматически
-- ❌ Требуется ручная генерация эмбеддингов
-
-### Режим 2: С запуском проекта (Docker + автоматическая загрузка дампа)
-
-**Когда использовать:**
-- Если нужны свежие данные из продакшн БД
-- Если нужно протестировать с актуальной базой знаний
-- Если требуется интеграция с QA-сервисом
-
-**План действий:**
-```bash
-cd Submodules/voproshalych
-
-# 1. Подготовка дампа БД (если есть)
-# Сохранить дамп из серверной БД в benchmarks/data/dump/virtassist_backup.dump
-
-# 2. Создать файл .env с переменными окружения
-cp .env.example .env
-# Отредактировать POSTGRES_PASSWORD и другие параметры
-
-# 3. Загрузка дампа
-uv run python benchmarks/load_database_dump.py --drop-tables --dump benchmarks/data/dump/virtassist_backup.dump
-
-# 4. Запуск бенчарков
-uv run python benchmarks/run_benchmarks.py --tier 1 --dataset golden_set
-uv run python benchmarks/run_benchmarks.py --tier 2 --dataset golden_set
-```
-
-**Преимущества:**
-- ✅ Свежие данные из продакшн БД
-- ✅ Полная интеграция с QA-сервисом
-- ✅ Автоматическая загрузка дампа
-
-**Ограничения:**
-- ⚠️ Требуется запуск Docker (ресурсы)
-- ⚠️ Время на развёртывание контейнеров
-- ⚠️ Необходим доступ к серверной БД для дампа
 
 ## Использование
-
-### Интерактивный дашборд
-
-```bash
-# Запуск дашборда
-uv run streamlit run benchmarks/dashboard.py
-
-# Дашборд доступен на http://localhost:8501
-```
-
-**Возможности дашборда:**
-- Просмотр текущих результатов бенчарков
-- Сравнение разных запусков
-- Графики метрик по времени
-- Фильтрация по датасетам и типам бенчарков
 
 ### Генерация эмбеддингов
 
@@ -155,8 +85,22 @@ uv run python benchmarks/run_benchmarks.py --tier 1 --dataset low_quality
 
 # Tier 2 (поиск чанков)
 uv run python benchmarks/run_benchmarks.py --tier 2 --dataset golden_set
-uv run python benchmarks/run_benchmarks.py --tier 2 --dataset questions_with_url
+uv run python benchmarks/run_benchmarks.py --tier 2 --dataset low_quality
 ```
+
+### Интерактивный дашборд
+
+```bash
+# Запуск дашборда
+cd Submodules/voproshalych
+uv run python benchmarks/run_dashboard.py
+```
+
+**Возможности дашборда:**
+- Просмотр текущих результатов бенчарков
+- Сравнение разных запусков
+- Графики метрик по времени
+- Фильтрация по датасетам и типам бенчарков
 
 ### Загрузка дампа БД
 
@@ -218,4 +162,15 @@ uv run python benchmarks/load_database_dump.py --drop-tables --dump benchmarks/d
 ## Документация
 
 - **Архитектура:** `architecture_snapshots/2026-02-13_Architecture_Audit.md`
-- **Анализ структуры:** `/Users/masha/src/github.com/webmasha/voproshalych-personal/2026_benchmarks/01_Изоляция_проектных_файлов_в_директорию_бенчарков.md`
+- **Реализация:** `README.md`
+- **Анализ структуры:** `01_Изоляция_проектных_файлов_в_директорию_бенчарков.md`
+
+## Структура хранения отчётов
+
+```
+2026_benchmarks/reports/
+├── summaries/                    # Саммари запусков
+│   ├── README.md              # Шаблон для саммари
+│   └── YYYY-MM-DD_*.md            # Саммари по датам
+└── SUMMARY.md                  # Шаблон для анализа саммари
+```

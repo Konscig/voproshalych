@@ -19,6 +19,7 @@ dependencies = [
     "pgvector",
     "pytest",
     "alembic>=1.18.4",
+    "gradio>=6.5.1",
 ]
 
 [tool.black]

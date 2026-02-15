@@ -71,7 +71,7 @@ def main():
 
     engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
-    model_path = "nizamovtimur/multilingual-e5-large-wikiutmn"
+    model_path = Config.EMBEDDING_MODEL_PATH
     encoder = SentenceTransformer(model_path, device="cpu")
 
     generator = EmbeddingGenerator(engine, encoder)

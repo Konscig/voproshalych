@@ -12,6 +12,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 # В Docker используется .env.docker автоматически через docker compose
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=".env.docker")
+load_dotenv(dotenv_path=".env")
 
 
 def check_prerequisites(engine, judge: LLMJudge, dataset_path: str) -> bool:
@@ -268,7 +269,11 @@ def main():
 
     logger.info(f"Запуск бенчмарка Tier {args.tier} с {len(dataset)} записями")
 
-    results = run_benchmark(engine, encoder, judge, dataset, args.tier, args.top_k)
+    # Запускаем бенчмарк (judge=None для Tier 1)
+    judge_for_benchmark = None if args.tier == "1" else judge
+    results = run_benchmark(
+        engine, encoder, judge_for_benchmark, dataset, args.tier, args.top_k
+    )
 
     save_results(results, args.output_dir)
     print_results(results)

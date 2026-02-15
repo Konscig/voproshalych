@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Явно загружаем .env.docker для локального использования (для разработки)
 # В Docker используется .env.docker автоматически через docker compose
-load_dotenv(dotenv_path=".env.docker")
+load_dotenv(dotenv_path=".env")
 
 
 def generate_synthetic_dataset(

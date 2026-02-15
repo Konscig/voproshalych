@@ -13,6 +13,7 @@ Enterprise-grade система бенчмарков для комплексно
 - ✅ **Три уровня тестирования**: Retrieval, Generation, End-to-End
 - ✅ **Синтетический Golden Standard**: Автоматическая генерация тестовых данных
 - ✅ **Enterprise-grade**: Отказоустойчивость, retry логика, подробные отчёты
+- ✅ **Configuration Management**: Единый источник конфигурации для всех компонентов
 
 ## Структура проекта
 
@@ -36,6 +37,7 @@ benchmarks/
 ├── generate_embeddings.py            # Генерация эмбеддингов
 ├── generate_dataset.py               # Генерация синтетического датасета
 ├── run_comprehensive_benchmark.py     # Запуск всех уровней
+├── pyproject.toml                      # Управление зависимостями
 └── README.md                         # Этот файл
 ```
 
@@ -102,11 +104,114 @@ python benchmarks/generate_dataset.py --check-only
 
 Основной класс для выполнения трёх уровней тестирования.
 
+## Управление зависимостями
+
+### Файл конфигурации: `benchmarks/pyproject.toml`
+
+Для изолированного управления зависимостями модуля бенчмарков используется отдельный `pyproject.toml`.
+
+**Структура зависимостей:**
+```toml
+[project.dependencies]
+python-dotenv = "*"
+sqlalchemy = "*"
+psycopg2-binary = "*"
+pgvector = "*"
+sentence-transformers = "*"
+numpy = "*"
+
+[project.optional-dependencies]
+llm-judge = [
+    "openai>=1.0.0",
+]
+
+dashboard = [
+    "gradio>=6.5.1",
+]
+
+all = [
+    "voproshalych-benchmarks[llm-judge,dashboard]",
+]
+```
+
+**Преимущества:**
+- Изолированные зависимости для бенчарков
+- Опциональные группы для разных сценариев использования
+- Чистое разделение ответственности
+
+**Установка зависимостей:**
+```bash
+# Установить все зависимости
+cd benchmarks
+uv sync
+
+# Установить только базовые зависимости
+cd benchmarks
+uv sync --no-dev
+
+# Установить только LLM Judge
+cd benchmarks
+uv sync --all llm-judge
+
+# Установить включая дашборд
+cd benchmarks
+uv sync --all
+```
+
+## Конфигурация моделей
+
+### Единый источник конфигурации
+
+Все настройки моделей управляются через `qa/Config` класс, что исключает хардкод и обеспечивает согласованность.
+
+### Переменные окружения
+
+В `.env.example` добавлены следующие переменные:
+
+```bash
+# настройки API Mistral
+MISTRAL_API=
+MISTRAL_MODEL=
+
+# настройки модели эмбеддингов
+EMBEDDING_MODEL_PATH=saved_models/multilingual-e5-large-wikiutmn
+
+# настройки модели судьи
+JUDGE_API=
+JUDGE_MODEL=
+
+# настройки LLM-судьи для бенчмарков (DeepSeek/Qwen)
+BENCHMARKS_JUDGE_API_KEY=
+BENCHMARKS_JUDGE_BASE_URL=https://api.deepseek.com
+BENCHMARKS_JUDGE_MODEL=deepseek-chat
+```
+
+### Использование конфигурации в коде
+
+**В скриптах бенчарков:**
+```python
+from qa.config import Config
+
+# Генерация эмбеддингов
+model_path = Config.EMBEDDING_MODEL_PATH  # НЕ "nizamovtimur/..."
+encoder = SentenceTransformer(model_path, device="cpu")
+```
+
+**Преимущества:**
+- Отсутствие хардкода путей к моделям
+- Лёгкая смена модели без изменения кода
+- Единый источник правды для конфигурации
+
 ## Три уровня тестирования
 
 ### Tier 1: Retrieval Accuracy (Поиск)
 
-**Цель:** Находит ли векторный поиск правильный чанк?
+**Цель:** Находит ли векторный поиск через pgvector правильный чанк?
+
+**Техническая реализация:**
+- Используются **реальные SQL запросы** через SQLAlchemy
+- Оператор `cosine_distance` для векторного поиска в pgvector
+- Тестирование реальной производительности PostgreSQL
 
 **Метрики:**
 - `HitRate@1/5/10` - Доля релевантных результатов в топ-K
@@ -119,7 +224,12 @@ python benchmarks/run_comprehensive_benchmark.py --tier 1
 
 ### Tier 2: Generation Quality (Генерация)
 
-**Цель:** Может ли LLM ответить на вопрос с идеальным контекстом?
+**Цель:** Может ли Mistral LLM ответить на вопрос с идеальным контекстом?
+
+**Техническая реализация:**
+- Используется **реальная функция генерации** из `qa.main.get_answer()`
+- Вызовы к Mistral API через проектный промпт
+- Оценка ответов LLM-судьёй
 
 **Метрики:**
 - `avg_faithfulness` - Точность ответа (отсутствие галлюцинаций)
@@ -133,6 +243,11 @@ python benchmarks/run_comprehensive_benchmark.py --tier 2
 ### Tier 3: End-to-End (Полный пайплайн)
 
 **Цель:** Как работает система целиком (Поиск + Генерация)?
+
+**Техническая реализация:**
+- Реальный pgvector поиск (как в Tier 1)
+- Реальная Mistral генерация (как в Tier 2)
+- Полный пайплайн RAG-системы
 
 **Метрики:**
 - `avg_e2e_score` - Общая оценка качества (1-5)
@@ -200,7 +315,7 @@ python benchmarks/dashboard.py
 # Дашборд будет доступен по адресу: http://localhost:7860
 ```
 
-### Структура отчётов
+## Структура отчётов
 
 Отчёты бенчмарков хранятся в `benchmarks/reports/`:
 
@@ -260,9 +375,9 @@ python run_dashboard.py
 #### Tab 1: Последний запуск
 
 Карточки с метриками последнего запуска для всех уровней:
-- Tier 1: HitRate@1/5/10, MRR
-- Tier 2: Faithfulness, Answer Relevance
-- Tier 3: E2E Score, Semantic Similarity
+- Tier1: HitRate@1/5/10, MRR
+- Tier2: Faithfulness, Answer Relevance
+- Tier3: E2E Score, Semantic Similarity
 
 #### Tab 2: История
 
@@ -330,14 +445,7 @@ uv add --dev gradio
 | Answer Relevance | ≥5.0 | ≥4.0 | ≥3.0 | <3.0 |
 | **Tier 3** | | | | |
 | E2E Score | ≥4.0 | ≥3.0 | ≥2.0 | <2.0 |
-| Semantic Similarity | ≥0.8 | ≥0.6 | ≥0.4 | <0.4 |
-
-### Покрытие эмбеддингами
-
-| Метрика | Текущее | Цель | Статус |
-|---------|---------|------|--------|
-| QA с эмбеддингами | ~5% | ≥ 80% | ❌ Критично |
-| Чанки с эмбеддингами | ~0% | ≥ 80% | ❌ Критично |
+| Semantic Similarity | ≥0.8 | ≥0.6 | ≥0.4 | <0.4 | |
 
 ## CLI команды
 
@@ -416,6 +524,12 @@ python benchmarks/run_comprehensive_benchmark.py --tier all --skip-checks
            │
            ▼
 ┌─────────────────────┐
+│  Config (qa/config) │
+│  - EMBEDDING_MODEL_PATH│
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
 │ generate_embeddings│
 │   (QA + Chunks)     │
 └──────────┬──────────┘
@@ -446,16 +560,26 @@ python benchmarks/run_comprehensive_benchmark.py --tier all --skip-checks
 └─────────────────────┘
 ```
 
+### Операторы поиска
+
+**Консистентное использование:**
+- `qa/confluence_retrieving.py` → `cosine_distance()`
+- `benchmarks/models/rag_benchmark.py` → `cosine_distance()`
+- Все компоненты используют один и тот же оператор
+
+**Проверено:** ✅ Операторы синхронизированы
+
 ### Зависимости
 
-**Основные:**
+**Основные (pyproject.toml):**
 - `sentence-transformers` - Эмбеддинги
 - `sqlalchemy` - База данных
-- `openai` - LLM API клиент
-- `tenacity` - Retry логика
+- `openai` - LLM API клиент (опционально)
+- `tenacity` - Retry логика (опционально)
+- `gradio` - Дашборд (опционально)
 
-**Опциональные:**
-- `gradio` - Дашборд
+**Из основного проекта:**
+- Все остальные зависимости через `pyproject.toml` корневого проекта
 
 ## Troubleshooting
 
@@ -537,6 +661,6 @@ cat benchmarks/reports/rag_benchmark_*.md
 
 ---
 
-**Версия:** 3.0 (Enterprise Grade)
+**Версия:** 4.0 (Production Ready)
 **Последнее обновление:** 2026-02-15
 **Статус:** ✅ Работоспособно

@@ -53,7 +53,7 @@ benchmarks/
 - `evaluate_answer_relevance()` - Оценка релевантности (1-5)
 - `evaluate_e2e_quality()` - Оценка E2E качества (1-5)
 
-**Конфигурация (.env):**
+**Конфигурация (.env.docker):**
 ```bash
 BENCHMARKS_JUDGE_API_KEY=your_api_key
 BENCHMARKS_JUDGE_BASE_URL=https://api.deepseek.com
@@ -166,7 +166,7 @@ uv sync --all
 
 ### Переменные окружения
 
-В `.env.example` добавлены следующие переменные:
+В `.env.docker` добавлены следующие переменные:
 
 ```bash
 # настройки API Mistral
@@ -267,8 +267,8 @@ python benchmarks/run_comprehensive_benchmark.py --tier 3
 cd Submodules/voproshalych
 uv sync
 
-# Настройте .env
-cp .env.example .env
+# Настройте .env.docker
+cp .env.docker.example .env.docker
 # Отредактируйте BENCHMARKS_JUDGE_API_KEY
 ```
 
@@ -590,8 +590,8 @@ python benchmarks/run_comprehensive_benchmark.py --tier all --skip-checks
 # Установите переменную окружения
 export BENCHMARKS_JUDGE_API_KEY=your_api_key
 
-# Или добавьте в .env
-echo "BENCHMARKS_JUDGE_API_KEY=your_api_key" >> .env
+# Или добавьте в .env.docker
+echo "BENCHMARKS_JUDGE_API_KEY=your_api_key" >> .env.docker
 ```
 
 ### Проблема: Нет чанков с эмбеддингами

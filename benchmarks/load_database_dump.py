@@ -12,6 +12,7 @@ import os
 import subprocess
 from pathlib import Path
 from sys import path as sys_path
+from dotenv import load_dotenv
 
 project_root = Path(__file__).parent.parent
 sys_path.insert(0, str(project_root))
@@ -22,6 +23,8 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+load_dotenv(dotenv_path=".env.docker")
 
 
 def drop_tables(database_url: str) -> bool:

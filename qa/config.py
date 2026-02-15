@@ -2,7 +2,7 @@ from os import environ, path
 from dotenv import load_dotenv
 from time import sleep
 
-load_dotenv(dotenv_path=path.join(path.dirname(path.dirname(__file__)), ".env"))
+load_dotenv(dotenv_path=path.join(path.dirname(path.dirname(__file__)), ".env.docker"))
 
 
 class Config:

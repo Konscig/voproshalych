@@ -28,6 +28,12 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Явно загружаем .env.docker для локального использования (для разработки)
+# В Docker используется .env.docker автоматически через docker compose
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=".env.docker")
+
 
 def check_prerequisites(engine, judge: LLMJudge, dataset_path: str) -> bool:
     """Проверить предварительные условия для запуска бенчмарков.

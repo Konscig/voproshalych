@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
+ dependencies = [
     "python-dotenv",
     "aiohttp",
     "langchain",
@@ -20,6 +20,7 @@ dependencies = [
     "pytest",
     "alembic>=1.18.4",
     "gradio>=6.5.1",
+    "openai",
 ]
 
 [tool.black]

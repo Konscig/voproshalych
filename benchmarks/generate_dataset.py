@@ -11,6 +11,7 @@ import random
 import sys
 from datetime import datetime
 from pathlib import Path
+from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -24,6 +25,10 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# Явно загружаем .env.docker для локального использования (для разработки)
+# В Docker используется .env.docker автоматически через docker compose
+load_dotenv(dotenv_path=".env.docker")
 
 
 def generate_synthetic_dataset(

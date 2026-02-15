@@ -25,6 +25,12 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
+# Явно загружаем .env.docker для локального использования (для разработки)
+# В Docker используется .env.docker автоматически через docker compose
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=".env.docker")
+
 
 def main():
     """Главная функция CLI скрипта."""

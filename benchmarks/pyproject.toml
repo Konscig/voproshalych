@@ -16,18 +16,15 @@ psycopg2-binary = "*"
 pgvector = "*"
 sentence-transformers = "*"
 numpy = "*"
+openai = "*"
 
 [project.optional-dependencies]
-llm-judge = [
-    "openai>=1.0.0",
-]
-
 dashboard = [
     "gradio>=6.5.1",
 ]
 
 all = [
-    "voproshalych-benchmarks[llm-judge,dashboard]",
+    "voproshalych-benchmarks[dashboard]",
 ]
 
 [tool.black]

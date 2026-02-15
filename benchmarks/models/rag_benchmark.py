@@ -1,8 +1,8 @@
 """Модуль бенчмарков RAG-системы.
 
 Реализует три уровня тестирования:
-- Tier 1: Retrieval Accuracy (качество поиска)
-- Tier 2: Generation Quality (качество генерации)
+- Tier 1: Retrieval Accuracy (качество поиска через pgvector)
+- Tier 2: Generation Quality (качество генерации через Mistral)
 - Tier 3: End-to-End (полный пайплайн)
 """
 
@@ -28,6 +28,7 @@ class RAGBenchmark:
         engine: Движок базы данных SQLAlchemy
         encoder: Модель для генерации эмбеддингов
         judge: LLM-судья для оценки качества
+        get_answer_func: Реальная функция генерации ответов из проекта (Mistral)
     """
 
     def __init__(
@@ -35,6 +36,7 @@ class RAGBenchmark:
         engine: Engine,
         encoder: SentenceTransformer,
         judge: Optional[LLMJudge] = None,
+        get_answer_func: Optional[callable] = None,
     ):
         """Инициализировать бенчмарк.
 
@@ -42,10 +44,34 @@ class RAGBenchmark:
             engine: Движок базы данных
             encoder: Модель для генерации эмбеддингов
             judge: LLM-судья (создастся автоматически если None)
+            get_answer_func: Функция генерации ответов (по умолчанию из qa.main)
         """
         self.engine = engine
         self.encoder = encoder
         self.judge = judge or LLMJudge()
+
+        if get_answer_func is None:
+            from qa.main import get_answer
+
+            def _get_answer_wrapper(question: str, context: str) -> str:
+                """Обёртка для вызова реальной функции генерации ответов.
+
+                Args:
+                    question: Вопрос пользователя
+                    context: Контекст (текст чанка)
+
+                Returns:
+                    Сгенерированный ответ
+                """
+                return get_answer(
+                    dialog_history=[], knowledge_base=context, question=question
+                )
+
+            self.get_answer_func = _get_answer_wrapper
+        else:
+            self.get_answer_func = get_answer_func
+
+        logger.info("RAGBenchmark инициализирован с реальной функцией генерации")
 
     def run_tier_1(
         self,
@@ -54,7 +80,8 @@ class RAGBenchmark:
     ) -> Dict[str, float]:
         """Выполнить бенчмарк Tier 1 (Retrieval Accuracy).
 
-        Проверяет, находит ли векторный поиск правильный чанк.
+        Проверяет, находит ли векторный поиск через pgvector правильный чанк.
+        ИСПОЛЬЗУЮТСЯ РЕАЛЬНЫЕ SQL ЗАПРОСЫ К БАЗЕ ДАННЫХ.
 
         Args:
             dataset: Список записей с chunk_id, question
@@ -64,16 +91,7 @@ class RAGBenchmark:
             Словарь с метриками
         """
         logger.info(f"Запуск Tier 1 (Retrieval Accuracy) с {len(dataset)} записями")
-
-        with Session(self.engine) as session:
-            all_chunks = session.scalars(
-                select(Chunk).where(Chunk.embedding.isnot(None))
-            ).all()
-
-            chunk_embeddings = np.array(
-                [c.embedding for c in all_chunks if c.embedding is not None]
-            )
-            chunk_ids = [c.id for c in all_chunks]
+        logger.info("Используются реальные SQL запросы с pgvector")
 
         hit_rates = {k: 0 for k in [1, 5, 10]}
         reciprocal_ranks = []
@@ -84,20 +102,24 @@ class RAGBenchmark:
 
             question_embedding = self.encoder.encode(question)
 
-            similarities = np.dot(chunk_embeddings, question_embedding)
+            with Session(self.engine) as session:
+                top_chunks = session.scalars(
+                    select(Chunk)
+                    .order_by(Chunk.embedding.cosine_distance(question_embedding))
+                    .limit(top_k)
+                ).all()
 
-            top_indices = np.argsort(similarities)[::-1][:top_k]
-            top_chunk_ids = [chunk_ids[i] for i in top_indices]
+                top_chunk_ids = [c.id for c in top_chunks]
 
-            for k in [1, 5, 10]:
-                if k <= top_k and chunk_id in top_chunk_ids[:k]:
-                    hit_rates[k] += 1
+                for k in [1, 5, 10]:
+                    if k <= top_k and chunk_id in top_chunk_ids[:k]:
+                        hit_rates[k] += 1
 
-            if chunk_id in top_chunk_ids:
-                rank = top_chunk_ids.index(chunk_id) + 1
-                reciprocal_ranks.append(1.0 / rank)
-            else:
-                reciprocal_ranks.append(0.0)
+                if chunk_id in top_chunk_ids:
+                    rank = top_chunk_ids.index(chunk_id) + 1
+                    reciprocal_ranks.append(1.0 / rank)
+                else:
+                    reciprocal_ranks.append(0.0)
 
         total = len(dataset)
 
@@ -120,7 +142,8 @@ class RAGBenchmark:
     ) -> Dict[str, float]:
         """Выполнить бенчмарк Tier 2 (Generation Quality).
 
-        Оценивает качество генерации ответов на идеальном контексте.
+        Оценивает качество генерации ответов на идеальном контексте
+        С ИСПОЛЬЗОВАНИЕМ РЕАЛЬНОЙ ФУНКЦИИ ГЕНЕРАЦИИ (Mistral).
 
         Args:
             dataset: Список записей с question, ground_truth_answer, chunk_text
@@ -129,6 +152,7 @@ class RAGBenchmark:
             Словарь с метриками
         """
         logger.info(f"Запуск Tier 2 (Generation Quality) с {len(dataset)} записями")
+        logger.info("Используются реальные вызовы Mistral через qa.main.get_answer")
 
         faithfulness_scores = []
         relevance_scores = []
@@ -138,18 +162,30 @@ class RAGBenchmark:
             try:
                 question = item["question"]
                 context = item["chunk_text"]
-                ground_truth = item["ground_truth_answer"]
+
+                system_answer = self.get_answer_func(question, context)
+
+                if not system_answer:
+                    logger.warning(f"Пустой ответ для вопроса: {question[:50]}...")
+                    errors += 1
+                    continue
 
                 faithfulness = self.judge.evaluate_faithfulness(
-                    question=question, context=context, answer=ground_truth
+                    question=question, context=context, answer=system_answer
                 )
 
                 relevance = self.judge.evaluate_answer_relevance(
-                    question=question, answer=ground_truth
+                    question=question, answer=system_answer
                 )
 
                 faithfulness_scores.append(faithfulness)
                 relevance_scores.append(relevance)
+
+                logger.debug(
+                    f"Вопрос: {question[:50]}... | "
+                    f"Faithfulness: {faithfulness:.2f} | "
+                    f"Relevance: {relevance:.2f}"
+                )
 
             except Exception as e:
                 logger.error(f"Ошибка оценки для вопроса '{item['question']}': {e}")
@@ -178,7 +214,8 @@ class RAGBenchmark:
     ) -> Dict[str, float]:
         """Выполнить бенчмарк Tier 3 (End-to-End).
 
-        Оценивает полный пайплайн RAG-системы.
+        Оценивает полный пайплайн RAG-системы (поиск + генерация).
+        ИСПОЛЬЗУЮТСЯ РЕАЛЬНЫЕ SQL ЗАПРОСЫ + MISTRAL ГЕНЕРАЦИЯ.
 
         Args:
             dataset: Список записей с question, ground_truth_answer
@@ -187,17 +224,7 @@ class RAGBenchmark:
             Словарь с метриками
         """
         logger.info(f"Запуск Tier 3 (End-to-End) с {len(dataset)} записями")
-
-        with Session(self.engine) as session:
-            all_chunks = session.scalars(
-                select(Chunk).where(Chunk.embedding.isnot(None))
-            ).all()
-
-            chunk_embeddings = np.array(
-                [c.embedding for c in all_chunks if c.embedding is not None]
-            )
-            chunk_ids = [c.id for c in all_chunks]
-            chunk_texts = {c.id: c.text for c in all_chunks}
+        logger.info("Используются реальные SQL запросы + Mistral генерация")
 
         e2e_scores = []
         semantic_similarities = []
@@ -210,15 +237,26 @@ class RAGBenchmark:
 
                 question_embedding = self.encoder.encode(question)
 
-                similarities = np.dot(chunk_embeddings, question_embedding)
-                top_index = np.argmax(similarities)
-                retrieved_chunk_id = chunk_ids[top_index]
+                with Session(self.engine) as session:
+                    retrieved_chunk = session.scalars(
+                        select(Chunk)
+                        .order_by(Chunk.embedding.cosine_distance(question_embedding))
+                        .limit(1)
+                    ).first()
 
-                retrieved_context = chunk_texts.get(retrieved_chunk_id, "")
+                if not retrieved_chunk:
+                    logger.warning(f"Чанк не найден для вопроса: {question[:50]}...")
+                    errors += 1
+                    continue
 
-                system_answer = self.judge.generate_question_from_chunk(
-                    retrieved_context
-                )["ground_truth_answer"]
+                retrieved_context = retrieved_chunk.text
+
+                system_answer = self.get_answer_func(question, retrieved_context)
+
+                if not system_answer:
+                    logger.warning(f"Пустой ответ для вопроса: {question[:50]}...")
+                    errors += 1
+                    continue
 
                 e2e_score = self.judge.evaluate_e2e_quality(
                     question=question,
@@ -229,12 +267,22 @@ class RAGBenchmark:
                 system_embedding = self.encoder.encode(system_answer)
                 gt_embedding = self.encoder.encode(ground_truth)
 
-                cosine_sim = np.dot(system_embedding, gt_embedding) / (
-                    np.linalg.norm(system_embedding) * np.linalg.norm(gt_embedding)
-                )
+                norm_system = np.linalg.norm(system_embedding)
+                norm_gt = np.linalg.norm(gt_embedding)
+
+                if norm_system > 0 and norm_gt > 0:
+                    cosine_sim = np.dot(system_embedding, gt_embedding) / (
+                        norm_system * norm_gt
+                    )
+                else:
+                    cosine_sim = 0.0
 
                 e2e_scores.append(e2e_score)
                 semantic_similarities.append(cosine_sim)
+
+                logger.debug(
+                    f"E2E Score: {e2e_score:.2f} | Similarity: {cosine_sim:.4f}"
+                )
 
             except Exception as e:
                 logger.error(f"Ошибка E2E для вопроса '{item['question']}': {e}")

@@ -36,8 +36,8 @@ benchmarks/
 ├── dashboard.py                      # Интерактивный дашборд (Gradio)
 ├── generate_embeddings.py            # Генерация эмбеддингов
 ├── generate_dataset.py               # Генерация синтетического датасета
-├── run_comprehensive_benchmark.py     # Запуск всех уровней
-├── pyproject.toml                      # Управление зависимостями
+├── run_comprehensive_benchmark.py    # Запуск всех уровней
+├── pyproject.toml                    # Управление зависимостями
 └── README.md                         # Этот файл
 ```
 

@@ -25,7 +25,7 @@ class Config:
     JUDGE_API = environ.get("JUDGE_API")
 
     EMBEDDING_MODEL_PATH = environ.get(
-        "EMBEDDING_MODEL_PATH", "saved_models/multilingual-e5-large-wikiutmn"
+        "EMBEDDING_MODEL_PATH", "nizamovtimur/multilingual-e5-large-wikiutmn"
     )
     MISTRAL_SYSTEM_PROMPT = """Действуй как инновационный виртуальный помощник студента Тюменского государственного университета (ТюмГУ) Вопрошалыч.
 

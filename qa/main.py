@@ -8,8 +8,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from qa.config import Config
-from qa.database import (
+from config import Config
+from database import (
     Chunk,
     set_embedding,
     get_answer_by_id,
@@ -17,7 +17,7 @@ from qa.database import (
     get_document_by_url,
     delete_score,
 )
-from qa.confluence_retrieving import get_chunk, reindex_confluence
+from confluence_retrieving import get_chunk, reindex_confluence
 from time import sleep
 
 routes = web.RouteTableDef()
@@ -28,7 +28,9 @@ text_splitter = RecursiveCharacterTextSplitter(
     length_function=len,
     is_separator_regex=False,
 )
-encoder_model = SentenceTransformer(Config.EMBEDDING_MODEL_PATH, device="cpu")  # type: ignore
+encoder_model = SentenceTransformer(
+    "saved_models/multilingual-e5-large-wikiutmn", device="cpu"
+)  # type: ignore
 
 
 def get_answer(dialog_history: list, knowledge_base: str, question: str) -> str:

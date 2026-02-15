@@ -7,8 +7,8 @@ from langchain_text_splitters import TextSplitter
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
-from qa.config import Config
-from qa.database import Chunk
+from config import Config
+from database import Chunk
 
 
 def get_document_content_by_id(

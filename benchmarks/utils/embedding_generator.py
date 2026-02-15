@@ -1,6 +1,6 @@
 """Модуль для генерации эмбеддингов.
 
-Генерирует эмбеддинги для всех вопросов в базе данных.
+Генерирует эмбеддинги для вопросов и чанков в базе данных.
 Использует модель multilingual-e5-large-wikiutmn.
 """
 
@@ -9,16 +9,16 @@ from typing import Optional
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, select, update
 from sqlalchemy.orm import Session
 
-from qa.database import QuestionAnswer, set_embedding
+from qa.database import Chunk, QuestionAnswer, set_embedding
 
 logger = logging.getLogger(__name__)
 
 
 class EmbeddingGenerator:
-    """Генератор эмбеддингов для вопросов.
+    """Генератор эмбеддингов для вопросов и чанков.
 
     Attributes:
         engine: Движок базы данных SQLAlchemy
@@ -159,5 +159,101 @@ class EmbeddingGenerator:
                 )
 
         logger.info(f"Покрытие эмбеддингами: {stats['coverage_percent']:.2f}%")
+
+        return stats
+
+    def generate_for_chunks(self, overwrite: bool = False) -> dict:
+        """Генерировать эмбеддинги для всех чанков.
+
+        Args:
+            overwrite: Перезаписывать существующие эмбеддинги
+
+        Returns:
+            Словарь со статистикой генерации
+        """
+        stats = {
+            "total_chunks": 0,
+            "processed": 0,
+            "skipped": 0,
+            "errors": 0,
+        }
+
+        with Session(self.engine) as session:
+            chunks = session.scalars(select(Chunk)).all()
+            stats["total_chunks"] = len(chunks)
+
+            logger.info(f"Начинаем генерацию эмбеддингов для {len(chunks)} чанков")
+
+            for i, chunk in enumerate(chunks, 1):
+                try:
+                    if not overwrite and chunk.embedding is not None:
+                        stats["skipped"] += 1
+                        continue
+
+                    if chunk.text:
+                        embedding = self.encoder.encode(chunk.text)
+
+                        session.execute(
+                            update(Chunk)
+                            .where(Chunk.id == chunk.id)
+                            .values(embedding=embedding)
+                        )
+                        session.commit()
+
+                        stats["processed"] += 1
+
+                        if i % 100 == 0:
+                            logger.info(f"Обработано {i}/{len(chunks)} чанков")
+                    else:
+                        stats["skipped"] += 1
+                        logger.warning(
+                            f"Чанк {chunk.id} не содержит текста, пропускаем"
+                        )
+
+                except Exception as e:
+                    stats["errors"] += 1
+                    logger.error(
+                        f"Ошибка при генерации эмбеддинга для чанка {chunk.id}: {e}"
+                    )
+                    session.rollback()
+
+        logger.info(
+            f"Генерация для чанков завершена. "
+            f"Обработано: {stats['processed']}, "
+            f"Пропущено: {stats['skipped']}, "
+            f"Ошибок: {stats['errors']}"
+        )
+
+        return stats
+
+    def check_chunks_coverage(self) -> dict:
+        """Проверить покрытие эмбеддингами чанков.
+
+        Returns:
+            Словарь со статистикой покрытия чанков
+        """
+        stats = {
+            "total_chunks": 0,
+            "with_embeddings": 0,
+            "without_embeddings": 0,
+            "coverage_percent": 0.0,
+        }
+
+        with Session(self.engine) as session:
+            chunks = session.scalars(select(Chunk)).all()
+            stats["total_chunks"] = len(chunks)
+
+            for chunk in chunks:
+                if chunk.embedding is not None and len(chunk.embedding) > 0:
+                    stats["with_embeddings"] += 1
+                else:
+                    stats["without_embeddings"] += 1
+
+            if stats["total_chunks"] > 0:
+                stats["coverage_percent"] = (
+                    stats["with_embeddings"] / stats["total_chunks"] * 100
+                )
+
+        logger.info(f"Покрытие эмбеддингами чанков: {stats['coverage_percent']:.2f}%")
 
         return stats

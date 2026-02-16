@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import logging
 import os
+from pathlib import Path
 from typing import Dict, List, Optional
 
 try:
@@ -23,7 +25,7 @@ from qa.database import BenchmarkRun, create_engine, ensure_benchmark_runs_schem
 
 logger = logging.getLogger(__name__)
 
-APP_TITLE = "RAG Analytics Hub"
+APP_TITLE = "RAG Quality Assurance System"
 
 METRICS_BY_TIER = {
     "tier_1": ["mrr", "hit_rate@1", "hit_rate@5", "hit_rate@10"],
@@ -53,6 +55,19 @@ class RAGBenchmarkDashboard:
 
     def _load_runs(self) -> List[Dict]:
         """Загрузить запуски бенчмарков из таблицы benchmark_runs."""
+
+        def normalize_metrics(raw_metrics):
+            if isinstance(raw_metrics, dict):
+                return raw_metrics
+            if isinstance(raw_metrics, str):
+                try:
+                    parsed = json.loads(raw_metrics)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except json.JSONDecodeError:
+                    return {}
+            return {}
+
         with Session(self.engine) as session:
             records = session.scalars(
                 select(BenchmarkRun).order_by(BenchmarkRun.timestamp.asc())
@@ -73,9 +88,9 @@ class RAGBenchmarkDashboard:
                     "run_author": record.run_author or "unknown",
                     "dataset_file": record.dataset_file or "unknown",
                     "overall_status": record.overall_status,
-                    "tier_1": record.tier_1_metrics or {},
-                    "tier_2": record.tier_2_metrics or {},
-                    "tier_3": record.tier_3_metrics or {},
+                    "tier_1": normalize_metrics(record.tier_1_metrics),
+                    "tier_2": normalize_metrics(record.tier_2_metrics),
+                    "tier_3": normalize_metrics(record.tier_3_metrics),
                 }
             )
 
@@ -128,12 +143,14 @@ class RAGBenchmarkDashboard:
             rendered_values.append(rendered_values[0])
 
         for date, value in zip(rendered_dates, rendered_values):
-            rows.append({"Дата": date, "Значение": value, "Серия": series_name})
+            rows.append({"timestamp": date, "value": value, "series": series_name})
 
         baseline = QUALITY_BASELINES.get(metric)
         if baseline is not None:
             for date in rendered_dates:
-                rows.append({"Дата": date, "Значение": baseline, "Серия": "Baseline"})
+                rows.append(
+                    {"timestamp": date, "value": baseline, "series": "Baseline"}
+                )
 
         return rows
 
@@ -150,6 +167,17 @@ class RAGBenchmarkDashboard:
                 "Панель мониторинга качества Retrieval, Generation и end-to-end "
                 "ответов RAG-системы."
             )
+
+            with gr.Accordion("System Info", open=False):
+                gr.Markdown(
+                    "\n".join(
+                        [
+                            f"- Judge model: `{Config.JUDGE_MODEL or 'unknown'}`",
+                            f"- Generation model: `{os.getenv('GENERATION_MODEL') or Config.MISTRAL_MODEL or 'unknown'}`",
+                            f"- Embedding model: `{Config.EMBEDDING_MODEL_PATH}`",
+                        ]
+                    )
+                )
 
             with gr.Tab("Latest Run"):
                 self._create_latest_run_tab()
@@ -191,38 +219,52 @@ class RAGBenchmarkDashboard:
             )
         )
 
-        with gr.Row():
-            for tier_name in ("tier_1", "tier_2", "tier_3"):
-                with gr.Column():
-                    gr.Markdown(f"#### {tier_name.upper()}")
-                    metrics_data = []
-                    for metric_name, value in latest_run.get(tier_name, {}).items():
-                        if metric_name == "tier":
-                            continue
-                        if isinstance(value, (int, float)):
-                            baseline = QUALITY_BASELINES.get(metric_name)
-                            baseline_value = (
-                                "-" if baseline is None else f"{baseline:.4f}"
-                            )
-                            status = "n/a"
-                            if baseline is not None:
-                                status = (
-                                    "ok" if float(value) >= baseline else "below_target"
-                                )
-                            metrics_data.append(
-                                [
-                                    metric_name,
-                                    f"{float(value):.4f}",
-                                    baseline_value,
-                                    status,
-                                ]
-                            )
-                    gr.Dataframe(
-                        value=metrics_data,
-                        headers=["Metric", "Value", "Baseline", "Status"],
-                        interactive=False,
-                        wrap=True,
-                    )
+        summary_rows = []
+        summary_rows.append(
+            {
+                "Tier": "Tier 1 (Retrieval)",
+                "HitRate@5": f"{float(latest_run.get('tier_1', {}).get('hit_rate@5', 0.0)):.4f}",
+                "MRR": f"{float(latest_run.get('tier_1', {}).get('mrr', 0.0)):.4f}",
+                "Faithfulness": "-",
+                "Relevance": "-",
+                "E2E Score": "-",
+            }
+        )
+        summary_rows.append(
+            {
+                "Tier": "Tier 2 (Generation)",
+                "HitRate@5": "-",
+                "MRR": "-",
+                "Faithfulness": f"{float(latest_run.get('tier_2', {}).get('avg_faithfulness', 0.0)):.4f}",
+                "Relevance": f"{float(latest_run.get('tier_2', {}).get('avg_answer_relevance', 0.0)):.4f}",
+                "E2E Score": "-",
+            }
+        )
+        summary_rows.append(
+            {
+                "Tier": "Tier 3 (E2E)",
+                "HitRate@5": "-",
+                "MRR": "-",
+                "Faithfulness": "-",
+                "Relevance": "-",
+                "E2E Score": f"{float(latest_run.get('tier_3', {}).get('avg_e2e_score', 0.0)):.4f}",
+            }
+        )
+
+        gr.Dataframe(
+            value=summary_rows,
+            headers=[
+                "Tier",
+                "HitRate@5",
+                "MRR",
+                "Faithfulness",
+                "Relevance",
+                "E2E Score",
+            ],
+            label="Latest Metrics Summary",
+            interactive=False,
+            wrap=True,
+        )
 
     def _create_history_tab(self):
         gr.Markdown("### Historical trend for selected metric")
@@ -239,10 +281,17 @@ class RAGBenchmarkDashboard:
                 label="Metric",
             )
 
+        initial_history = pd.DataFrame(
+            self._build_series_rows(
+                *self.get_metric_history("tier_1", "mrr"), "mrr", "mrr"
+            )
+        )
+
         plot = gr.LinePlot(
-            x="Дата",
-            y="Значение",
-            color="Серия",
+            value=initial_history,
+            x="timestamp",
+            y="value",
+            color="series",
             title="Metric vs Baseline",
             x_title="Run",
             y_title="Value",
@@ -260,7 +309,7 @@ class RAGBenchmarkDashboard:
         def update_plot(tier: str, metric: str):
             dates, values = self.get_metric_history(tier, metric)
             if not dates:
-                return pd.DataFrame(columns=["Дата", "Значение", "Серия"])
+                return pd.DataFrame(columns=["timestamp", "value", "series"])
             rows = self._build_series_rows(dates, values, metric, metric)
             return pd.DataFrame(rows)
 
@@ -280,10 +329,6 @@ class RAGBenchmarkDashboard:
             outputs=[plot],
         )
 
-        demo_metric = metric_dropdown.value or "mrr"
-        initial_data = update_plot("tier_1", demo_metric)
-        plot.value = initial_data
-
     def _create_comparison_tab(self):
         gr.Markdown("### Compare tiers by metric")
 
@@ -293,10 +338,23 @@ class RAGBenchmarkDashboard:
             label="Metric",
         )
 
+        initial_comparison_rows: List[Dict[str, str | float]] = []
+        for tier_name, label in {
+            "tier_1": "Tier 1",
+            "tier_2": "Tier 2",
+            "tier_3": "Tier 3",
+        }.items():
+            dates, values = self.get_metric_history(tier_name, "mrr")
+            if dates:
+                initial_comparison_rows.extend(
+                    self._build_series_rows(dates, values, "mrr", label)
+                )
+
         plot = gr.LinePlot(
-            x="Дата",
-            y="Значение",
-            color="Серия",
+            value=pd.DataFrame(initial_comparison_rows),
+            x="timestamp",
+            y="value",
+            color="series",
             title="Tier comparison",
             x_title="Run",
             y_title="Value",
@@ -326,7 +384,7 @@ class RAGBenchmarkDashboard:
                 )
 
             if not all_rows:
-                return pd.DataFrame(columns=["Дата", "Значение", "Серия"])
+                return pd.DataFrame(columns=["timestamp", "value", "series"])
 
             baseline = QUALITY_BASELINES.get(metric)
             if baseline is not None and longest_dates:
@@ -338,9 +396,9 @@ class RAGBenchmarkDashboard:
                     ]
                 all_rows.extend(
                     {
-                        "Дата": date,
-                        "Значение": baseline,
-                        "Серия": "Baseline",
+                        "timestamp": date,
+                        "value": baseline,
+                        "series": "Baseline",
                     }
                     for date in baseline_dates
                 )
@@ -348,7 +406,7 @@ class RAGBenchmarkDashboard:
             deduped = []
             seen = set()
             for row in all_rows:
-                key = (row["Дата"], row["Значение"], row["Серия"])
+                key = (row["timestamp"], row["value"], row["series"])
                 if key in seen:
                     continue
                 seen.add(key)
@@ -361,24 +419,21 @@ class RAGBenchmarkDashboard:
             outputs=[plot],
         )
 
-        plot.value = update_comparison_plot("mrr")
-
     def _create_all_runs_tab(self):
         all_runs = []
         for run in reversed(self.runs):
+            tier_1 = run.get("tier_1", {})
+            tier_2 = run.get("tier_2", {})
+            tier_3 = run.get("tier_3", {})
             all_runs.append(
                 {
                     "Timestamp": run["timestamp_readable"],
-                    "Branch": run["git_branch"],
-                    "Commit": run["git_commit_hash"],
-                    "Author": run["run_author"],
-                    "Dataset": run["dataset_file"],
-                    "Status": run["overall_status"],
-                    "Tier1 MRR": run.get("tier_1", {}).get("mrr", "N/A"),
-                    "Tier2 Faithfulness": run.get("tier_2", {}).get(
-                        "avg_faithfulness", "N/A"
-                    ),
-                    "Tier3 E2E": run.get("tier_3", {}).get("avg_e2e_score", "N/A"),
+                    "Branch / Commit": f"{run['git_branch']} / {run['git_commit_hash']}",
+                    "T1: HitRate@5": f"{float(tier_1.get('hit_rate@5', 0.0)):.4f}",
+                    "T1: MRR": f"{float(tier_1.get('mrr', 0.0)):.4f}",
+                    "T2: Faithfulness": f"{float(tier_2.get('avg_faithfulness', 0.0)):.4f}",
+                    "T2: Relevance": f"{float(tier_2.get('avg_answer_relevance', 0.0)):.4f}",
+                    "T3: E2E Score": f"{float(tier_3.get('avg_e2e_score', 0.0)):.4f}",
                 }
             )
 
@@ -386,14 +441,12 @@ class RAGBenchmarkDashboard:
             value=all_runs,
             headers=[
                 "Timestamp",
-                "Branch",
-                "Commit",
-                "Author",
-                "Dataset",
-                "Status",
-                "Tier1 MRR",
-                "Tier2 Faithfulness",
-                "Tier3 E2E",
+                "Branch / Commit",
+                "T1: HitRate@5",
+                "T1: MRR",
+                "T2: Faithfulness",
+                "T2: Relevance",
+                "T3: E2E Score",
             ],
             interactive=False,
             wrap=True,
@@ -430,16 +483,20 @@ class RAGBenchmarkDashboard:
             run_index = run_choices.index(selected)
             run = ordered_runs[run_index]
             dataset_file = run.get("dataset_file") or ""
+            benchmark_dir = Path(__file__).resolve().parent
+            project_root = benchmark_dir.parent
             candidate_paths = [
-                os.path.join("data", dataset_file),
-                os.path.join("benchmarks", "data", dataset_file),
+                benchmark_dir / "data" / dataset_file,
+                project_root / "benchmarks" / "data" / dataset_file,
+                Path.cwd() / "data" / dataset_file,
+                Path.cwd() / "benchmarks" / "data" / dataset_file,
             ]
             dataset_path = next(
-                (path for path in candidate_paths if os.path.exists(path)),
+                (path for path in candidate_paths if path.exists()),
                 candidate_paths[0],
             )
 
-            if not os.path.exists(dataset_path):
+            if not dataset_path.exists():
                 return (
                     f"**Dataset:** `{dataset_file}`\n\nФайл не найден по пути `{dataset_path}`",
                     [],
@@ -487,29 +544,38 @@ class RAGBenchmarkDashboard:
     def _create_reference_tab(self):
         gr.Markdown(
             """
-### Что оценивают уровни
+### Формальная постановка задачи
 
-- **Tier 1 (Retrieval):** насколько хорошо поиск находит правильные документы.
-- **Tier 2 (Generation):** насколько ответ точен и соответствует найденному контексту.
-- **Tier 3 (E2E):** итоговое качество пользовательского ответа целиком.
+Система оценивает качество RAG в трёх уровнях:
+- **Tier 1 (Retrieval):** качество ранжирования документов-кандидатов.
+- **Tier 2 (Generation):** качество генерации ответа при фиксированном контексте.
+- **Tier 3 (E2E):** итоговое качество ответа в полном pipeline retrieval+generation.
 
-### Как читать метрики
+### Определения метрик
 
-- **MRR**: средняя позиция первого релевантного ответа. `1.0` означает, что правильный
-  ответ почти всегда на первом месте.
-- **Faithfulness 4.5 / 5**: в среднем ответы очень близки к фактам из контекста,
-  риск галлюцинаций невысок.
-- **Answer Relevance**: насколько ответ решает реальный вопрос пользователя.
-- **E2E Score**: интегральная экспертная оценка качества ответа.
+- **Precision@k**: доля релевантных документов в top-k.
+- **Recall@k**: доля найденных релевантных документов среди всех релевантных.
+- **MRR (Mean Reciprocal Rank):**
+  `MRR = (1 / |Q|) * Σ_q (1 / rank_q)` , где `rank_q` — позиция первого релевантного
+  документа для запроса `q`.
+- **Faithfulness (1..5):** аппроксимация условной вероятности того, что факты в ответе
+  выводимы из предоставленного контекста без галлюцинаций.
 
-### Пороговые значения качества
+### Методология LLM-as-a-Judge
 
-- **Tier 1**: `MRR >= 0.80`, `Hit@5 >= 0.90`, `Hit@10 >= 0.95`
-- **Tier 2**: `Faithfulness >= 4.5`, `Answer Relevance >= 4.2`
-- **Tier 3**: `E2E >= 4.2`, `Semantic Similarity >= 0.85`
+Для Tier 2 и Tier 3 используется схема **LLM-as-a-Judge**:
+1. Формируется вход: `question`, `context`, `system_answer`, `ground_truth`.
+2. Судья выставляет числовую оценку по фиксированным рубрикам.
+3. На уровне отчёта агрегируются средние значения и сравниваются с baseline.
 
-Если метрика ниже baseline, это сигнал к аудиту индексации, retrieval-ранжирования,
-prompt-стратегии и post-processing.
+### Интерпретация baseline
+
+- Tier 1: `MRR >= 0.80`, `Hit@5 >= 0.90`, `Hit@10 >= 0.95`
+- Tier 2: `Faithfulness >= 4.5`, `Relevance >= 4.2`
+- Tier 3: `E2E >= 4.2`, `Semantic Similarity >= 0.85`
+
+Значения ниже baseline указывают на деградацию качества retrieval, prompt-политики,
+или согласованности генерации с контекстом.
             """
         )
 

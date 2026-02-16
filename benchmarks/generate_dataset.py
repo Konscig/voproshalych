@@ -7,9 +7,9 @@ import argparse
 import json
 import logging
 import os
-import random
 import sys
 from datetime import datetime
+from difflib import SequenceMatcher
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -42,50 +42,78 @@ def generate_synthetic_dataset(
         output_path: Путь для сохранения датасета
         skip_existing: Пропускать чанки, для которых уже есть вопросы
     """
-    from sqlalchemy import select
+    from sqlalchemy import func, select
     from sqlalchemy.orm import Session
 
     judge = LLMJudge()
 
+    def normalize_question(question: str) -> str:
+        return " ".join(question.lower().split())
+
+    def is_too_similar(candidate: str, existing: set[str]) -> bool:
+        normalized_candidate = normalize_question(candidate)
+        if normalized_candidate in existing:
+            return True
+        for existing_question in existing:
+            if (
+                SequenceMatcher(None, normalized_candidate, existing_question).ratio()
+                >= 0.92
+            ):
+                return True
+        return False
+
     with Session(engine) as session:
-        all_chunks = session.scalars(select(Chunk)).all()
-        logger.info(f"Всего чанков в БД: {len(all_chunks)}")
+        total_chunks = session.scalars(select(func.count(Chunk.id))).one()
+        logger.info(f"Всего чанков в БД: {total_chunks}")
 
-        chunks_with_embeddings = [
-            c for c in all_chunks if c.embedding is not None and len(c.embedding) > 0
-        ]
-        logger.info(f"Чанков с эмбеддингами: {len(chunks_with_embeddings)}")
+        available_chunks = session.scalars(
+            select(Chunk)
+            .where(Chunk.embedding.isnot(None))
+            .where(Chunk.text.isnot(None))
+            .order_by(func.random())
+        ).all()
 
-        if len(chunks_with_embeddings) < num_samples:
+        logger.info(f"Чанков с эмбеддингами: {len(available_chunks)}")
+
+        if len(available_chunks) < num_samples:
             logger.warning(
                 f"Недостаточно чанков с эмбеддингами: "
-                f"требуется {num_samples}, доступно {len(chunks_with_embeddings)}"
+                f"требуется {num_samples}, доступно {len(available_chunks)}"
             )
-            num_samples = len(chunks_with_embeddings)
-
-        random.seed(42)
-        selected_chunks = random.sample(chunks_with_embeddings, num_samples)
+            num_samples = len(available_chunks)
 
         dataset = []
+        seen_questions: set[str] = set()
 
-        for i, chunk in enumerate(selected_chunks, 1):
+        for i, chunk in enumerate(available_chunks, 1):
+            if len(dataset) >= num_samples:
+                break
             try:
                 result = judge.generate_question_from_chunk(chunk.text)
+                question = result["question"].strip()
+
+                if is_too_similar(question, seen_questions):
+                    logger.info(
+                        "Дубликат/слишком похожий вопрос, пропускаем: %s", question
+                    )
+                    continue
+
+                seen_questions.add(normalize_question(question))
 
                 dataset_item = {
                     "chunk_id": chunk.id,
                     "chunk_text": chunk.text[:500],
-                    "question": result["question"],
+                    "question": question,
                     "ground_truth_answer": result["ground_truth_answer"],
                     "confluence_url": chunk.confluence_url,
                 }
 
                 dataset.append(dataset_item)
 
-                logger.info(f"[{i}/{num_samples}] Сгенерировано: {result['question']}")
+                logger.info(f"[{len(dataset)}/{num_samples}] Сгенерировано: {question}")
 
-                if i % 10 == 0:
-                    logger.info(f"Прогресс: {i}/{num_samples}")
+                if len(dataset) % 10 == 0:
+                    logger.info(f"Прогресс: {len(dataset)}/{num_samples}")
 
             except Exception as e:
                 logger.error(f"Ошибка для чанка {chunk.id}: {e}")
@@ -109,15 +137,15 @@ def main():
     parser.add_argument(
         "--num-samples",
         type=int,
-        default=50,
-        help="Количество сэмплов для генерации (default: 50)",
+        default=100,
+        help="Количество сэмплов для генерации (default: 100)",
     )
 
     parser.add_argument(
         "--output",
         type=str,
-        default="benchmarks/data/golden_dataset_synthetic.json",
-        help="Путь для сохранения датасета",
+        default=None,
+        help="Путь для сохранения датасета (по умолчанию versioned dataset_YYYYMMDD_HHMMSS.json)",
     )
 
     parser.add_argument(
@@ -127,23 +155,25 @@ def main():
     )
 
     args = parser.parse_args()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = args.output or f"benchmarks/data/dataset_{timestamp}.json"
 
     engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
     if args.check_only:
-        if os.path.exists(args.output):
-            with open(args.output, "r", encoding="utf-8") as f:
+        if os.path.exists(output_path):
+            with open(output_path, "r", encoding="utf-8") as f:
                 dataset = json.load(f)
-            print(f"Датасет существует: {args.output}")
+            print(f"Датасет существует: {output_path}")
             print(f"Количество записей: {len(dataset)}")
             if dataset:
                 print(f"\nПример записи:")
                 print(json.dumps(dataset[0], ensure_ascii=False, indent=2))
         else:
-            print(f"Датасет не найден: {args.output}")
+            print(f"Датасет не найден: {output_path}")
         return
 
-    generate_synthetic_dataset(engine, args.num_samples, args.output)
+    generate_synthetic_dataset(engine, args.num_samples, output_path)
 
 
 if __name__ == "__main__":

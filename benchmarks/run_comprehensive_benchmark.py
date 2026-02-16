@@ -2,10 +2,11 @@
 
 Использование:
     python run_comprehensive_benchmark.py --tier all --limit 50
-    python run_comprehensive_benchmark.py --tier 1 --dataset golden_dataset_synthetic.json
+    python run_comprehensive_benchmark.py --tier 1 --dataset benchmarks/data/dataset_20260216_143000.json
 """
 
 import argparse
+import glob
 import json
 import logging
 import os
@@ -19,9 +20,15 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from qa.config import Config
-from qa.database import Chunk, create_engine
+from qa.database import (
+    BenchmarkRun,
+    Chunk,
+    create_engine,
+    ensure_benchmark_runs_schema,
+)
 from benchmarks.models.rag_benchmark import RAGBenchmark
 from benchmarks.utils.llm_judge import LLMJudge
+from benchmarks.utils.report_generator import ReportGenerator
 from sentence_transformers import SentenceTransformer
 
 logging.basicConfig(
@@ -104,6 +111,23 @@ def load_dataset(dataset_path: str, limit: Optional[int] = None) -> list:
     return dataset
 
 
+def resolve_dataset_path(dataset_path: str) -> str:
+    """Разрешить путь к датасету, учитывая versioned файлы по умолчанию."""
+    if dataset_path != "benchmarks/data/golden_dataset_synthetic.json":
+        return dataset_path
+
+    if os.path.exists(dataset_path):
+        return dataset_path
+
+    candidates = sorted(glob.glob("benchmarks/data/dataset_*.json"))
+    if candidates:
+        latest = candidates[-1]
+        logger.info("Используем последний versioned датасет: %s", latest)
+        return latest
+
+    return dataset_path
+
+
 def run_benchmark(
     engine,
     encoder: SentenceTransformer,
@@ -139,12 +163,14 @@ def run_benchmark(
         raise ValueError(f"Неизвестный уровень бенчмарка: {tier}")
 
 
-def save_results(results: dict, output_dir: str):
+def save_results(results: dict, output_dir: str, dataset_name: str, engine):
     """Сохранить результаты бенчмарка.
 
     Args:
         results: Результаты бенчмарка
         output_dir: Директория для сохранения
+        dataset_name: Имя датасета
+        engine: Движок базы данных
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -162,33 +188,53 @@ def save_results(results: dict, output_dir: str):
 
     normalized_results: dict = to_builtin(results)
 
+    report_generator = ReportGenerator()
+    run_metadata = report_generator.get_run_metadata()
+    overall_status = report_generator.evaluate_overall_status(normalized_results)
+
+    artifact_payload = dict(normalized_results)
+    artifact_payload["run_metadata"] = run_metadata
+    artifact_payload["overall_status"] = overall_status
+    artifact_payload["dataset_file"] = os.path.basename(dataset_name)
+
     json_path = os.path.join(output_dir, f"rag_benchmark_{timestamp}.json")
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(normalized_results, f, ensure_ascii=False, indent=2)
+        json.dump(artifact_payload, f, ensure_ascii=False, indent=2)
 
     markdown_path = os.path.join(output_dir, f"rag_benchmark_{timestamp}.md")
+    markdown_report = report_generator.generate_benchmark_report(
+        normalized_results,
+        dataset_name=dataset_name,
+        metadata=run_metadata,
+    )
+
     with open(markdown_path, "w", encoding="utf-8") as f:
-        f.write("# RAG Benchmark Report\n\n")
-        f.write(f"**Время:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        f.write(markdown_report)
 
-        for tier_name, tier_results in normalized_results.items():
-            f.write(f"## {tier_name.upper()}\n\n")
-            f.write("| Метрика | Значение |\n")
-            f.write("|---------|----------|\n")
+    ensure_benchmark_runs_schema(engine)
 
-            for key, value in tier_results.items():
-                if key == "tier":
-                    continue
-                if isinstance(value, float):
-                    f.write(f"| {key} | {value:.4f} |\n")
-                else:
-                    f.write(f"| {key} | {value} |\n")
+    from sqlalchemy.orm import Session
 
-            f.write("\n")
+    with Session(engine) as session:
+        session.add(
+            BenchmarkRun(
+                timestamp=datetime.now(),
+                git_branch=run_metadata["git_branch"],
+                git_commit_hash=run_metadata["git_commit_hash"],
+                run_author=run_metadata["run_author"],
+                dataset_file=os.path.basename(dataset_name),
+                tier_1_metrics=normalized_results.get("tier_1"),
+                tier_2_metrics=normalized_results.get("tier_2"),
+                tier_3_metrics=normalized_results.get("tier_3"),
+                overall_status=overall_status,
+            )
+        )
+        session.commit()
 
     logger.info(f"✅ Результаты сохранены:")
     logger.info(f"   JSON: {json_path}")
     logger.info(f"   Markdown: {markdown_path}")
+    logger.info("   DB table: benchmark_runs")
 
 
 def print_results(results: dict):
@@ -236,7 +282,10 @@ def main():
         "--dataset",
         type=str,
         default="benchmarks/data/golden_dataset_synthetic.json",
-        help="Путь к файлу датасета",
+        help=(
+            "Путь к файлу датасета. Если используется путь по умолчанию и файл "
+            "не найден, будет выбран последний benchmarks/data/dataset_*.json"
+        ),
     )
 
     parser.add_argument(
@@ -275,17 +324,19 @@ def main():
 
     judge = LLMJudge()
 
+    resolved_dataset = resolve_dataset_path(args.dataset)
+
     if not args.skip_checks:
-        if not check_prerequisites(engine, judge, args.dataset):
+        if not check_prerequisites(engine, judge, resolved_dataset):
             sys.exit(1)
 
-    dataset = load_dataset(args.dataset, args.limit)
+    dataset = load_dataset(resolved_dataset, args.limit)
 
     logger.info(f"Запуск бенчмарка Tier {args.tier} с {len(dataset)} записями")
 
     results = run_benchmark(engine, encoder, judge, dataset, args.tier, args.top_k)
 
-    save_results(results, args.output_dir)
+    save_results(results, args.output_dir, dataset_name=resolved_dataset, engine=engine)
     print_results(results)
 
     logger.info("✅ Бенчмарк успешно завершён")

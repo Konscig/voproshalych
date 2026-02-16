@@ -4,6 +4,7 @@ from typing import Optional, List, TypedDict
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import (
     Text,
+    JSON,
     Column,
     DateTime,
     create_engine,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Engine,
     select,
     update,
+    text,
 )
 from sqlalchemy.orm import (
     Mapped,
@@ -108,6 +110,50 @@ class QuestionAnswer(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class BenchmarkRun(Base):
+    """Результат запуска бенчмарка RAG-системы.
+
+    Args:
+        timestamp (datetime): время запуска бенчмарка
+        git_branch (str | None): ветка git, на которой запущен бенчмарк
+        git_commit_hash (str | None): short hash коммита
+        run_author (str | None): автор запуска
+        tier_1_metrics (dict | None): метрики уровня Retrieval
+        tier_2_metrics (dict | None): метрики уровня Generation
+        tier_3_metrics (dict | None): метрики end-to-end уровня
+        overall_status (str): итоговый статус качества
+        created_at (datetime): время создания записи
+        updated_at (datetime): время обновления записи
+    """
+
+    __tablename__ = "benchmark_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False)
+    git_branch: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    git_commit_hash: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    run_author: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    dataset_file: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    tier_1_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    tier_2_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    tier_3_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    overall_status: Mapped[str] = mapped_column(Text(), nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+def ensure_benchmark_runs_schema(engine: Engine) -> None:
+    """Создать таблицу benchmark_runs и недостающие колонки при необходимости."""
+    Base.metadata.create_all(bind=engine, tables=[BenchmarkRun.__table__])
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs ADD COLUMN IF NOT EXISTS dataset_file TEXT"
+            )
+        )
 
 
 def get_answer_by_id(engine: Engine, question_answer_id: int) -> str:

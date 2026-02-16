@@ -164,15 +164,25 @@ class LLMJudge:
         Raises:
             RuntimeError: Если не удалось сгенерировать вопрос
         """
-        prompt = """Представь, что ты пользователь чат-бота поддержки. 
-Сформулируй вопрос, на который этот текст дает точный ответ. 
-Также напиши идеальный ответ на этот вопрос.
+        prompt = """Сгенерируй вопрос студента по этому тексту.
+
+Требования к вопросу:
+1) Не используй официальный канцелярский язык регламентов.
+2) Представь, что студент пишет в чат поддержки на бегу или в стрессе.
+3) Добавляй разговорные формулировки; иногда допускай сленг, редко — лёгкую опечатку.
+4) Вопрос должен оставаться понятным и отвечаемым по данному тексту.
+5) Вариативность обязательна: вопросы должны отличаться по стилю, а не быть шаблонными.
+
+Пример стиля:
+- вместо "Каков регламент сдачи?" используй "А когда вообще сдавать надо, есть инфа?"
+
+Также напиши идеальный краткий ответ строго по тексту чанка.
 
 Текст чанка:
 {chunk_text}
 
-Ответ в формате JSON:
-{{"question": "твой вопрос", "ground_truth_answer": "твой идеальный ответ"}}
+Верни только JSON:
+{{"question": "живой вопрос студента", "ground_truth_answer": "краткий точный ответ"}}
 """
 
         try:
@@ -181,7 +191,11 @@ class LLMJudge:
                 messages=[
                     {
                         "role": "system",
-                        "content": "Ты эксперт по формулировке вопросов и ответов.",
+                        "content": (
+                            "Ты формируешь realistic synthetic dataset для RAG-бенчмарков. "
+                            "Генерируй живые студенческие вопросы с разговорным стилем, "
+                            "иногда со сленгом/шумом, без формального тона."
+                        ),
                     },
                     {"role": "user", "content": prompt.format(chunk_text=chunk_text)},
                 ],
@@ -189,7 +203,7 @@ class LLMJudge:
                 max_tokens=500,
             )
 
-            content = response.choices[0].message.content.strip()
+            content = (response.choices[0].message.content or "").strip()
             result = _parse_json_payload(content)
 
             if "question" not in result or "ground_truth_answer" not in result:
@@ -260,7 +274,7 @@ class LLMJudge:
                 max_tokens=10,
             )
 
-            score_str = response.choices[0].message.content.strip()
+            score_str = (response.choices[0].message.content or "").strip()
 
             try:
                 score = float(score_str)
@@ -330,7 +344,7 @@ class LLMJudge:
                 max_tokens=10,
             )
 
-            score_str = response.choices[0].message.content.strip()
+            score_str = (response.choices[0].message.content or "").strip()
 
             try:
                 score = float(score_str)
@@ -403,7 +417,7 @@ class LLMJudge:
                 max_tokens=10,
             )
 
-            score_str = response.choices[0].message.content.strip()
+            score_str = (response.choices[0].message.content or "").strip()
 
             try:
                 score = float(score_str)

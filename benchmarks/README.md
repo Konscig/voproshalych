@@ -20,7 +20,7 @@ Enterprise-grade система бенчмарков для комплексно
 ```
 benchmarks/
 ├── data/
-│   └── golden_dataset_synthetic.json  # Золотой стандарт (генерируется)
+│   └── dataset_YYYYMMDD_HHMMSS.json   # Версионированный золотой стандарт
 │
 ├── models/
 │   └── rag_benchmark.py              # Основной класс бенчмарка
@@ -83,7 +83,7 @@ python benchmarks/generate_embeddings.py --check-coverage
 **Запуск:**
 ```bash
 # Генерация 50 вопросов
-python benchmarks/generate_dataset.py --num-samples 50
+python benchmarks/generate_dataset.py --num-samples 100
 
 # Проверка существующего датасета
 python benchmarks/generate_dataset.py --check-only
@@ -315,13 +315,24 @@ docker run --rm \
 ```bash
 cd Submodules/voproshalych
 
-# Сгенерируйте золотой стандарт (50 вопросов)
+# Сгенерируйте золотой стандарт (100 вопросов)
 docker run --rm \
   --network voproshalych_chatbot-conn \
   -v "$PWD:/workspace" \
   -w /workspace \
   virtassist/qa:latest \
-  python benchmarks/generate_dataset.py --num-samples 50
+  python benchmarks/generate_dataset.py --num-samples 100
+
+# Результат будет сохранен как versioned файл:
+# benchmarks/data/dataset_YYYYMMDD_HHMMSS.json
+
+# При необходимости укажите имя файла явно
+docker run --rm \
+  --network voproshalych_chatbot-conn \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  virtassist/qa:latest \
+  python benchmarks/generate_dataset.py --num-samples 100 --output benchmarks/data/dataset_custom.json
 ```
 
 ### Шаг 5: Запуск бенчмарков
@@ -332,16 +343,31 @@ cd Submodules/voproshalych
 # Запустите все уровни
 docker run --rm \
   --network voproshalych_chatbot-conn \
+  -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
+  -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
+  -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" \
   -v "$PWD:/workspace" \
   -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
   -w /workspace \
   virtassist/qa:latest \
   python benchmarks/run_comprehensive_benchmark.py --tier all --limit 50
 
+# Запуск на конкретном датасете
+docker run --rm \
+  --network voproshalych_chatbot-conn \
+  -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
+  -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
+  -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  -w /workspace \
+  virtassist/qa:latest \
+  python benchmarks/run_comprehensive_benchmark.py --tier all --dataset benchmarks/data/dataset_YYYYMMDD_HHMMSS.json --limit 50
+
 # Или отдельные уровни
-docker run --rm --network voproshalych_chatbot-conn -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 1
-docker run --rm --network voproshalych_chatbot-conn -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 2
-docker run --rm --network voproshalych_chatbot-conn -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 3
+docker run --rm --network voproshalych_chatbot-conn -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 1
+docker run --rm --network voproshalych_chatbot-conn -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 2
+docker run --rm --network voproshalych_chatbot-conn -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 3
 ```
 
 ### Шаг 6: Просмотр результатов
@@ -353,7 +379,9 @@ cd Submodules/voproshalych
 cat benchmarks/reports/rag_benchmark_*.md
 
 # Или запустите дашборд
-python benchmarks/dashboard.py
+cd benchmarks
+uv sync --extra dashboard
+uv run python run_dashboard.py
 # Дашборд будет доступен по адресу: http://localhost:7860
 ```
 
@@ -395,6 +423,10 @@ benchmarks/reports/
   }
 }
 ```
+
+В JSON-артефакт добавляются поля `run_metadata`, `overall_status` и
+`dataset_file`, а в БД (`benchmark_runs`) сохраняется связь запуска с
+использованным датасетом.
 
 ## Интерактивный дашборд
 
@@ -517,7 +549,7 @@ python benchmarks/generate_embeddings.py --chunks --overwrite
 
 ```bash
 # Генерация датасета
-python benchmarks/generate_dataset.py --num-samples 50
+python benchmarks/generate_dataset.py --num-samples 100
 
 # Проверка существующего
 python benchmarks/generate_dataset.py --check-only
@@ -595,15 +627,32 @@ python benchmarks/run_comprehensive_benchmark.py --tier all --skip-checks
            │
            ▼
 ┌─────────────────────┐
-│  Reports (JSON/MD)  │
+│ Reports (JSON/MD)   │
+│ + benchmark_runs DB │
 └──────────┬──────────┘
            │
            ▼
 ┌─────────────────────┐
 │   Dashboard.py      │
-│   (Gradio)          │
+│ (чтение из БД)      │
 └─────────────────────┘
 ```
+
+### Стратегия модульности
+
+**Стратегия:** модуль `benchmarks` остаётся внутри `voproshalych`.
+
+**Почему так:**
+- Бенчмарки глубоко связаны с `qa.config` и SQLAlchemy-моделями приложения
+  (`Chunk`, `QuestionAnswer`, `BenchmarkRun`).
+- Вынос в отдельный репозиторий приведёт к дублированию моделей и сложной
+  синхронизации зависимостей.
+- Текущая интеграция позволяет быстрее развивать продуктовую аналитику качества.
+
+**Future-proof план:**
+- При реальной потребности переиспользования вынесем `benchmarks` в отдельный
+  Python-пакет.
+- До этого момента вынос репозитория избыточен (YAGNI).
 
 ### Операторы поиска
 
@@ -691,7 +740,7 @@ python benchmarks/generate_embeddings.py --check-coverage
 **Решение:**
 ```bash
 # Сгенерируйте датасет
-python benchmarks/generate_dataset.py --num-samples 50
+python benchmarks/generate_dataset.py --num-samples 100
 ```
 
 ### Проблема: Ошибка подключения к DeepSeek

@@ -1,265 +1,274 @@
-"""Интерактивный дашборд для просмотра метрик бенчмарков RAG-системы.
+"""Интерактивный аналитический дашборд для метрик RAG-бенчмарков."""
 
-Использует Gradio для визуализации метрик качества поиска и генерации.
-"""
+from __future__ import annotations
 
-import json
+from datetime import datetime
 import logging
 import os
-import re
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 try:
     import gradio as gr
+    import pandas as pd
 
     GRADIO_AVAILABLE = True
 except ImportError:
     GRADIO_AVAILABLE = False
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from qa.config import Config
+from qa.database import BenchmarkRun, create_engine, ensure_benchmark_runs_schema
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_REPORTS_DIR = str(Path(__file__).resolve().parent / "reports")
+APP_TITLE = "RAG Analytics Hub"
+
+METRICS_BY_TIER = {
+    "tier_1": ["mrr", "hit_rate@1", "hit_rate@5", "hit_rate@10"],
+    "tier_2": ["avg_faithfulness", "avg_answer_relevance"],
+    "tier_3": ["avg_e2e_score", "avg_semantic_similarity"],
+}
+
+QUALITY_BASELINES = {
+    "mrr": 0.8,
+    "hit_rate@1": 0.7,
+    "hit_rate@5": 0.9,
+    "hit_rate@10": 0.95,
+    "avg_faithfulness": 4.5,
+    "avg_answer_relevance": 4.2,
+    "avg_e2e_score": 4.2,
+    "avg_semantic_similarity": 0.85,
+}
 
 
 class RAGBenchmarkDashboard:
-    """Дашборд для просмотра метрик RAG-бенчмарков.
+    """Дашборд для просмотра качества Retrieval и Generation."""
 
-    Attributes:
-        reports_dir: Директория с отчётами
-        metrics_data: Загруженные метрики
-    """
+    def __init__(self):
+        self.engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
+        ensure_benchmark_runs_schema(self.engine)
+        self.runs = self._load_runs()
 
-    def __init__(self, reports_dir: str = DEFAULT_REPORTS_DIR):
-        """Инициализировать дашборд.
+    def _load_runs(self) -> List[Dict]:
+        """Загрузить запуски бенчмарков из таблицы benchmark_runs."""
+        with Session(self.engine) as session:
+            records = session.scalars(
+                select(BenchmarkRun).order_by(BenchmarkRun.timestamp.asc())
+            ).all()
 
-        Args:
-            reports_dir: Директория с отчётами
-        """
-        self.reports_dir = reports_dir
-        self.metrics_data = self._load_metrics()
+        runs = []
+        for record in records:
+            timestamp_str = record.timestamp.strftime("%Y%m%d_%H%M%S")
+            runs.append(
+                {
+                    "id": record.id,
+                    "timestamp": timestamp_str,
+                    "timestamp_readable": record.timestamp.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                    "git_branch": record.git_branch or "unknown",
+                    "git_commit_hash": record.git_commit_hash or "unknown",
+                    "run_author": record.run_author or "unknown",
+                    "dataset_file": record.dataset_file or "unknown",
+                    "overall_status": record.overall_status,
+                    "tier_1": record.tier_1_metrics or {},
+                    "tier_2": record.tier_2_metrics or {},
+                    "tier_3": record.tier_3_metrics or {},
+                }
+            )
 
-    def _load_metrics(self) -> Dict:
-        """Загрузить все JSON отчёты с метриками.
-
-        Returns:
-            Словарь с метриками
-        """
-        metrics = {}
-
-        if not os.path.exists(self.reports_dir):
-            logger.warning(f"Директория с отчётами не найдена: {self.reports_dir}")
-            return metrics
-
-        for filename in os.listdir(self.reports_dir):
-            if filename.startswith("rag_benchmark_") and filename.endswith(".json"):
-                filepath = os.path.join(self.reports_dir, filename)
-
-                try:
-                    with open(filepath, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-
-                        timestamp_str = self._extract_timestamp(filename)
-                        data["timestamp"] = timestamp_str
-                        data["filename"] = filename
-
-                        metrics[timestamp_str] = data
-                except Exception as e:
-                    logger.error(f"Ошибка загрузки {filename}: {e}")
-
-        logger.info(f"Загружено {len(metrics)} файлов с метриками")
-        return metrics
-
-    def _extract_timestamp(self, filename: str) -> str:
-        """Извлечь timestamp из имени файла.
-
-        Args:
-            filename: Имя файла
-
-        Returns:
-            Строка timestamp
-        """
-        match = re.search(r"rag_benchmark_(\d{8}_\d{6})", filename)
-        if match:
-            return match.group(1)
-        return filename
+        logger.info("Загружено %s запусков из benchmark_runs", len(runs))
+        return runs
 
     def get_latest_run(self) -> Optional[Dict]:
-        """Получить последний запуск бенчмарка.
-
-        Returns:
-            Данные последнего запуска
-        """
-        if not self.metrics_data:
+        """Получить последний запуск бенчмарка."""
+        if not self.runs:
             return None
-
-        latest_timestamp = max(self.metrics_data.keys())
-        return self.metrics_data[latest_timestamp]
+        return self.runs[-1]
 
     def get_metric_history(
         self, tier: str, metric: str
-    ) -> Tuple[List[str], List[float]]:
-        """Получить историю изменения метрики.
+    ) -> tuple[List[str], List[float]]:
+        """Получить историю изменения метрики по всем запускам."""
+        dates: List[str] = []
+        values: List[float] = []
 
-        Args:
-            tier: Уровень бенчмарка (tier_1, tier_2, tier_3)
-            metric: Название метрики
-
-        Returns:
-            Кортеж (даты, значения)
-        """
-        sorted_timestamps = sorted(self.metrics_data.keys())
-
-        dates = []
-        values = []
-
-        for timestamp in sorted_timestamps:
-            data = self.metrics_data[timestamp]
-
-            if tier in data and metric in data[tier]:
-                try:
-                    value = float(data[tier][metric])
-                    dates.append(timestamp)
-                    values.append(value)
-                except (ValueError, TypeError):
-                    continue
+        for run in self.runs:
+            tier_metrics = run.get(tier, {})
+            value = tier_metrics.get(metric)
+            if value is None:
+                continue
+            try:
+                values.append(float(value))
+                dates.append(run["timestamp"])
+            except (TypeError, ValueError):
+                continue
 
         return dates, values
 
-    def get_all_tier_metrics(self, tier: str) -> Dict[str, List]:
-        """Получить все метрики для уровня.
+    def _metric_options_for_tier(self, tier: str) -> List[str]:
+        return METRICS_BY_TIER.get(tier, [])
 
-        Args:
-            tier: Уровень бенчмарка
+    def _build_series_rows(
+        self,
+        dates: List[str],
+        values: List[float],
+        metric: str,
+        series_name: str,
+    ) -> List[Dict[str, str | float]]:
+        """Построить строки для gr.LinePlot с baseline-линией."""
+        rows: List[Dict[str, str | float]] = []
 
-        Returns:
-            Словарь {метрика: [(дата, значение)]}
-        """
-        sorted_timestamps = sorted(self.metrics_data.keys())
-        metrics = {}
+        rendered_dates = dates[:]
+        rendered_values = values[:]
+        if len(rendered_dates) == 1:
+            rendered_dates.append(f"{rendered_dates[0]}_point")
+            rendered_values.append(rendered_values[0])
 
-        for timestamp in sorted_timestamps:
-            data = self.metrics_data[timestamp]
+        for date, value in zip(rendered_dates, rendered_values):
+            rows.append({"Дата": date, "Значение": value, "Серия": series_name})
 
-            if tier in data:
-                for metric_name, value in data[tier].items():
-                    if metric_name == "tier":
-                        continue
+        baseline = QUALITY_BASELINES.get(metric)
+        if baseline is not None:
+            for date in rendered_dates:
+                rows.append({"Дата": date, "Значение": baseline, "Серия": "Baseline"})
 
-                    try:
-                        float_value = float(value)
-                        if metric_name not in metrics:
-                            metrics[metric_name] = []
-                        metrics[metric_name].append((timestamp, float_value))
-                    except (ValueError, TypeError):
-                        continue
-
-        return metrics
+        return rows
 
     def create_interface(self):
-        """Создать интерфейс Gradio.
-
-        Returns:
-            Объект интерфейса Gradio
-
-        Raises:
-            ImportError: Если gradio не установлен
-        """
+        """Создать интерфейс Gradio."""
         if not GRADIO_AVAILABLE:
             raise ImportError(
-                "Gradio не установлен. Установите его с помощью: pip install gradio"
+                "Gradio не установлен. Выполните: uv sync --extra dashboard"
             )
 
-        with gr.Blocks(title="Дашборд метрик RAG-бенчмарков") as demo:
-            gr.Markdown("# 📊 Дашборд метрик RAG-бенчмарков Вопрошалыча")
+        with gr.Blocks(title=APP_TITLE) as demo:
+            gr.Markdown(f"# {APP_TITLE}")
+            gr.Markdown(
+                "Панель мониторинга качества Retrieval, Generation и end-to-end "
+                "ответов RAG-системы."
+            )
 
-            with gr.Tab("Последний запуск"):
+            with gr.Tab("Latest Run"):
                 self._create_latest_run_tab()
 
-            with gr.Tab("История"):
+            with gr.Tab("Metric History"):
                 self._create_history_tab()
 
-            with gr.Tab("Сравнение уровней"):
+            with gr.Tab("Tier Comparison"):
                 self._create_comparison_tab()
 
-            with gr.Tab("Все запуски"):
+            with gr.Tab("Runs Registry"):
                 self._create_all_runs_tab()
+
+            with gr.Tab("Run Dataset"):
+                self._create_run_dataset_tab()
+
+            with gr.Tab("Справка"):
+                self._create_reference_tab()
 
         return demo
 
     def _create_latest_run_tab(self):
-        """Создать вкладку с последним запуском."""
         latest_run = self.get_latest_run()
-
         if not latest_run:
-            gr.Markdown("❌ Нет данных о запусках бенчмарков")
+            gr.Markdown("Нет данных о запусках бенчмарков в таблице benchmark_runs.")
             return
 
-        gr.Markdown(f"### Последний запуск: {latest_run['timestamp']}")
+        gr.Markdown(
+            "\n".join(
+                [
+                    "### Latest benchmark run",
+                    f"- Timestamp: `{latest_run['timestamp_readable']}`",
+                    f"- Branch: `{latest_run['git_branch']}`",
+                    f"- Commit: `{latest_run['git_commit_hash']}`",
+                    f"- Author: `{latest_run['run_author']}`",
+                    f"- Dataset: `{latest_run['dataset_file']}`",
+                    f"- Overall status: `{latest_run['overall_status']}`",
+                ]
+            )
+        )
 
         with gr.Row():
-            for tier_name in ["tier_1", "tier_2", "tier_3"]:
-                if tier_name in latest_run:
-                    with gr.Column():
-                        gr.Markdown(f"#### {tier_name.upper()}")
-
-                        metrics_data = []
-                        for metric, value in latest_run[tier_name].items():
-                            if metric != "tier" and isinstance(value, (int, float)):
-                                metrics_data.append([metric, f"{value:.4f}"])
-
-                        gr.Dataframe(
-                            value=metrics_data,
-                            headers=["Метрика", "Значение"],
-                            label=f"Метрики {tier_name.upper()}",
-                            interactive=False,
-                        )
+            for tier_name in ("tier_1", "tier_2", "tier_3"):
+                with gr.Column():
+                    gr.Markdown(f"#### {tier_name.upper()}")
+                    metrics_data = []
+                    for metric_name, value in latest_run.get(tier_name, {}).items():
+                        if metric_name == "tier":
+                            continue
+                        if isinstance(value, (int, float)):
+                            baseline = QUALITY_BASELINES.get(metric_name)
+                            baseline_value = (
+                                "-" if baseline is None else f"{baseline:.4f}"
+                            )
+                            status = "n/a"
+                            if baseline is not None:
+                                status = (
+                                    "ok" if float(value) >= baseline else "below_target"
+                                )
+                            metrics_data.append(
+                                [
+                                    metric_name,
+                                    f"{float(value):.4f}",
+                                    baseline_value,
+                                    status,
+                                ]
+                            )
+                    gr.Dataframe(
+                        value=metrics_data,
+                        headers=["Metric", "Value", "Baseline", "Status"],
+                        interactive=False,
+                        wrap=True,
+                    )
 
     def _create_history_tab(self):
-        """Создать вкладку с историей изменений."""
-        gr.Markdown("### 📈 История изменений метрик")
+        gr.Markdown("### Historical trend for selected metric")
 
         with gr.Row():
             tier_dropdown = gr.Dropdown(
                 choices=["tier_1", "tier_2", "tier_3"],
                 value="tier_1",
-                label="Уровень бенчмарка",
+                label="Tier",
             )
-
             metric_dropdown = gr.Dropdown(
-                choices=[
-                    "hit_rate@1",
-                    "hit_rate@5",
-                    "hit_rate@10",
-                    "mrr",
-                    "avg_faithfulness",
-                    "avg_answer_relevance",
-                    "avg_e2e_score",
-                    "avg_semantic_similarity",
-                ],
+                choices=self._metric_options_for_tier("tier_1"),
                 value="mrr",
-                label="Метрика",
+                label="Metric",
             )
 
         plot = gr.LinePlot(
-            label="История метрики",
             x="Дата",
             y="Значение",
+            color="Серия",
+            title="Metric vs Baseline",
+            x_title="Run",
+            y_title="Value",
+            tooltip="all",
+            height=420,
+            color_map={"Baseline": "#808080"},
+            sort="x",
         )
 
-        def update_plot(tier, metric):
+        def update_metric_choices(tier: str):
+            options = self._metric_options_for_tier(tier)
+            value = options[0] if options else None
+            return gr.Dropdown(choices=options, value=value)
+
+        def update_plot(tier: str, metric: str):
             dates, values = self.get_metric_history(tier, metric)
-
             if not dates:
-                return None
-
-            return {
-                "Дата": dates,
-                metric: values,
-            }
+                return pd.DataFrame(columns=["Дата", "Значение", "Серия"])
+            rows = self._build_series_rows(dates, values, metric, metric)
+            return pd.DataFrame(rows)
 
         tier_dropdown.change(
+            fn=update_metric_choices,
+            inputs=[tier_dropdown],
+            outputs=[metric_dropdown],
+        ).then(
             fn=update_plot,
             inputs=[tier_dropdown, metric_dropdown],
             outputs=[plot],
@@ -271,56 +280,80 @@ class RAGBenchmarkDashboard:
             outputs=[plot],
         )
 
+        demo_metric = metric_dropdown.value or "mrr"
+        initial_data = update_plot("tier_1", demo_metric)
+        plot.value = initial_data
+
     def _create_comparison_tab(self):
-        """Создать вкладку сравнения уровней."""
-        gr.Markdown("### 🔍 Сравнение уровней бенчмарков")
+        gr.Markdown("### Compare tiers by metric")
 
         metric_dropdown = gr.Dropdown(
-            choices=[
-                "hit_rate@1",
-                "hit_rate@5",
-                "hit_rate@10",
-                "mrr",
-                "avg_faithfulness",
-                "avg_answer_relevance",
-                "avg_e2e_score",
-                "avg_semantic_similarity",
-            ],
+            choices=sorted(QUALITY_BASELINES.keys()),
             value="mrr",
-            label="Метрика",
+            label="Metric",
         )
 
         plot = gr.LinePlot(
-            label="Сравнение уровней",
             x="Дата",
             y="Значение",
+            color="Серия",
+            title="Tier comparison",
+            x_title="Run",
+            y_title="Value",
+            tooltip="all",
+            height=420,
+            color_map={"Baseline": "#808080"},
+            sort="x",
         )
 
-        def update_comparison_plot(metric):
-            tier_1_dates, tier_1_values = self.get_metric_history("tier_1", metric)
-            tier_2_dates, tier_2_values = self.get_metric_history("tier_2", metric)
-            tier_3_dates, tier_3_values = self.get_metric_history("tier_3", metric)
+        def update_comparison_plot(metric: str):
+            all_rows: List[Dict[str, str | float]] = []
+            series_by_tier = {
+                "tier_1": "Tier 1",
+                "tier_2": "Tier 2",
+                "tier_3": "Tier 3",
+            }
 
-            data = {"Дата": []}
+            longest_dates: List[str] = []
+            for tier_name, label in series_by_tier.items():
+                dates, values = self.get_metric_history(tier_name, metric)
+                if not dates:
+                    continue
+                if len(dates) > len(longest_dates):
+                    longest_dates = dates[:]
+                all_rows.extend(
+                    self._build_series_rows(dates, values, metric, series_name=label)
+                )
 
-            if tier_1_dates:
-                data["Дата"] = tier_1_dates
-                data["Tier 1"] = tier_1_values
+            if not all_rows:
+                return pd.DataFrame(columns=["Дата", "Значение", "Серия"])
 
-            if tier_2_dates:
-                if not data["Дата"]:
-                    data["Дата"] = tier_2_dates
-                data["Tier 2"] = tier_2_values
+            baseline = QUALITY_BASELINES.get(metric)
+            if baseline is not None and longest_dates:
+                baseline_dates = longest_dates
+                if len(baseline_dates) == 1:
+                    baseline_dates = [
+                        baseline_dates[0],
+                        f"{baseline_dates[0]}_point",
+                    ]
+                all_rows.extend(
+                    {
+                        "Дата": date,
+                        "Значение": baseline,
+                        "Серия": "Baseline",
+                    }
+                    for date in baseline_dates
+                )
 
-            if tier_3_dates:
-                if not data["Дата"]:
-                    data["Дата"] = tier_3_dates
-                data["Tier 3"] = tier_3_values
-
-            if not data["Дата"]:
-                return None
-
-            return data
+            deduped = []
+            seen = set()
+            for row in all_rows:
+                key = (row["Дата"], row["Значение"], row["Серия"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                deduped.append(row)
+            return pd.DataFrame(deduped)
 
         metric_dropdown.change(
             fn=update_comparison_plot,
@@ -328,35 +361,164 @@ class RAGBenchmarkDashboard:
             outputs=[plot],
         )
 
-    def _create_all_runs_tab(self):
-        """Создать вкладку со всеми запусками."""
-        gr.Markdown("### 📋 Все запуски бенчмарков")
+        plot.value = update_comparison_plot("mrr")
 
+    def _create_all_runs_tab(self):
         all_runs = []
-        for timestamp, data in sorted(self.metrics_data.items()):
-            run_info = {
-                "Timestamp": timestamp,
-                "Tier 1 MRR": data.get("tier_1", {}).get("mrr", "N/A"),
-                "Tier 2 Faithfulness": data.get("tier_2", {}).get(
-                    "avg_faithfulness", "N/A"
-                ),
-                "Tier 3 E2E": data.get("tier_3", {}).get("avg_e2e_score", "N/A"),
-            }
-            all_runs.append(run_info)
+        for run in reversed(self.runs):
+            all_runs.append(
+                {
+                    "Timestamp": run["timestamp_readable"],
+                    "Branch": run["git_branch"],
+                    "Commit": run["git_commit_hash"],
+                    "Author": run["run_author"],
+                    "Dataset": run["dataset_file"],
+                    "Status": run["overall_status"],
+                    "Tier1 MRR": run.get("tier_1", {}).get("mrr", "N/A"),
+                    "Tier2 Faithfulness": run.get("tier_2", {}).get(
+                        "avg_faithfulness", "N/A"
+                    ),
+                    "Tier3 E2E": run.get("tier_3", {}).get("avg_e2e_score", "N/A"),
+                }
+            )
 
         gr.Dataframe(
             value=all_runs,
-            headers=["Timestamp", "Tier 1 MRR", "Tier 2 Faithfulness", "Tier 3 E2E"],
-            label="Все запуски",
+            headers=[
+                "Timestamp",
+                "Branch",
+                "Commit",
+                "Author",
+                "Dataset",
+                "Status",
+                "Tier1 MRR",
+                "Tier2 Faithfulness",
+                "Tier3 E2E",
+            ],
             interactive=False,
+            wrap=True,
+        )
+
+    def _create_run_dataset_tab(self):
+        run_choices = [
+            f"{run['timestamp_readable']} | {run['git_commit_hash']} | {run['dataset_file']}"
+            for run in reversed(self.runs)
+        ]
+
+        if not run_choices:
+            gr.Markdown("Нет запусков для просмотра привязанного датасета.")
+            return
+
+        run_selector = gr.Dropdown(
+            choices=run_choices,
+            value=run_choices[0],
+            label="Выберите запуск",
+        )
+        dataset_meta = gr.Markdown()
+        dataset_preview = gr.Dataframe(
+            headers=["chunk_id", "question", "ground_truth_answer", "confluence_url"],
+            interactive=False,
+            wrap=True,
+        )
+
+        ordered_runs = list(reversed(self.runs))
+
+        def update_dataset_preview(selected: str):
+            if not selected:
+                return "", []
+
+            run_index = run_choices.index(selected)
+            run = ordered_runs[run_index]
+            dataset_file = run.get("dataset_file") or ""
+            candidate_paths = [
+                os.path.join("data", dataset_file),
+                os.path.join("benchmarks", "data", dataset_file),
+            ]
+            dataset_path = next(
+                (path for path in candidate_paths if os.path.exists(path)),
+                candidate_paths[0],
+            )
+
+            if not os.path.exists(dataset_path):
+                return (
+                    f"**Dataset:** `{dataset_file}`\n\nФайл не найден по пути `{dataset_path}`",
+                    [],
+                )
+
+            try:
+                import json
+
+                with open(dataset_path, "r", encoding="utf-8") as f:
+                    dataset = json.load(f)
+
+                preview = []
+                for row in dataset[:20]:
+                    preview.append(
+                        [
+                            row.get("chunk_id"),
+                            row.get("question", ""),
+                            row.get("ground_truth_answer", ""),
+                            row.get("confluence_url", ""),
+                        ]
+                    )
+
+                meta = (
+                    f"**Dataset:** `{dataset_file}`\n"
+                    f"\n**Rows:** {len(dataset)}\n"
+                    f"\n**Linked run:** `{run['timestamp_readable']}`"
+                )
+                return meta, preview
+            except Exception as error:
+                return (
+                    f"**Dataset:** `{dataset_file}`\n\nОшибка чтения файла: `{error}`",
+                    [],
+                )
+
+        run_selector.change(
+            fn=update_dataset_preview,
+            inputs=[run_selector],
+            outputs=[dataset_meta, dataset_preview],
+        )
+
+        initial_meta, initial_preview = update_dataset_preview(run_choices[0])
+        dataset_meta.value = initial_meta
+        dataset_preview.value = initial_preview
+
+    def _create_reference_tab(self):
+        gr.Markdown(
+            """
+### Что оценивают уровни
+
+- **Tier 1 (Retrieval):** насколько хорошо поиск находит правильные документы.
+- **Tier 2 (Generation):** насколько ответ точен и соответствует найденному контексту.
+- **Tier 3 (E2E):** итоговое качество пользовательского ответа целиком.
+
+### Как читать метрики
+
+- **MRR**: средняя позиция первого релевантного ответа. `1.0` означает, что правильный
+  ответ почти всегда на первом месте.
+- **Faithfulness 4.5 / 5**: в среднем ответы очень близки к фактам из контекста,
+  риск галлюцинаций невысок.
+- **Answer Relevance**: насколько ответ решает реальный вопрос пользователя.
+- **E2E Score**: интегральная экспертная оценка качества ответа.
+
+### Пороговые значения качества
+
+- **Tier 1**: `MRR >= 0.80`, `Hit@5 >= 0.90`, `Hit@10 >= 0.95`
+- **Tier 2**: `Faithfulness >= 4.5`, `Answer Relevance >= 4.2`
+- **Tier 3**: `E2E >= 4.2`, `Semantic Similarity >= 0.85`
+
+Если метрика ниже baseline, это сигнал к аудиту индексации, retrieval-ранжирования,
+prompt-стратегии и post-processing.
+            """
         )
 
 
 def main():
-    """Главная функция для запуска дашборда."""
+    """Главная функция запуска дашборда."""
     if not GRADIO_AVAILABLE:
-        print("❌ Gradio не установлен!")
-        print("Установите его с помощью: pip install gradio")
+        print("Gradio не установлен.")
+        print("Установите зависимости: uv sync --extra dashboard")
         return
 
     logging.basicConfig(
@@ -366,12 +528,7 @@ def main():
 
     dashboard = RAGBenchmarkDashboard()
     interface = dashboard.create_interface()
-
-    interface.launch(
-        server_name="0.0.0.0",
-        share=False,
-        debug=True,
-    )
+    interface.launch(server_name="0.0.0.0", share=False, debug=True)
 
 
 if __name__ == "__main__":

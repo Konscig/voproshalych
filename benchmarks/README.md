@@ -402,10 +402,13 @@ benchmarks/reports/
 
 ```bash
 # Из директории Submodules/voproshalych/benchmarks
-python dashboard.py
+cd Submodules/voproshalych/benchmarks
 
-# Или через специальный скрипт
-python run_dashboard.py
+# Установите зависимости дашборда
+uv sync --extra dashboard
+
+# Запустите дашборд
+uv run python run_dashboard.py
 ```
 
 Дашборд будет доступен по адресу: http://localhost:7860
@@ -707,8 +710,12 @@ print(
 
 **Решение:**
 ```bash
-# Установите Gradio
-pip install gradio
+# Запускайте из benchmarks и установите extra-зависимости
+cd Submodules/voproshalych/benchmarks
+uv sync --extra dashboard
+
+# Запуск
+uv run python run_dashboard.py
 
 # Или используйте статические отчёты
 cat benchmarks/reports/rag_benchmark_*.md

@@ -4,19 +4,20 @@ version = "0.1.0"
 description = "Benchmarking system for RAG evaluation"
 readme = "README.md"
 requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "pgvector",
+    "sentence-transformers",
+    "numpy",
+    "openai",
+    "tenacity",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[project.dependencies]
-python-dotenv = "*"
-sqlalchemy = "*"
-psycopg2-binary = "*"
-pgvector = "*"
-sentence-transformers = "*"
-numpy = "*"
-openai = "*"
 
 [project.optional-dependencies]
 dashboard = [
@@ -34,3 +35,6 @@ target-version = ['py312']
 [tool.isort]
 profile = "black"
 line_length = 88
+
+[tool.uv]
+package = false

@@ -8,6 +8,7 @@ import logging
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 try:
@@ -19,6 +20,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_REPORTS_DIR = str(Path(__file__).resolve().parent / "reports")
+
 
 class RAGBenchmarkDashboard:
     """Дашборд для просмотра метрик RAG-бенчмарков.
@@ -28,7 +31,7 @@ class RAGBenchmarkDashboard:
         metrics_data: Загруженные метрики
     """
 
-    def __init__(self, reports_dir: str = "benchmarks/reports"):
+    def __init__(self, reports_dir: str = DEFAULT_REPORTS_DIR):
         """Инициализировать дашборд.
 
         Args:

@@ -12,6 +12,9 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Optional
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -147,16 +150,28 @@ def save_results(results: dict, output_dir: str):
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    def to_builtin(value: Any) -> Any:
+        """Преобразовать numpy-типы в стандартные типы Python."""
+        if isinstance(value, dict):
+            return {k: to_builtin(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [to_builtin(v) for v in value]
+        if isinstance(value, np.generic):
+            return value.item()
+        return value
+
+    normalized_results: dict = to_builtin(results)
+
     json_path = os.path.join(output_dir, f"rag_benchmark_{timestamp}.json")
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+        json.dump(normalized_results, f, ensure_ascii=False, indent=2)
 
     markdown_path = os.path.join(output_dir, f"rag_benchmark_{timestamp}.md")
     with open(markdown_path, "w", encoding="utf-8") as f:
         f.write("# RAG Benchmark Report\n\n")
         f.write(f"**Время:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-        for tier_name, tier_results in results.items():
+        for tier_name, tier_results in normalized_results.items():
             f.write(f"## {tier_name.upper()}\n\n")
             f.write("| Метрика | Значение |\n")
             f.write("|---------|----------|\n")

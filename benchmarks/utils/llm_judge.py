@@ -5,6 +5,8 @@
 
 import logging
 import os
+import json
+import re
 from typing import Dict, List, Optional
 
 from openai import OpenAI
@@ -15,6 +17,55 @@ from tenacity import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_json_payload(text: str) -> Dict[str, str]:
+    """Распарсить JSON-ответ модели с учётом markdown-обёрток."""
+    cleaned = text.strip()
+
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+        if not match:
+            raise
+        return json.loads(match.group(0))
+
+
+def _get_judge_candidates() -> List[tuple[str, str, str]]:
+    """Собрать кандидатов подключения к judge API из окружения."""
+    candidates: List[tuple[str, str, str]] = []
+
+    benchmarks_api = os.getenv("BENCHMARKS_JUDGE_API_KEY")
+    benchmarks_base = os.getenv("BENCHMARKS_JUDGE_BASE_URL", "https://api.deepseek.com")
+    benchmarks_model = os.getenv("BENCHMARKS_JUDGE_MODEL", "deepseek-chat")
+    if benchmarks_api:
+        candidates.append((benchmarks_api, benchmarks_base, benchmarks_model))
+
+    project_api = os.getenv("JUDGE_API")
+    project_base = os.getenv("JUDGE_BASE_URL", "https://api.mistral.ai/v1")
+    project_model = os.getenv("JUDGE_MODEL", "mistral-small-latest")
+    if project_api:
+        candidates.append((project_api, project_base, project_model))
+
+    if not candidates:
+        raise ValueError(
+            "Не задан ключ judge API. Укажите BENCHMARKS_JUDGE_API_KEY "
+            "или JUDGE_API в окружении."
+        )
+
+    unique_candidates = []
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        unique_candidates.append(candidate)
+    return unique_candidates
 
 
 class LLMJudge:
@@ -41,24 +92,32 @@ class LLMJudge:
         Raises:
             ValueError: Если не удалось подключиться к API
         """
-        api_key = api_key or os.getenv("BENCHMARKS_JUDGE_API_KEY")
-        base_url = base_url or os.getenv(
-            "BENCHMARKS_JUDGE_BASE_URL", "https://api.deepseek.com"
-        )
-        model = model or os.getenv("BENCHMARKS_JUDGE_MODEL", "deepseek-chat")
+        candidates: List[tuple[str, str, str]] = []
+        if api_key and base_url and model:
+            candidates.append((api_key, base_url, model))
+        candidates.extend(_get_judge_candidates())
 
-        if not api_key:
-            raise ValueError(
-                "JUDGE_API_KEY не указан. Установите переменную окружения "
-                "или передайте api_key параметр."
+        last_error: Optional[Exception] = None
+        for candidate_api, candidate_base, candidate_model in candidates:
+            self.model = candidate_model
+            self.client = OpenAI(api_key=candidate_api, base_url=candidate_base)
+            logger.info(
+                "LLMJudge инициализация: model=%s, base_url=%s",
+                candidate_model,
+                candidate_base,
             )
+            try:
+                self._check_connection()
+                return
+            except Exception as error:
+                last_error = error
+                logger.warning(
+                    "Не удалось подключиться к judge API (%s, %s), пробуем следующий источник.",
+                    candidate_model,
+                    candidate_base,
+                )
 
-        self.model = model
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
-
-        logger.info(f"LLMJudge инициализирован: model={model}, base_url={base_url}")
-
-        self._check_connection()
+        raise ConnectionError(f"Не удалось инициализировать LLMJudge: {last_error}")
 
     @retry(
         stop=stop_after_attempt(3),
@@ -131,10 +190,7 @@ class LLMJudge:
             )
 
             content = response.choices[0].message.content.strip()
-
-            import json
-
-            result = json.loads(content)
+            result = _parse_json_payload(content)
 
             if "question" not in result or "ground_truth_answer" not in result:
                 raise ValueError("Некорректный формат ответа от API")

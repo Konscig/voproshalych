@@ -178,6 +178,8 @@ class EmbeddingGenerator:
             "errors": 0,
         }
 
+        batch_size = 100
+
         with Session(self.engine) as session:
             chunks = session.scalars(select(Chunk)).all()
             stats["total_chunks"] = len(chunks)
@@ -198,7 +200,8 @@ class EmbeddingGenerator:
                             .where(Chunk.id == chunk.id)
                             .values(embedding=embedding)
                         )
-                        session.commit()
+                        if i % batch_size == 0:
+                            session.commit()
 
                         stats["processed"] += 1
 
@@ -216,6 +219,8 @@ class EmbeddingGenerator:
                         f"Ошибка при генерации эмбеддинга для чанка {chunk.id}: {e}"
                     )
                     session.rollback()
+
+            session.commit()
 
         logger.info(
             f"Генерация для чанков завершена. "

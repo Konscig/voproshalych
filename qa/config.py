@@ -2,7 +2,43 @@ from os import environ, path
 from dotenv import load_dotenv
 from time import sleep
 
-load_dotenv(dotenv_path=path.join(path.dirname(path.dirname(__file__)), ".env.docker"))
+ROOT_DIR = path.dirname(path.dirname(__file__))
+load_dotenv(dotenv_path=path.join(ROOT_DIR, ".env"), override=True)
+load_dotenv(dotenv_path=path.join(ROOT_DIR, ".env.docker"), override=False)
+
+
+def _build_database_uri() -> str:
+    """Собирает URI подключения к PostgreSQL из переменных окружения."""
+    user = environ.get("POSTGRES_USER", "postgres")
+    password = environ.get("POSTGRES_PASSWORD", "postgres")
+    db_name = environ.get("POSTGRES_DB", "postgres")
+    host = environ.get("POSTGRES_HOST", "localhost")
+    port = environ.get("POSTGRES_PORT")
+
+    is_inside_docker = path.exists("/.dockerenv")
+    if not is_inside_docker and host.startswith("db"):
+        host = "localhost"
+
+    if port and ":" not in host:
+        host = f"{host}:{port}"
+
+    return f"postgresql://{user}:{password}@{host}/{db_name}"
+
+
+def _resolve_embedding_model_path() -> str:
+    """Возвращает путь к embedding-модели с фолбэком на HF."""
+    model_path = environ.get("EMBEDDING_MODEL_PATH")
+    if model_path:
+        return model_path
+
+    local_path = "saved_models/multilingual-e5-large-wikiutmn"
+    has_weights = path.exists(
+        path.join(local_path, "model.safetensors")
+    ) or path.exists(path.join(local_path, "pytorch_model.bin"))
+    if has_weights:
+        return local_path
+
+    return "nizamovtimur/multilingual-e5-large-wikiutmn"
 
 
 class Config:
@@ -12,10 +48,7 @@ class Config:
     CONFLUENCE_TOKEN = environ.get("CONFLUENCE_TOKEN")
     CONFLUENCE_HOST = environ.get("CONFLUENCE_HOST")
     CONFLUENCE_SPACES = environ.get("CONFLUENCE_SPACES", "").split()  # type: ignore
-    SQLALCHEMY_DATABASE_URI = (
-        f"postgresql://{environ.get('POSTGRES_USER')}:{environ.get('POSTGRES_PASSWORD')}@"
-        f"{environ.get('POSTGRES_HOST')}/{environ.get('POSTGRES_DB')}"
-    )
+    SQLALCHEMY_DATABASE_URI = _build_database_uri()
     MISTRAL_API_URL = environ.get(
         "MISTRAL_API_URL", "https://api.mistral.ai/v1/chat/completions"
     )
@@ -24,9 +57,7 @@ class Config:
     JUDGE_MODEL = environ.get("JUDGE_MODEL")
     JUDGE_API = environ.get("JUDGE_API")
 
-    EMBEDDING_MODEL_PATH = environ.get(
-        "EMBEDDING_MODEL_PATH", "nizamovtimur/multilingual-e5-large-wikiutmn"
-    )
+    EMBEDDING_MODEL_PATH = _resolve_embedding_model_path()
     MISTRAL_SYSTEM_PROMPT = """Действуй как инновационный виртуальный помощник студента Тюменского государственного университета (ТюмГУ) Вопрошалыч.
 
         Используй следующий фрагмент из базы знаний в тройных кавычках, чтобы кратко ответить на вопрос студента.

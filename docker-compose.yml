@@ -7,17 +7,14 @@ services:
         restart: unless-stopped
         ports:
             - "5432:5432"
-        environment:
-            - TZ=${TZ}
-            - POSTGRES_DB=${POSTGRES_DB}
-            - POSTGRES_USER=${POSTGRES_USER}
-            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+        env_file:
+            - .env.docker
         volumes:
             - db-data:/var/lib/postgresql/data
         networks:
             - chatbot-conn
         healthcheck:
-            test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
             interval: 10s
             timeout: 5s
             retries: 3

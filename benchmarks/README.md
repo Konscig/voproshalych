@@ -263,50 +263,92 @@ python benchmarks/run_comprehensive_benchmark.py --tier 3
 ### Шаг 1: Настройка окружения
 
 ```bash
-# Установите зависимости
+# Из корня проекта
 cd Submodules/voproshalych
+
+# Python-зависимости (локальный запуск)
 uv sync
 
-# Настройте .env.docker
+# Настройка переменных окружения
 cp .env.docker.example .env.docker
-# Отредактируйте BENCHMARKS_JUDGE_API_KEY
+# Заполните API ключи в .env.docker
+# - BENCHMARKS_JUDGE_API_KEY (или JUDGE_API)
+# - MISTRAL_API
 ```
 
-### Шаг 2: Генерация эмбеддингов
+### Шаг 2: Запуск инфраструктуры
 
 ```bash
-# Запустите Docker контейнеры
+# Запустите сервисы и пересоберите образы
 docker compose up -d --build
-
-# Сгенерируйте эмбеддинги для чанков
-python benchmarks/generate_embeddings.py --chunks
-
-# Проверьте покрытие
-python benchmarks/generate_embeddings.py --check-coverage
 ```
 
-### Шаг 3: Генерация датасета
+### Шаг 3: Генерация эмбеддингов
+
+Рекомендуемый запуск бенчмарков - внутри контейнера `qa` с монтированием
+текущей директории, чтобы отчеты и датасет сохранялись на хосте.
 
 ```bash
+cd Submodules/voproshalych
+
+# Генерация эмбеддингов для чанков
+docker run --rm \
+  --network voproshalych_chatbot-conn \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  -w /workspace \
+  virtassist/qa:latest \
+  python benchmarks/generate_embeddings.py --chunks
+
+# Проверка покрытия
+docker run --rm \
+  --network voproshalych_chatbot-conn \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  -w /workspace \
+  virtassist/qa:latest \
+  python benchmarks/generate_embeddings.py --check-coverage
+```
+
+### Шаг 4: Генерация датасета
+
+```bash
+cd Submodules/voproshalych
+
 # Сгенерируйте золотой стандарт (50 вопросов)
-python benchmarks/generate_dataset.py --num-samples 50
+docker run --rm \
+  --network voproshalych_chatbot-conn \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  virtassist/qa:latest \
+  python benchmarks/generate_dataset.py --num-samples 50
 ```
 
-### Шаг 4: Запуск бенчмарков
+### Шаг 5: Запуск бенчмарков
 
 ```bash
+cd Submodules/voproshalych
+
 # Запустите все уровни
-python benchmarks/run_comprehensive_benchmark.py --tier all --limit 50
+docker run --rm \
+  --network voproshalych_chatbot-conn \
+  -v "$PWD:/workspace" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  -w /workspace \
+  virtassist/qa:latest \
+  python benchmarks/run_comprehensive_benchmark.py --tier all --limit 50
 
 # Или отдельные уровни
-python benchmarks/run_comprehensive_benchmark.py --tier 1
-python benchmarks/run_comprehensive_benchmark.py --tier 2
-python benchmarks/run_comprehensive_benchmark.py --tier 3
+docker run --rm --network voproshalych_chatbot-conn -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 1
+docker run --rm --network voproshalych_chatbot-conn -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 2
+docker run --rm --network voproshalych_chatbot-conn -v "$PWD:/workspace" -w /workspace virtassist/qa:latest python benchmarks/run_comprehensive_benchmark.py --tier 3
 ```
 
-### Шаг 5: Просмотр результатов
+### Шаг 6: Просмотр результатов
 
 ```bash
+cd Submodules/voproshalych
+
 # Посмотрите отчёты в Markdown
 cat benchmarks/reports/rag_benchmark_*.md
 
@@ -582,6 +624,42 @@ python benchmarks/run_comprehensive_benchmark.py --tier all --skip-checks
 - Все остальные зависимости через `pyproject.toml` корневого проекта
 
 ## Troubleshooting
+
+### Проблема: запуск из локального Python не видит хост `db`
+
+**Симптом:**
+`OperationalError: could not translate host name "db" to address`
+
+**Решение:**
+- Для локального запуска создайте `.env` (рядом с `.env.docker`) и задайте
+  `POSTGRES_HOST=localhost` (и при необходимости `POSTGRES_PORT=5432`)
+- Для запуска внутри Docker оставьте `POSTGRES_HOST=db`
+
+`qa/config.py` загружает `.env` c приоритетом над `.env.docker`, поэтому
+локальные переопределения применяются автоматически.
+
+### Проблема: локально не грузится embedding-модель из `saved_models`
+
+**Симптом:**
+`OSError: ... no file named model.safetensors ...`
+
+**Решение:**
+- Используйте запуск внутри контейнера с кэшем HF (см. команды выше)
+- Или задайте в `.env`:
+
+```bash
+EMBEDDING_MODEL_PATH=nizamovtimur/multilingual-e5-large-wikiutmn
+```
+
+### Проблема: не хватает зависимостей LLM Judge
+
+**Симптом:**
+`ModuleNotFoundError: No module named 'openai'`
+
+**Решение:**
+- Убедитесь, что установлены `openai` и `tenacity`
+- В проекте они добавлены в `qa/requirements.txt` и используются для
+  `benchmarks/utils/llm_judge.py`
 
 ### Проблема: BENCHMARKS_JUDGE_API_KEY не установлен
 

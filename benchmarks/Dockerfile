@@ -13,11 +13,13 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY benchmarks/pyproject.toml benchmarks/uv.lock ./
+COPY pyproject.toml uv.lock ./
 
 RUN uv sync --frozen --no-dev
 
-COPY benchmarks /usr/src/app/benchmarks
-COPY qa /usr/src/app/qa
+COPY models /usr/src/app/models
+COPY utils /usr/src/app/utils
+COPY *.py /usr/src/app/
+COPY README.md Makefile /usr/src/app/
 
 WORKDIR /usr/src/app

@@ -109,9 +109,7 @@ services:
             - chatbot-conn
 
     benchmarks:
-        build:
-            context: .
-            dockerfile: benchmarks/Dockerfile
+        build: ./benchmarks
         image: virtassist/benchmarks:latest
         container_name: virtassist-benchmarks
         restart: no
@@ -119,8 +117,7 @@ services:
         env_file:
             - .env.docker
         volumes:
-            - ./benchmarks:/usr/src/app/benchmarks
-            - ./qa:/usr/src/app/qa
+            - ./:/usr/src/app
             - benchmarks-cache:/root/.cache
             - benchmarks-reports:/usr/src/app/benchmarks/reports
             - benchmarks-data:/usr/src/app/benchmarks/data

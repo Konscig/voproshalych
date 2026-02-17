@@ -156,7 +156,7 @@ def main():
     args = parser.parse_args()
 
     # Проверяем аргументы
-    if not args.dump and not args.dump_dir:
+    if not args.dump and not args.dump_dir and not args.drop_tables_only:
         parser.print_help()
         sys.exit(1)
 

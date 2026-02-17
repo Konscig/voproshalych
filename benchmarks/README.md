@@ -165,34 +165,33 @@ uv run python benchmarks/load_database_dump.py --drop-tables-only
 ### `generate_embeddings.py`
 
 ```bash
-docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
-docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --all
-docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --score 5
-docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --all
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --score 5
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
 ```
 
 ### `generate_dataset.py`
 
 ```bash
-docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
-docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/dataset_custom.json
-docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
-docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --check-only --output benchmarks/data/dataset_custom.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/dataset_custom.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --check-only --output benchmarks/data/dataset_custom.json
 ```
 
 ### `run_comprehensive_benchmark.py`
 
 ```bash
-docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
-docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
-docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500 --top-k 10
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500 --top-k 10
 ```
 
 ### `run_dashboard.py`
 
 ```bash
-docker compose exec benchmarks python benchmarks/generate_embeddings.py --chunks
-docker compose exec benchmarks python benchmarks/generate_embeddings.py --check-coverage
+docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
 ```
 
 ## Запуск с docker-compose.benchmarks.yml
@@ -279,15 +278,15 @@ uv run python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump -
 
 ```bash
 cd Submodules/voproshalych
-docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
 
-docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
 ```
 
 ### Шаг 4. Генерация synthetic датасета
 
 ```bash
-docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
 ```
 
 ### Шаг 5. (Опционально) подготовка manual dataset
@@ -298,16 +297,16 @@ docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --ma
 ### Шаг 6. Запуск бенчмарков
 
 ```bash
-docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_YYYYMMDD_HHMMSS.json
-docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_YYYYMMDD_HHMMSS.json
-docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_YYYYMMDD_HHMMSS.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_YYYYMMDD_HHMMSS.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500
 ```
 
 ### Шаг 7. Просмотр отчётов и дашборда
 
 ```bash
 cd Submodules/voproshalych
-docker compose run --rm -p 7860:7860 benchmarks python benchmarks/run_dashboard.py
+docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
 ```
 
 Дашборд доступен по адресу: `http://localhost:7860`
@@ -324,15 +323,26 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
 ```
 
-Из `Submodules/voproshalych` с использованием основного `docker-compose.yml`:
+### Через Makefile
 
 ```bash
-uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
-docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
-docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
-docker compose run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
+cd Submodules/voproshalych/benchmarks
+make install
+make load-dump
+make generate-embeddings
+make generate-dataset
+make run-benchmarks
+make run-dashboard
+make help
 ```
+
+Доступные команды Makefile:
+- `up` - поднять основной стек
+- `down` - остановить основной стек
+- `up-benchmarks` - поднять стек с бенчмарками
+- `down-benchmarks` - остановить стек с бенчмарками
+- `ps` - показать статус сервисов
+- `logs` - показать логи сервиса benchmarks
 
 ## Архитектура
 
@@ -355,26 +365,7 @@ sequenceDiagram
     User->>Benchmarks: run_dashboard.py
     Benchmarks->>Postgres: SELECT benchmark_runs
     Benchmarks-->>User: interactive metrics dashboard
-```
-
-## Docker-compose пример для отдельного benchmark-сервиса
-
-```yaml
-services:
-  benchmarks:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: uv run python benchmarks/run_dashboard.py
-    env_file:
-      - .env.docker
-    ports:
-      - "7860:7860"
-    depends_on:
-      - db
-```
-
-Сервис предназначен для ручного запуска бенчарков и дашборда по запросу.
+    ```
 
 ## Полезные ссылки
 

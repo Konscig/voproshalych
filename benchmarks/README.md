@@ -46,6 +46,31 @@ benchmarks/
 ├── run_comprehensive_benchmark.py
 └── run_dashboard.py
 ```
+ 
+## Smoke-сценарии тестирования
+
+Для быстрого тестирования системы бенчмарков доступны два Smoke-сценария:
+
+### Локальное тестирование
+
+Полный сценарий для локального запуска без Docker:
+- 📄 [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md) - локальное тестирование с `uv run`
+- Требуется только PostgreSQL и Python 3.12+
+- Все команды выполняются локально через UV
+
+### Контейнеризация с Docker
+
+Полный сценарий для работы в Docker окружении:
+- 📄 [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md) - тестирование с `docker-compose.benchmarks.yml`
+- Изолированный стек с отдельными volumes для кэша, отчётов и данных
+- Все команды выполняются внутри контейнеров
+
+### Выбор сценария
+
+| Сценарий | Когда использовать | Окружение |
+|-----------|-------------------|-------------|
+| LOCAL | Разработка, отладка, быстрые проверки | Локальный Python + PostgreSQL |
+| DOCKER | CI/CD, интеграционное тестирование, продакшн | Docker + Docker Compose |
 
 ## Компоненты системы
 
@@ -196,120 +221,34 @@ docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks
 
 ## Запуск с docker-compose.benchmarks.yml
 
-Для работы с бенчмарками существует отдельный docker-compose файл `docker-compose.benchmarks.yml`.
+Для работы с бенчмарками используется отдельный docker-compose файл `docker-compose.benchmarks.yml`.
+
+### Описание
 
 Этот файл включает в себя:
 - Все сервисы основного приложения (db, db-migrate, qa, chatbot, adminpanel, max)
 - Дополнительный сервис `benchmarks` с портом 7860 для дашборда
 - Отдельные volumes для reports, data и cache бенчмарков
 
-### Преимущества использования docker-compose.benchmarks.yml
+### Преимущества
 
 - **Изолированный стек**: Полная среда для тестирования бенчмарков
 - **Отдельные volumes**: Данные бенчмарков хранятся отдельно от данных приложения
 - **Управление зависимостями**: Сервис benchmarks использует UV для управления зависимостями
 - **Единая точка запуска**: Все сервисы поднимаются одной командой
 
-### Запуск
+### Быстрый старт
 
 ```bash
+# Поднять стек с бенчмарками
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml up -d --build
-```
 
-### Остановка
-
-```bash
+# Остановить
 docker compose -f docker-compose.benchmarks.yml down
 ```
 
-### Полный рабочий цикл
-
-### Шаг 0. Поднять контейнеры
-
-Для запуска с бенчмарками (опционально):
-
-```bash
-cd Submodules/voproshalych
-docker compose -f docker-compose.benchmarks.yml up -d --build
-```
-
-Для запуска только основного приложения:
-
-```bash
-cd Submodules/voproshalych
-docker compose up -d --build
-```
-
-Дождитесь здорового состояния всех сервисов:
-```bash
-docker compose -f docker-compose.benchmarks.yml ps
-```
-
-### Шаг 1. Подготовка `.env.docker`
-
-Если `.env.docker` не существует:
-
-```bash
-cd Submodules/voproshalych
-cp .env.docker.example .env.docker
-```
-
-Заполните как минимум:
-- `MISTRAL_API`, `MISTRAL_MODEL`
-- `BENCHMARKS_JUDGE_API_KEY` (или `JUDGE_API`)
-- `EMBEDDING_MODEL_PATH`
-
-### Шаг 2. Подготовка БД для бенчмарков
-
-```bash
-cd Submodules/voproshalych
-uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-```
-
-Если нужно полностью переинициализировать таблицы перед загрузкой:
-
-```bash
-cd Submodules/voproshalych
-uv run python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump --drop-tables
-```
-
-### Шаг 3. Генерация эмбеддингов
-
-```bash
-cd Submodules/voproshalych
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
-
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
-```
-
-### Шаг 4. Генерация synthetic датасета
-
-```bash
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
-```
-
-### Шаг 5. (Опционально) подготовка manual dataset
-
-- Создайте файл `benchmarks/data/manual_dataset_YYYYMMDD_HHMMSS.json`
-- Следуйте: `benchmarks/docs/manual_annotation_guide.md`
-
-### Шаг 6. Запуск бенчмарков
-
-```bash
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_YYYYMMDD_HHMMSS.json
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_YYYYMMDD_HHMMSS.json
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500
-```
-
-### Шаг 7. Просмотр отчётов и дашборда
-
-```bash
-cd Submodules/voproshalych
-docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
-```
-
-Дашборд доступен по адресу: `http://localhost:7860`
+👉 **Подробные инструкции**: [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md)
 
 ## Быстрые шорткаты (docker compose)
 

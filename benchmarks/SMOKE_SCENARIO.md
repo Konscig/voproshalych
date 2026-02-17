@@ -1,32 +1,39 @@
 # Smoke-сценарий для benchmarks
 
-Короткая проверка полного цикла: synthetic, manual и real-users режимы.
+Полный цикл проверки: synthetic, manual и real-users режимы через `uv`.
 
-## 0) Подготовка окружения
+## 0) Поднять контейнеры
 
 ```bash
 cd Submodules/voproshalych
-uv sync
+docker compose up -d
+```
+
+Дождитесь здорового состояния всех сервисов:
+```bash
+docker compose ps
 ```
 
 ## 1) Подготовка БД
 
 ```bash
-python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+docker compose exec qa uv run python benchmarks/load_database_dump.py \
+  --dump benchmarks/data/dump/virtassist_backup_20260213.dump
 ```
 
 ## 2) Эмбеддинги
 
 ```bash
-python benchmarks/generate_embeddings.py --chunks
-python benchmarks/generate_embeddings.py --check-coverage
+docker compose exec qa uv run python benchmarks/generate_embeddings.py --chunks
+docker compose exec qa uv run python benchmarks/generate_embeddings.py --check-coverage
 ```
 
 ## 3) Synthetic dataset + benchmark
 
 ```bash
-python benchmarks/generate_dataset.py --max-questions 20
-python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10
+docker compose exec qa uv run python benchmarks/generate_dataset.py --max-questions 20
+docker compose exec qa uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode synthetic --limit 10
 ```
 
 ## 4) Manual dataset + benchmark
@@ -34,20 +41,26 @@ python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --l
 Создайте файл `benchmarks/data/manual_dataset_smoke.json` с 3-5 записями.
 
 ```bash
-python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_smoke.json --limit 5
+docker compose exec qa uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode manual \
+  --manual-dataset benchmarks/data/manual_dataset_smoke.json \
+  --limit 5
 ```
 
 ## 5) Real users benchmark
 
 ```bash
-python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 50 --top-k 10
+docker compose exec qa uv run python benchmarks/run_comprehensive_benchmark.py \
+  --mode real-users --real-score 5 --real-limit 50 --top-k 10
 ```
 
 ## 6) Проверка результатов
 
 ```bash
-python benchmarks/run_dashboard.py
+docker compose exec qa uv run python benchmarks/run_dashboard.py
 ```
+
+Дашборд доступен по адресу: `http://localhost:7860`
 
 Ожидаемо:
 - в `benchmarks/reports/` появляются свежие `rag_benchmark_*.json/.md`;

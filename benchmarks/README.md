@@ -155,9 +155,9 @@ $$
 ### `load_database_dump.py`
 
 ```bash
-python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump
-python benchmarks/load_database_dump.py --drop-tables-only
+uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+uv run python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump
+uv run python benchmarks/load_database_dump.py --drop-tables-only
 ```
 
 **Важно:** При загрузке дампа таблицы автоматически очищаются перед загрузкой. Флаг `--drop-tables-only` используется для удаления таблиц без загрузки дампа.
@@ -165,27 +165,27 @@ python benchmarks/load_database_dump.py --drop-tables-only
 ### `generate_embeddings.py`
 
 ```bash
-docker compose exec benchmarks python benchmarks/generate_embeddings.py --chunks
-docker compose exec benchmarks python benchmarks/generate_embeddings.py --all
-docker compose exec benchmarks python benchmarks/generate_embeddings.py --score 5
-docker compose exec benchmarks python benchmarks/generate_embeddings.py --check-coverage
+docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
+docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --all
+docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --score 5
+docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
 ```
 
 ### `generate_dataset.py`
 
 ```bash
-docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 500
-docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/dataset_custom.json
-docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
-docker compose exec benchmarks python benchmarks/generate_dataset.py --check-only --output benchmarks/data/dataset_custom.json
+docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
+docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/dataset_custom.json
+docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
+docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --check-only --output benchmarks/data/dataset_custom.json
 ```
 
 ### `run_comprehensive_benchmark.py`
 
 ```bash
-docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
-docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
-docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500 --top-k 10
+docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
+docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
+docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500 --top-k 10
 ```
 
 ### `run_dashboard.py`
@@ -227,41 +227,29 @@ cp .env.docker.example .env.docker
 
 ```bash
 cd Submodules/voproshalych
-python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
 ```
 
 Если нужно полностью переинициализировать таблицы перед загрузкой:
 
 ```bash
 cd Submodules/voproshalych
-python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump --drop-tables
+uv run python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump --drop-tables
 ```
 
 ### Шаг 3. Генерация эмбеддингов
 
 ```bash
 cd Submodules/voproshalych
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_embeddings.py --chunks
+docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
 
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_embeddings.py --check-coverage
+docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
 ```
 
 ### Шаг 4. Генерация synthetic датасета
 
 ```bash
-docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 500
+docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
 ```
 
 ### Шаг 5. (Опционально) подготовка manual dataset
@@ -272,9 +260,9 @@ docker compose exec benchmarks python benchmarks/generate_dataset.py --max-quest
 ### Шаг 6. Запуск бенчмарков
 
 ```bash
-docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_YYYYMMDD_HHMMSS.json
-docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_YYYYMMDD_HHMMSS.json
-docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500
+docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_YYYYMMDD_HHMMSS.json
+docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_YYYYMMDD_HHMMSS.json
+docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500
 ```
 
 ### Шаг 7. Просмотр отчётов и дашборда
@@ -291,11 +279,11 @@ docker compose run --rm -p 7860:7860 benchmarks python benchmarks/run_dashboard.
 Из `Submodules/voproshalych`:
 
 ```bash
-docker compose exec benchmarks python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-docker compose exec benchmarks python benchmarks/generate_embeddings.py --chunks
-docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 500
-docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
-docker compose run --rm -p 7860:7860 benchmarks python benchmarks/run_dashboard.py
+uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
+docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
+docker compose exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
+docker compose run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
 ```
 
 ## Архитектура
@@ -329,7 +317,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python benchmarks/run_dashboard.py
+    command: uv run python benchmarks/run_dashboard.py
     env_file:
       - .env.docker
     ports:

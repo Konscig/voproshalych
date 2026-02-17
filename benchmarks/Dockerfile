@@ -1,16 +1,20 @@
-FROM python:3.10-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 WORKDIR /usr/src/app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y curl && \
+RUN apt-get update && \
+    apt-get install -y git && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 
-COPY ./requirements.txt .
-RUN pip install -r requirements.txt
+ENV UV_SYSTEM_PYTHON=1
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen
 
 COPY . /usr/src/app/

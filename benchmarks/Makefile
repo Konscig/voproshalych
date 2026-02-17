@@ -1,48 +1,27 @@
 ROOT_DIR := ..
 
-.PHONY: load-dump drop-tables generate-embeddings generate-dataset run-benchmarks run-dashboard
+.PHONY: load-dump drop-tables generate-embeddings generate-dataset run-benchmarks run-dashboard install
+
+install:
+	uv sync
 
 load-dump:
-	python $(ROOT_DIR)/benchmarks/load_database_dump.py --dump $(ROOT_DIR)/benchmarks/data/dump/virtassist_backup_20260213.dump
+	uv run python $(ROOT_DIR)/benchmarks/load_database_dump.py --dump $(ROOT_DIR)/benchmarks/data/dump/virtassist_backup_20260213.dump
 
 drop-tables:
-	python $(ROOT_DIR)/benchmarks/load_database_dump.py --drop-tables-only
+	uv run python $(ROOT_DIR)/benchmarks/load_database_dump.py --drop-tables-only
 
 generate-embeddings:
-	docker run --rm \
-	  --network voproshalych_chatbot-conn \
-	  -v "$(PWD):/workspace" \
-	  -v "$$HOME/.cache/huggingface:/root/.cache/huggingface" \
-	  -w /workspace \
-	  virtassist/qa:latest \
-	  python $(ROOT_DIR)/benchmarks/generate_embeddings.py --chunks
+	docker compose exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
 
 generate-dataset:
-	docker run --rm \
-	  --network voproshalych_chatbot-conn \
-	  -v "$(PWD):/workspace" \
-	  -v "$$HOME/.cache/huggingface:/root/.cache/huggingface" \
-	  -w /workspace \
-	  virtassist/qa:latest \
-	  python $(ROOT_DIR)/benchmarks/generate_dataset.py --max-questions 500
+	docker compose exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
 
 run-benchmarks:
-	docker run --rm \
-	  --network voproshalych_chatbot-conn \
-	  -v "$(PWD):/workspace" \
-	  -v "$$HOME/.cache/huggingface:/root/.cache/huggingface" \
-	  -w /workspace \
-	  -e BENCHMARK_GIT_BRANCH="$$(git rev-parse --abbrev-ref HEAD)" \
-	  -e BENCHMARK_GIT_COMMIT_HASH="$$(git rev-parse --short HEAD)" \
-	  -e BENCHMARK_RUN_AUTHOR="$$(git config user.name)" \
-	  virtassist/qa:latest \
-	  python $(ROOT_DIR)/benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
+	docker compose exec -e BENCHMARK_GIT_BRANCH=$$(git rev-parse --abbrev-ref HEAD) \
+		-e BENCHMARK_GIT_COMMIT_HASH=$$(git rev-parse --short HEAD) \
+		-e BENCHMARK_RUN_AUTHOR=$$(git config user.name) \
+		benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
 
 run-dashboard:
-	docker run --rm \
-	  --network voproshalych_chatbot-conn \
-	  -v "$(PWD):/workspace" \
-	  -w /workspace \
-	  -p 7860:7860 \
-	  virtassist/qa:latest \
-	  python $(ROOT_DIR)/benchmarks/run_dashboard.py
+	docker compose run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py

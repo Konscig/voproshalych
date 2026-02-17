@@ -13,6 +13,7 @@ dependencies = [
     "numpy",
     "openai",
     "tenacity",
+    "pandas",
 ]
 
 [build-system]
@@ -24,8 +25,12 @@ dashboard = [
     "gradio>=6.5.1",
 ]
 
+dev = [
+    "pytest",
+]
+
 all = [
-    "voproshalych-benchmarks[dashboard]",
+    "voproshalych-benchmarks[dashboard,dev]",
 ]
 
 [tool.black]

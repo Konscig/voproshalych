@@ -7,6 +7,7 @@ import logging
 import os
 import json
 import re
+import time
 from typing import Dict, List, Optional
 
 from openai import OpenAI
@@ -74,6 +75,8 @@ class LLMJudge:
     Attributes:
         client: OpenAI клиент для взаимодействия с API
         model: Название модели для использования
+        request_delay: Задержка между запросами в секундах
+        request_timeout: Таймаут запроса в секундах
     """
 
     def __init__(
@@ -81,6 +84,8 @@ class LLMJudge:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
+        request_delay: float = 2.0,
+        request_timeout: float = 120.0,
     ):
         """Инициализировать LLM-судью.
 
@@ -88,6 +93,8 @@ class LLMJudge:
             api_key: API ключ (по умолчанию из BENCHMARKS_JUDGE_API_KEY)
             base_url: Базовый URL (по умолчанию из BENCHMARKS_JUDGE_BASE_URL или https://api.deepseek.com)
             model: Название модели (по умолчанию из BENCHMARKS_JUDGE_MODEL или deepseek-chat)
+            request_delay: Задержка между запросами в секундах (по умолчанию 2.0)
+            request_timeout: Таймаут запроса в секундах (по умолчанию 120.0)
 
         Raises:
             ValueError: Если не удалось подключиться к API
@@ -100,11 +107,15 @@ class LLMJudge:
         last_error: Optional[Exception] = None
         for candidate_api, candidate_base, candidate_model in candidates:
             self.model = candidate_model
-            self.client = OpenAI(api_key=candidate_api, base_url=candidate_base)
+            self.client = OpenAI(
+                api_key=candidate_api, base_url=candidate_base, timeout=request_timeout
+            )
+            self.request_delay = request_delay
             logger.info(
-                "LLMJudge инициализация: model=%s, base_url=%s",
+                "LLMJudge инициализация: model=%s, base_url=%s, timeout=%s",
                 candidate_model,
                 candidate_base,
+                request_timeout,
             )
             try:
                 self._check_connection()
@@ -121,7 +132,7 @@ class LLMJudge:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_random_exponential(min=1, max=60),
+        wait=wait_random_exponential(min=5, max=120),
         reraise=True,
     )
     def _check_connection(self):
@@ -135,6 +146,7 @@ class LLMJudge:
                 model=self.model,
                 messages=[{"role": "user", "content": "Hello"}],
                 max_tokens=1,
+                timeout=30,
             )
 
             if response.choices and len(response.choices) > 0:
@@ -149,7 +161,7 @@ class LLMJudge:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_random_exponential(min=1, max=60),
+        wait=wait_random_exponential(min=5, max=120),
         reraise=True,
     )
     def generate_question_from_chunk(self, chunk_text: str) -> Dict[str, str]:
@@ -214,6 +226,8 @@ class LLMJudge:
 
             logger.info(f"Сгенерирован вопрос: {result['question'][:50]}...")
 
+            time.sleep(self.request_delay)
+
             return result
 
         except Exception as e:
@@ -223,7 +237,7 @@ class LLMJudge:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_random_exponential(min=1, max=60),
+        wait=wait_random_exponential(min=5, max=120),
         reraise=True,
     )
     def evaluate_faithfulness(
@@ -284,6 +298,9 @@ class LLMJudge:
                 score = max(1.0, min(5.0, score))
 
                 logger.info(f"Faithfulness оценка: {score}")
+
+                time.sleep(self.request_delay)
+
                 return score
 
             except ValueError:
@@ -296,7 +313,7 @@ class LLMJudge:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_random_exponential(min=1, max=60),
+        wait=wait_random_exponential(min=5, max=120),
         reraise=True,
     )
     def evaluate_answer_relevance(
@@ -354,6 +371,9 @@ class LLMJudge:
                 score = max(1.0, min(5.0, score))
 
                 logger.info(f"Answer Relevance оценка: {score}")
+
+                time.sleep(self.request_delay)
+
                 return score
 
             except ValueError:
@@ -366,7 +386,7 @@ class LLMJudge:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_random_exponential(min=1, max=60),
+        wait=wait_random_exponential(min=5, max=120),
         reraise=True,
     )
     def evaluate_e2e_quality(
@@ -427,6 +447,9 @@ class LLMJudge:
                 score = max(1.0, min(5.0, score))
 
                 logger.info(f"E2E Quality оценка: {score}")
+
+                time.sleep(self.request_delay)
+
                 return score
 
             except ValueError:

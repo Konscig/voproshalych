@@ -2,7 +2,7 @@
 
 Использование:
     python load_database_dump.py --dump /path/to/dump.sql
-    python load_database_dump.py --dump-dir /path/to/dump/dir/
+    python load_database_dump.py --drop-tables
 """
 
 import argparse
@@ -77,6 +77,11 @@ def load_dump_main(dump_path: str) -> bool:
         return False
 
     try:
+        logger.info("Очистка таблиц перед загрузкой дампа...")
+        if not drop_tables_via_docker():
+            logger.error("Не удалось очистить таблицы")
+            return False
+
         logger.info(f"Загрузка дампа: {dump_abs_path}")
 
         db_container_name = "virtassist-db"
@@ -143,9 +148,9 @@ def main():
     )
 
     parser.add_argument(
-        "--drop-tables",
+        "--drop-tables-only",
         action="store_true",
-        help="Удалить существующие таблицы перед загрузкой дампа",
+        help="Только удалить таблицы (без загрузки дампа)",
     )
 
     args = parser.parse_args()
@@ -155,10 +160,14 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    if args.drop_tables:
+    if args.drop_tables_only:
         logger.info("Удаление существующих таблиц...")
-        drop_tables_via_docker()
-        sys.exit(0)
+        if drop_tables_via_docker():
+            logger.info("✅ Таблицы удалены!")
+            sys.exit(0)
+        else:
+            logger.error("❌ Ошибка удаления таблиц")
+            sys.exit(1)
 
     dump_path = args.dump if args.dump else args.dump_dir
     success = load_dump_main(dump_path)

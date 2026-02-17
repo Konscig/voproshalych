@@ -156,10 +156,11 @@ $$
 
 ```bash
 python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump --drop-tables
+python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump
+python benchmarks/load_database_dump.py --drop-tables-only
 ```
 
-`--drop-tables` используйте для полной пересборки benchmark-среды в БД.
+**Важно:** При загрузке дампа таблицы автоматически очищаются перед загрузкой. Флаг `--drop-tables-only` используется для удаления таблиц без загрузки дампа.
 
 ### `generate_embeddings.py`
 

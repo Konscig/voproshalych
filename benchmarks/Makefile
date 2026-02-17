@@ -1,9 +1,12 @@
 ROOT_DIR := ..
 
-.PHONY: load-dump generate-embeddings generate-dataset run-benchmarks run-dashboard
+.PHONY: load-dump drop-tables generate-embeddings generate-dataset run-benchmarks run-dashboard
 
 load-dump:
 	python $(ROOT_DIR)/benchmarks/load_database_dump.py --dump $(ROOT_DIR)/benchmarks/data/dump/virtassist_backup_20260213.dump
+
+drop-tables:
+	python $(ROOT_DIR)/benchmarks/load_database_dump.py --drop-tables-only
 
 generate-embeddings:
 	docker run --rm \

@@ -17,16 +17,16 @@ docker compose ps
 ## 1) Подготовка БД
 
 ```bash
-cd Submodules/voproshalych
 python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
 ```
 
-Если нужно полностью переинициализировать таблицы перед загрузкой:
+Если нужно только удалить таблицы без загрузки дампа:
 
 ```bash
-cd Submodules/voproshalych
-python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump --drop-tables
+python benchmarks/load_database_dump.py --drop-tables-only
 ```
+
+**Важно:** При загрузке дампа таблицы автоматически очищаются перед загрузкой.
 
 ## 2) Эмбеддинги
 

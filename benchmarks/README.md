@@ -195,9 +195,47 @@ docker compose exec benchmarks python benchmarks/generate_embeddings.py --chunks
 docker compose exec benchmarks python benchmarks/generate_embeddings.py --check-coverage
 ```
 
-## Полный рабочий цикл
+## Запуск с docker-compose.benchmarks.yml
+
+Для работы с бенчмарками существует отдельный docker-compose файл `docker-compose.benchmarks.yml`.
+
+Этот файл включает в себя:
+- Все сервисы основного приложения (db, db-migrate, qa, chatbot, adminpanel, max)
+- Дополнительный сервис `benchmarks` с портом 7860 для дашборда
+- Отдельные volumes для reports, data и cache бенчмарков
+
+### Преимущества использования docker-compose.benchmarks.yml
+
+- **Изолированный стек**: Полная среда для тестирования бенчмарков
+- **Отдельные volumes**: Данные бенчмарков хранятся отдельно от данных приложения
+- **Управление зависимостями**: Сервис benchmarks использует UV для управления зависимостями
+- **Единая точка запуска**: Все сервисы поднимаются одной командой
+
+### Запуск
+
+```bash
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml up -d --build
+```
+
+### Остановка
+
+```bash
+docker compose -f docker-compose.benchmarks.yml down
+```
+
+### Полный рабочий цикл
 
 ### Шаг 0. Поднять контейнеры
+
+Для запуска с бенчмарками (опционально):
+
+```bash
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml up -d --build
+```
+
+Для запуска только основного приложения:
 
 ```bash
 cd Submodules/voproshalych
@@ -206,7 +244,7 @@ docker compose up -d --build
 
 Дождитесь здорового состояния всех сервисов:
 ```bash
-docker compose ps
+docker compose -f docker-compose.benchmarks.yml ps
 ```
 
 ### Шаг 1. Подготовка `.env.docker`
@@ -276,7 +314,17 @@ docker compose run --rm -p 7860:7860 benchmarks python benchmarks/run_dashboard.
 
 ## Быстрые шорткаты (docker compose)
 
-Из `Submodules/voproshalych`:
+Из `Submodules/voproshalych` с использованием `docker-compose.benchmarks.yml`:
+
+```bash
+uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
+docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
+```
+
+Из `Submodules/voproshalych` с использованием основного `docker-compose.yml`:
 
 ```bash
 uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump

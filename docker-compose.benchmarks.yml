@@ -1,0 +1,144 @@
+version: '3.8'
+services:
+    db:
+        build: ./db
+        image: virtassist/db:latest
+        container_name: virtassist-db
+        restart: unless-stopped
+        ports:
+            - "5432:5432"
+        env_file:
+            - .env.docker
+        volumes:
+            - db-data:/var/lib/postgresql/data
+        networks:
+            - chatbot-conn
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+            start_period: 20s
+            start_interval: 5s
+
+    db-migrate:
+        build:
+            context: ./db
+            dockerfile: Dockerfile-migrate
+        image: virtassist/db-migrate:latest
+        container_name: virtassist-db-migrate
+        restart: no
+        command: alembic upgrade head
+        env_file:
+            - .env.docker
+        depends_on:
+            db:
+                condition: service_healthy
+        networks:
+            - chatbot-conn
+
+    qa:
+        build: ./qa
+        image: virtassist/qa:latest
+        container_name: virtassist-qa
+        restart: unless-stopped
+        command: sh -c "cron && python main.py"
+        env_file:
+            - .env.docker
+        depends_on:
+            db:
+                condition: service_healthy
+        networks:
+            - chatbot-conn
+
+    chatbot:
+        build: ./chatbot
+        image: virtassist/chatbot:latest
+        container_name: virtassist-chatbot
+        restart: unless-stopped
+        command: python main.py
+        env_file:
+            - .env.docker
+        depends_on:
+            db:
+                condition: service_healthy
+            qa:
+                condition: service_started
+            db-migrate:
+                condition: service_completed_successfully
+        networks:
+            - chatbot-conn
+
+    adminpanel:
+        build: ./adminpanel
+        image: virtassist/adminpanel:latest
+        container_name: virtassist-adminpanel
+        command: gunicorn --bind 0.0.0.0:80 --timeout 1200 wsgi:app
+        restart: unless-stopped
+        ports:
+            - 80:80
+        env_file:
+            - .env.docker
+        depends_on:
+            db:
+                condition: service_healthy
+            qa:
+                condition: service_started
+            chatbot:
+                condition: service_started
+            db-migrate:
+                condition: service_completed_successfully
+        networks:
+            - chatbot-conn
+
+    max:
+        build: ./max
+        image: virtassist/max:latest
+        container_name: virtassist-max
+        restart: unless-stopped
+        env_file:
+            - .env.docker
+        depends_on:
+            db:
+                condition: service_healthy
+            qa:
+                condition: service_started
+            db-migrate:
+                condition: service_completed_successfully
+        networks:
+            - chatbot-conn
+
+    benchmarks:
+        build: ./benchmarks
+        image: virtassist/benchmarks:latest
+        container_name: virtassist-benchmarks
+        restart: no
+        working_dir: /usr/src/app
+        env_file:
+            - .env.docker
+        volumes:
+            - ./:/usr/src/app
+            - benchmarks-cache:/root/.cache
+            - benchmarks-reports:/usr/src/app/benchmarks/reports
+            - benchmarks-data:/usr/src/app/benchmarks/data
+        ports:
+            - "7860:7860"
+        depends_on:
+            db:
+                condition: service_healthy
+            qa:
+                condition: service_started
+            db-migrate:
+                condition: service_completed_successfully
+        networks:
+            - chatbot-conn
+
+volumes:
+    db-data:
+    benchmarks-cache:
+    benchmarks-reports:
+    benchmarks-data:
+
+networks:
+    chatbot-conn:
+        driver: bridge

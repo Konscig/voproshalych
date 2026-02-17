@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
+from sqlalchemy import func
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -26,6 +27,8 @@ from qa.database import (
     create_engine,
     ensure_benchmark_runs_schema,
 )
+from qa.database import QuestionAnswer
+from benchmarks.models.real_queries_benchmark import RealQueriesBenchmark
 from benchmarks.models.rag_benchmark import RAGBenchmark
 from benchmarks.utils.llm_judge import LLMJudge
 from benchmarks.utils.report_generator import ReportGenerator
@@ -45,12 +48,16 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=".env.docker")
 
 
-def check_prerequisites(engine, judge: LLMJudge, dataset_path: str) -> bool:
+def check_prerequisites(
+    engine,
+    mode: str,
+    dataset_path: Optional[str] = None,
+) -> bool:
     """Проверить предварительные условия для запуска бенчмарков.
 
     Args:
         engine: Движок базы данных
-        judge: LLM-судья
+        mode: Режим запуска (synthetic/manual/real-users)
         dataset_path: Путь к датасету
 
     Returns:
@@ -77,12 +84,26 @@ def check_prerequisites(engine, judge: LLMJudge, dataset_path: str) -> bool:
             )
             return False
 
-    if not os.path.exists(dataset_path):
+    if mode in {"synthetic", "manual"} and (
+        not dataset_path or not os.path.exists(dataset_path)
+    ):
         logger.error(
             f"❌ Датасет не найден: {dataset_path}\n"
-            "Сгенерируйте датасет: python benchmarks/generate_dataset.py --num-samples 50"
+            "Сгенерируйте датасет: "
+            "python benchmarks/generate_dataset.py --max-questions 50"
         )
         return False
+
+    if mode == "real-users":
+        with Session(engine) as session:
+            total_real = session.scalar(
+                select(func.count(QuestionAnswer.id)).where(
+                    QuestionAnswer.embedding.isnot(None)
+                )
+            )
+        if not total_real:
+            logger.error("❌ В таблице question_answer нет вопросов с эмбеддингами")
+            return False
 
     logger.info("✅ Все предварительные условия выполнены")
     return True
@@ -128,13 +149,26 @@ def resolve_dataset_path(dataset_path: str) -> str:
     return dataset_path
 
 
+def resolve_manual_dataset_path(
+    manual_dataset: Optional[str], dataset_path: str
+) -> str:
+    """Определить путь к manual dataset."""
+    if manual_dataset:
+        return manual_dataset
+    return dataset_path
+
+
 def run_benchmark(
     engine,
     encoder: SentenceTransformer,
-    judge: LLMJudge,
-    dataset: list,
+    judge: Optional[LLMJudge],
+    dataset: Optional[list],
     tier: str,
+    mode: str,
     top_k: int = 10,
+    real_score_filter: int | None = 5,
+    real_limit: int = 500,
+    real_latest: bool = False,
 ):
     """Запустить бенчмарк.
 
@@ -144,12 +178,25 @@ def run_benchmark(
         judge: LLM-судья
         dataset: Датасет
         tier: Уровень бенчмарка (1, 2, 3, all)
+        mode: Режим запуска (synthetic/manual/real-users)
         top_k: Количество результатов для поиска (Tier 1)
 
     Returns:
         Результаты бенчмарка
     """
+    if mode == "real-users":
+        real_benchmark = RealQueriesBenchmark(engine, encoder)
+        return {
+            "tier_real_users": real_benchmark.run(
+                top_k=top_k,
+                score_filter=real_score_filter,
+                limit=real_limit,
+                latest=real_latest,
+            )
+        }
+
     benchmark = RAGBenchmark(engine, encoder, judge)
+    dataset = dataset or []
 
     if tier == "all":
         return benchmark.run_all_tiers(dataset, top_k=top_k)
@@ -163,7 +210,13 @@ def run_benchmark(
         raise ValueError(f"Неизвестный уровень бенчмарка: {tier}")
 
 
-def save_results(results: dict, output_dir: str, dataset_name: str, engine):
+def save_results(
+    results: dict,
+    output_dir: str,
+    dataset_name: str,
+    engine,
+    mode: str,
+):
     """Сохранить результаты бенчмарка.
 
     Args:
@@ -196,6 +249,7 @@ def save_results(results: dict, output_dir: str, dataset_name: str, engine):
     artifact_payload["run_metadata"] = run_metadata
     artifact_payload["overall_status"] = overall_status
     artifact_payload["dataset_file"] = os.path.basename(dataset_name)
+    artifact_payload["dataset_type"] = mode
 
     json_path = os.path.join(output_dir, f"rag_benchmark_{timestamp}.json")
     with open(json_path, "w", encoding="utf-8") as f:
@@ -223,9 +277,11 @@ def save_results(results: dict, output_dir: str, dataset_name: str, engine):
                 git_commit_hash=run_metadata["git_commit_hash"],
                 run_author=run_metadata["run_author"],
                 dataset_file=os.path.basename(dataset_name),
+                dataset_type=mode,
                 tier_1_metrics=normalized_results.get("tier_1"),
                 tier_2_metrics=normalized_results.get("tier_2"),
                 tier_3_metrics=normalized_results.get("tier_3"),
+                real_user_metrics=normalized_results.get("tier_real_users"),
                 overall_status=overall_status,
             )
         )
@@ -274,8 +330,16 @@ def main():
         "--tier",
         type=str,
         choices=["1", "2", "3", "all"],
-        required=True,
+        default="all",
         help="Уровень бенчмарка (1, 2, 3 или all)",
+    )
+
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["synthetic", "manual", "real-users"],
+        default="synthetic",
+        help="Режим бенчмарка: synthetic, manual или real-users",
     )
 
     parser.add_argument(
@@ -286,6 +350,13 @@ def main():
             "Путь к файлу датасета. Если используется путь по умолчанию и файл "
             "не найден, будет выбран последний benchmarks/data/dataset_*.json"
         ),
+    )
+
+    parser.add_argument(
+        "--manual-dataset",
+        type=str,
+        default=None,
+        help="Путь к manual dataset (используется при --mode manual)",
     )
 
     parser.add_argument(
@@ -315,6 +386,26 @@ def main():
         help="Пропустить проверку предварительных условий",
     )
 
+    parser.add_argument(
+        "--real-score",
+        type=int,
+        default=5,
+        help="Фильтр score для real-users режима (default: 5)",
+    )
+
+    parser.add_argument(
+        "--real-limit",
+        type=int,
+        default=500,
+        help="Лимит вопросов для real-users режима",
+    )
+
+    parser.add_argument(
+        "--real-latest",
+        action="store_true",
+        help="Брать последние real-user вопросы по created_at",
+    )
+
     args = parser.parse_args()
 
     engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
@@ -322,21 +413,65 @@ def main():
     model_path = Config.EMBEDDING_MODEL_PATH
     encoder = SentenceTransformer(model_path, device="cpu")
 
-    judge = LLMJudge()
-
     resolved_dataset = resolve_dataset_path(args.dataset)
+    if args.mode == "manual":
+        resolved_dataset = resolve_manual_dataset_path(
+            args.manual_dataset, args.dataset
+        )
 
     if not args.skip_checks:
-        if not check_prerequisites(engine, judge, resolved_dataset):
+        if not check_prerequisites(
+            engine,
+            mode=args.mode,
+            dataset_path=resolved_dataset,
+        ):
             sys.exit(1)
 
-    dataset = load_dataset(resolved_dataset, args.limit)
+    dataset: Optional[list] = None
+    if args.mode in {"synthetic", "manual"}:
+        dataset = load_dataset(resolved_dataset, args.limit)
 
-    logger.info(f"Запуск бенчмарка Tier {args.tier} с {len(dataset)} записями")
+    needs_judge = args.mode in {"synthetic", "manual"} and args.tier in {
+        "2",
+        "3",
+        "all",
+    }
+    judge = LLMJudge() if needs_judge else None
 
-    results = run_benchmark(engine, encoder, judge, dataset, args.tier, args.top_k)
+    if dataset is not None:
+        logger.info(
+            "Запуск бенчмарка mode=%s, tier=%s, dataset_rows=%s",
+            args.mode,
+            args.tier,
+            len(dataset),
+        )
+    else:
+        logger.info("Запуск бенчмарка mode=%s, tier=%s", args.mode, args.tier)
 
-    save_results(results, args.output_dir, dataset_name=resolved_dataset, engine=engine)
+    results = run_benchmark(
+        engine,
+        encoder,
+        judge,
+        dataset,
+        args.tier,
+        args.mode,
+        args.top_k,
+        real_score_filter=args.real_score,
+        real_limit=args.real_limit,
+        real_latest=args.real_latest,
+    )
+
+    dataset_name = resolved_dataset
+    if args.mode == "real-users":
+        dataset_name = f"real_users_score_{args.real_score}"
+
+    save_results(
+        results,
+        args.output_dir,
+        dataset_name=dataset_name,
+        engine=engine,
+        mode=args.mode,
+    )
     print_results(results)
 
     logger.info("✅ Бенчмарк успешно завершён")

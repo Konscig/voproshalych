@@ -31,6 +31,14 @@ METRICS_BY_TIER = {
     "tier_1": ["mrr", "hit_rate@1", "hit_rate@5", "hit_rate@10"],
     "tier_2": ["avg_faithfulness", "avg_answer_relevance"],
     "tier_3": ["avg_e2e_score", "avg_semantic_similarity"],
+    "tier_real_users": [
+        "mrr",
+        "recall@1",
+        "recall@5",
+        "precision@1",
+        "precision@5",
+        "ndcg@5",
+    ],
 }
 
 QUALITY_BASELINES = {
@@ -43,6 +51,14 @@ QUALITY_BASELINES = {
     "avg_e2e_score": 4.2,
     "avg_semantic_similarity": 0.85,
 }
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    """Безопасно привести значение к float."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 class RAGBenchmarkDashboard:
@@ -87,10 +103,12 @@ class RAGBenchmarkDashboard:
                     "git_commit_hash": record.git_commit_hash or "unknown",
                     "run_author": record.run_author or "unknown",
                     "dataset_file": record.dataset_file or "unknown",
+                    "dataset_type": record.dataset_type or "synthetic",
                     "overall_status": record.overall_status,
                     "tier_1": normalize_metrics(record.tier_1_metrics),
                     "tier_2": normalize_metrics(record.tier_2_metrics),
                     "tier_3": normalize_metrics(record.tier_3_metrics),
+                    "tier_real_users": normalize_metrics(record.real_user_metrics),
                 }
             )
 
@@ -172,7 +190,7 @@ class RAGBenchmarkDashboard:
                 gr.Markdown(
                     "\n".join(
                         [
-                            f"- Judge model: `{Config.JUDGE_MODEL or 'unknown'}`",
+                            f"- Judge model: `{os.getenv('BENCHMARKS_JUDGE_MODEL') or os.getenv('JUDGE_MODEL') or Config.JUDGE_MODEL or 'unknown'}`",
                             f"- Generation model: `{os.getenv('GENERATION_MODEL') or Config.MISTRAL_MODEL or 'unknown'}`",
                             f"- Embedding model: `{Config.EMBEDDING_MODEL_PATH}`",
                         ]
@@ -214,6 +232,8 @@ class RAGBenchmarkDashboard:
                     f"- Commit: `{latest_run['git_commit_hash']}`",
                     f"- Author: `{latest_run['run_author']}`",
                     f"- Dataset: `{latest_run['dataset_file']}`",
+                    f"- Dataset type: `{latest_run.get('dataset_type', 'synthetic')}`",
+                    f"- Judge model: `{os.getenv('BENCHMARKS_JUDGE_MODEL') or os.getenv('JUDGE_MODEL') or Config.JUDGE_MODEL or 'unknown'}`",
                     f"- Overall status: `{latest_run['overall_status']}`",
                 ]
             )
@@ -223,8 +243,10 @@ class RAGBenchmarkDashboard:
         summary_rows.append(
             {
                 "Tier": "Tier 1 (Retrieval)",
-                "HitRate@5": f"{float(latest_run.get('tier_1', {}).get('hit_rate@5', 0.0)):.4f}",
-                "MRR": f"{float(latest_run.get('tier_1', {}).get('mrr', 0.0)):.4f}",
+                "HitRate@5": round(
+                    _safe_float(latest_run.get("tier_1", {}).get("hit_rate@5")), 4
+                ),
+                "MRR": round(_safe_float(latest_run.get("tier_1", {}).get("mrr")), 4),
                 "Faithfulness": "-",
                 "Relevance": "-",
                 "E2E Score": "-",
@@ -235,8 +257,16 @@ class RAGBenchmarkDashboard:
                 "Tier": "Tier 2 (Generation)",
                 "HitRate@5": "-",
                 "MRR": "-",
-                "Faithfulness": f"{float(latest_run.get('tier_2', {}).get('avg_faithfulness', 0.0)):.4f}",
-                "Relevance": f"{float(latest_run.get('tier_2', {}).get('avg_answer_relevance', 0.0)):.4f}",
+                "Faithfulness": round(
+                    _safe_float(latest_run.get("tier_2", {}).get("avg_faithfulness")),
+                    4,
+                ),
+                "Relevance": round(
+                    _safe_float(
+                        latest_run.get("tier_2", {}).get("avg_answer_relevance")
+                    ),
+                    4,
+                ),
                 "E2E Score": "-",
             }
         )
@@ -247,9 +277,26 @@ class RAGBenchmarkDashboard:
                 "MRR": "-",
                 "Faithfulness": "-",
                 "Relevance": "-",
-                "E2E Score": f"{float(latest_run.get('tier_3', {}).get('avg_e2e_score', 0.0)):.4f}",
+                "E2E Score": round(
+                    _safe_float(latest_run.get("tier_3", {}).get("avg_e2e_score")), 4
+                ),
             }
         )
+
+        if latest_run.get("tier_real_users"):
+            summary_rows.append(
+                {
+                    "Tier": "Real Users (Retrieval)",
+                    "HitRate@5": "-",
+                    "MRR": round(
+                        _safe_float(latest_run.get("tier_real_users", {}).get("mrr")),
+                        4,
+                    ),
+                    "Faithfulness": "-",
+                    "Relevance": "-",
+                    "E2E Score": "-",
+                }
+            )
 
         gr.Dataframe(
             value=summary_rows,
@@ -269,21 +316,35 @@ class RAGBenchmarkDashboard:
     def _create_history_tab(self):
         gr.Markdown("### Historical trend for selected metric")
 
+        default_tier = "tier_1"
+        default_metric = "mrr"
+        if not self.get_metric_history(default_tier, default_metric)[0]:
+            for candidate_tier in ["tier_1", "tier_2", "tier_3", "tier_real_users"]:
+                for candidate_metric in self._metric_options_for_tier(candidate_tier):
+                    if self.get_metric_history(candidate_tier, candidate_metric)[0]:
+                        default_tier = candidate_tier
+                        default_metric = candidate_metric
+                        break
+                if default_metric != "mrr" or default_tier != "tier_1":
+                    break
+
         with gr.Row():
             tier_dropdown = gr.Dropdown(
-                choices=["tier_1", "tier_2", "tier_3"],
-                value="tier_1",
+                choices=["tier_1", "tier_2", "tier_3", "tier_real_users"],
+                value=default_tier,
                 label="Tier",
             )
             metric_dropdown = gr.Dropdown(
-                choices=self._metric_options_for_tier("tier_1"),
-                value="mrr",
+                choices=self._metric_options_for_tier(default_tier),
+                value=default_metric,
                 label="Metric",
             )
 
         initial_history = pd.DataFrame(
             self._build_series_rows(
-                *self.get_metric_history("tier_1", "mrr"), "mrr", "mrr"
+                *self.get_metric_history(default_tier, default_metric),
+                default_metric,
+                default_metric,
             )
         )
 
@@ -307,6 +368,8 @@ class RAGBenchmarkDashboard:
             return gr.Dropdown(choices=options, value=value)
 
         def update_plot(tier: str, metric: str):
+            if not metric:
+                return pd.DataFrame(columns=["timestamp", "value", "series"])
             dates, values = self.get_metric_history(tier, metric)
             if not dates:
                 return pd.DataFrame(columns=["timestamp", "value", "series"])
@@ -332,8 +395,12 @@ class RAGBenchmarkDashboard:
     def _create_comparison_tab(self):
         gr.Markdown("### Compare tiers by metric")
 
+        comparison_metrics = sorted(
+            {metric for metrics in METRICS_BY_TIER.values() for metric in metrics}
+        )
+
         metric_dropdown = gr.Dropdown(
-            choices=sorted(QUALITY_BASELINES.keys()),
+            choices=comparison_metrics,
             value="mrr",
             label="Metric",
         )
@@ -343,6 +410,7 @@ class RAGBenchmarkDashboard:
             "tier_1": "Tier 1",
             "tier_2": "Tier 2",
             "tier_3": "Tier 3",
+            "tier_real_users": "Real Users",
         }.items():
             dates, values = self.get_metric_history(tier_name, "mrr")
             if dates:
@@ -370,6 +438,7 @@ class RAGBenchmarkDashboard:
                 "tier_1": "Tier 1",
                 "tier_2": "Tier 2",
                 "tier_3": "Tier 3",
+                "tier_real_users": "Real Users",
             }
 
             longest_dates: List[str] = []
@@ -420,25 +489,13 @@ class RAGBenchmarkDashboard:
         )
 
     def _create_all_runs_tab(self):
-        all_runs = []
-        for run in reversed(self.runs):
-            tier_1 = run.get("tier_1", {})
-            tier_2 = run.get("tier_2", {})
-            tier_3 = run.get("tier_3", {})
-            all_runs.append(
-                {
-                    "Timestamp": run["timestamp_readable"],
-                    "Branch / Commit": f"{run['git_branch']} / {run['git_commit_hash']}",
-                    "T1: HitRate@5": f"{float(tier_1.get('hit_rate@5', 0.0)):.4f}",
-                    "T1: MRR": f"{float(tier_1.get('mrr', 0.0)):.4f}",
-                    "T2: Faithfulness": f"{float(tier_2.get('avg_faithfulness', 0.0)):.4f}",
-                    "T2: Relevance": f"{float(tier_2.get('avg_answer_relevance', 0.0)):.4f}",
-                    "T3: E2E Score": f"{float(tier_3.get('avg_e2e_score', 0.0)):.4f}",
-                }
-            )
-
-        gr.Dataframe(
-            value=all_runs,
+        mode_filter = gr.Dropdown(
+            choices=["all", "synthetic", "manual", "real-users"],
+            value="all",
+            label="Фильтр по типу датасета",
+        )
+        table = gr.Dataframe(
+            value=[],
             headers=[
                 "Timestamp",
                 "Branch / Commit",
@@ -452,11 +509,68 @@ class RAGBenchmarkDashboard:
             wrap=True,
         )
 
+        def build_registry_rows(filter_mode: str):
+            rows = []
+            for run in reversed(self.runs):
+                run_mode = run.get("dataset_type", "synthetic")
+                if filter_mode != "all" and run_mode != filter_mode:
+                    continue
+                tier_1 = run.get("tier_1", {})
+                tier_2 = run.get("tier_2", {})
+                tier_3 = run.get("tier_3", {})
+                rows.append(
+                    {
+                        "Timestamp": str(run["timestamp_readable"]),
+                        "Branch / Commit": (
+                            f"{run['git_branch']} / {run['git_commit_hash']}"
+                        ),
+                        "T1: HitRate@5": round(
+                            _safe_float(tier_1.get("hit_rate@5")), 4
+                        ),
+                        "T1: MRR": round(_safe_float(tier_1.get("mrr")), 4),
+                        "T2: Faithfulness": round(
+                            _safe_float(tier_2.get("avg_faithfulness")), 4
+                        ),
+                        "T2: Relevance": round(
+                            _safe_float(tier_2.get("avg_answer_relevance")), 4
+                        ),
+                        "T3: E2E Score": round(
+                            _safe_float(tier_3.get("avg_e2e_score")), 4
+                        ),
+                    }
+                )
+            return rows
+
+        mode_filter.change(
+            fn=build_registry_rows, inputs=[mode_filter], outputs=[table]
+        )
+        table.value = build_registry_rows("all")
+
     def _create_run_dataset_tab(self):
-        run_choices = [
-            f"{run['timestamp_readable']} | {run['git_commit_hash']} | {run['dataset_file']}"
-            for run in reversed(self.runs)
-        ]
+        mode_filter = gr.Dropdown(
+            choices=["all", "synthetic", "manual", "real-users"],
+            value="all",
+            label="Тип запуска",
+        )
+
+        ordered_runs = list(reversed(self.runs))
+
+        def format_run_choice(run: Dict) -> str:
+            return (
+                f"{run['timestamp_readable']} | {run['dataset_type']} | "
+                f"{run['git_commit_hash']} | {run['dataset_file']}"
+            )
+
+        def get_run_choices(filter_mode: str) -> List[str]:
+            if filter_mode == "all":
+                return [format_run_choice(run) for run in ordered_runs]
+            return [
+                format_run_choice(run)
+                for run in ordered_runs
+                if run.get("dataset_type") == filter_mode
+            ]
+
+        run_choices = get_run_choices("all")
 
         if not run_choices:
             gr.Markdown("Нет запусков для просмотра привязанного датасета.")
@@ -469,20 +583,45 @@ class RAGBenchmarkDashboard:
         )
         dataset_meta = gr.Markdown()
         dataset_preview = gr.Dataframe(
-            headers=["chunk_id", "question", "ground_truth_answer", "confluence_url"],
+            headers=[
+                "chunk_id",
+                "question",
+                "ground_truth_answer",
+                "confluence_url",
+                "relevant_chunk_ids",
+                "relevant_urls",
+            ],
             interactive=False,
             wrap=True,
         )
-
-        ordered_runs = list(reversed(self.runs))
 
         def update_dataset_preview(selected: str):
             if not selected:
                 return "", []
 
-            run_index = run_choices.index(selected)
-            run = ordered_runs[run_index]
+            run = next(
+                (item for item in ordered_runs if format_run_choice(item) == selected),
+                None,
+            )
+            if run is None:
+                return "Не найден выбранный запуск", []
+
+            if run.get("dataset_type") == "real-users":
+                real_metrics = run.get("tier_real_users", {})
+                info = "\n".join(
+                    [
+                        f"**Dataset:** `{run.get('dataset_file', 'unknown')}`",
+                        f"**Mode:** `{run.get('dataset_type', 'real-users')}`",
+                        f"**MRR:** `{_safe_float(real_metrics.get('mrr')):.4f}`",
+                        f"**Recall@5:** `{_safe_float(real_metrics.get('recall@5')):.4f}`",
+                        f"**NDCG@5:** `{_safe_float(real_metrics.get('ndcg@5')):.4f}`",
+                    ]
+                )
+                return info, []
+
             dataset_file = run.get("dataset_file") or ""
+            # TODO: вынести датасеты в отдельную таблицу benchmark_datasets,
+            # чтобы хранить snapshot записи вместе с запуском в БД.
             benchmark_dir = Path(__file__).resolve().parent
             project_root = benchmark_dir.parent
             candidate_paths = [
@@ -509,27 +648,56 @@ class RAGBenchmarkDashboard:
                     dataset = json.load(f)
 
                 preview = []
-                for row in dataset[:20]:
+                for row in dataset[:30]:
                     preview.append(
                         [
                             row.get("chunk_id"),
                             row.get("question", ""),
                             row.get("ground_truth_answer", ""),
                             row.get("confluence_url", ""),
+                            ", ".join(
+                                map(str, row.get("relevant_chunk_ids", []) or [])
+                            ),
+                            ", ".join(row.get("relevant_urls", []) or []),
                         ]
                     )
 
                 meta = (
                     f"**Dataset:** `{dataset_file}`\n"
+                    f"\n**Mode:** `{run.get('dataset_type', 'synthetic')}`\n"
                     f"\n**Rows:** {len(dataset)}\n"
                     f"\n**Linked run:** `{run['timestamp_readable']}`"
                 )
+
+                if dataset and isinstance(dataset[0], dict):
+                    if (
+                        "relevant_chunk_ids" in dataset[0]
+                        or "relevant_urls" in dataset[0]
+                    ):
+                        meta += (
+                            "\n\n`Manual dataset detected`: доступны поля "
+                            "`relevant_chunk_ids`, `relevant_urls`, `notes`."
+                        )
+
                 return meta, preview
             except Exception as error:
                 return (
                     f"**Dataset:** `{dataset_file}`\n\nОшибка чтения файла: `{error}`",
                     [],
                 )
+
+        def update_run_choices(filter_mode: str):
+            options = get_run_choices(filter_mode)
+            if not options:
+                return gr.Dropdown(choices=[], value=None), "", []
+            meta, preview = update_dataset_preview(options[0])
+            return gr.Dropdown(choices=options, value=options[0]), meta, preview
+
+        mode_filter.change(
+            fn=update_run_choices,
+            inputs=[mode_filter],
+            outputs=[run_selector, dataset_meta, dataset_preview],
+        )
 
         run_selector.change(
             fn=update_dataset_preview,
@@ -543,39 +711,68 @@ class RAGBenchmarkDashboard:
 
     def _create_reference_tab(self):
         gr.Markdown(
-            """
-### Формальная постановка задачи
+            r"""
+### Методология оценки RAG
 
-Система оценивает качество RAG в трёх уровнях:
-- **Tier 1 (Retrieval):** качество ранжирования документов-кандидатов.
-- **Tier 2 (Generation):** качество генерации ответа при фиксированном контексте.
-- **Tier 3 (E2E):** итоговое качество ответа в полном pipeline retrieval+generation.
+- **Tier 1 (Retrieval):** оценка ранжирования чанков в векторном поиске.
+- **Tier 2 (Generation):** оценка качества ответа при релевантном контексте.
+- **Tier 3 (End-to-End):** оценка полного пайплайна retrieval + generation.
+- **Real Users:** retrieval-метрики на реальных вопросах пользователей.
 
-### Определения метрик
+### Retrieval-метрики
 
-- **Precision@k**: доля релевантных документов в top-k.
-- **Recall@k**: доля найденных релевантных документов среди всех релевантных.
-- **MRR (Mean Reciprocal Rank):**
-  `MRR = (1 / |Q|) * Σ_q (1 / rank_q)` , где `rank_q` — позиция первого релевантного
-  документа для запроса `q`.
-- **Faithfulness (1..5):** аппроксимация условной вероятности того, что факты в ответе
-  выводимы из предоставленного контекста без галлюцинаций.
+Для множества запросов $Q$:
 
-### Методология LLM-as-a-Judge
+$$
+\mathrm{HitRate@K} = \frac{1}{|Q|} \sum_{q \in Q} \mathbf{1}[\exists d \in \mathrm{TopK}(q): d \in G_q]
+$$
 
-Для Tier 2 и Tier 3 используется схема **LLM-as-a-Judge**:
-1. Формируется вход: `question`, `context`, `system_answer`, `ground_truth`.
-2. Судья выставляет числовую оценку по фиксированным рубрикам.
-3. На уровне отчёта агрегируются средние значения и сравниваются с baseline.
+$$
+\mathrm{Recall@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{|\mathrm{TopK}(q) \cap G_q|}{|G_q|}
+$$
 
-### Интерпретация baseline
+$$
+\mathrm{Precision@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{|\mathrm{TopK}(q) \cap G_q|}{K}
+$$
 
-- Tier 1: `MRR >= 0.80`, `Hit@5 >= 0.90`, `Hit@10 >= 0.95`
-- Tier 2: `Faithfulness >= 4.5`, `Relevance >= 4.2`
-- Tier 3: `E2E >= 4.2`, `Semantic Similarity >= 0.85`
+$$
+\mathrm{MRR} = \frac{1}{|Q|} \sum_{q \in Q} \frac{1}{\mathrm{rank}_q}
+$$
 
-Значения ниже baseline указывают на деградацию качества retrieval, prompt-политики,
-или согласованности генерации с контекстом.
+$$
+\mathrm{NDCG@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{\mathrm{DCG@K}(q)}{\mathrm{IDCG@K}(q)}
+$$
+
+### Generation и End-to-End (LLM-as-a-Judge)
+
+Судья выставляет оценки $s_i \in \{1,2,3,4,5\}$.
+
+$$
+\mathrm{avg\_faithfulness} = \frac{1}{N} \sum_{i=1}^{N} s_i
+$$
+
+$$
+\mathrm{avg\_answer\_relevance} = \frac{1}{N} \sum_{i=1}^{N} s_i
+$$
+
+$$
+\mathrm{avg\_e2e\_score} = \frac{1}{N} \sum_{i=1}^{N} s_i
+$$
+
+Шкала 1-5 трактуется как **ordinal scale** (упорядоченная, не строго линейная).
+
+Для semantic similarity используется косинусная близость эмбеддингов:
+
+$$
+\mathrm{cos\_sim}(u, v) = \frac{u \cdot v}{\|u\|\,\|v\|}
+$$
+
+### Baseline-пороги
+
+- Tier 1: `MRR >= 0.80`, `HitRate@5 >= 0.90`, `HitRate@10 >= 0.95`
+- Tier 2: `Faithfulness >= 4.5`, `Answer Relevance >= 4.2`
+- Tier 3: `E2E Score >= 4.2`, `Semantic Similarity >= 0.85`
+- Real Users: `MRR`, `Recall@K`, `NDCG@K` анализируются в динамике по релизам
             """
         )
 

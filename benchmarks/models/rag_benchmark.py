@@ -7,16 +7,16 @@
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Set
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
-from qa.config import Config
 from qa.database import Chunk
 from benchmarks.utils.llm_judge import LLMJudge
+from benchmarks.utils.evaluator import compute_retrieval_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class RAGBenchmark:
         engine: Engine,
         encoder: SentenceTransformer,
         judge: Optional[LLMJudge] = None,
-        get_answer_func: Optional[callable] = None,
+        get_answer_func: Optional[Callable[[str, str], str]] = None,
     ):
         """Инициализировать бенчмарк.
 
@@ -48,7 +48,7 @@ class RAGBenchmark:
         """
         self.engine = engine
         self.encoder = encoder
-        self.judge = judge or LLMJudge()
+        self.judge = judge
 
         if get_answer_func is None:
             from qa.main import get_answer
@@ -73,6 +73,72 @@ class RAGBenchmark:
 
         logger.info("RAGBenchmark инициализирован с реальной функцией генерации")
 
+    def _get_judge(self) -> LLMJudge:
+        """Лениво инициализировать LLM-судью при необходимости."""
+        if self.judge is None:
+            self.judge = LLMJudge()
+        return self.judge
+
+    @staticmethod
+    def _extract_relevant_chunk_ids(item: Dict, fallback_chunk_id: int) -> Set[int]:
+        """Извлечь множество релевантных chunk_id из элемента датасета."""
+        if isinstance(item.get("relevant_chunk_ids"), list):
+            return {
+                int(chunk_id)
+                for chunk_id in item["relevant_chunk_ids"]
+                if isinstance(chunk_id, (int, str)) and str(chunk_id).isdigit()
+            }
+        return {fallback_chunk_id}
+
+    @staticmethod
+    def _extract_relevant_urls(item: Dict) -> Set[str]:
+        """Извлечь множество релевантных URL из элемента датасета."""
+        if isinstance(item.get("relevant_urls"), list):
+            return {
+                str(url).strip()
+                for url in item["relevant_urls"]
+                if isinstance(url, str) and url.strip()
+            }
+        url = item.get("confluence_url")
+        if isinstance(url, str) and url.strip():
+            return {url.strip()}
+        return set()
+
+    def _resolve_context_for_item(self, item: Dict, session: Session) -> str:
+        """Получить контекст для генерации в Tier 2 на основе датасета."""
+        chunk_text = item.get("chunk_text")
+        if isinstance(chunk_text, str) and chunk_text.strip():
+            return chunk_text
+
+        relevant_ids = item.get("relevant_chunk_ids")
+        if isinstance(relevant_ids, list) and relevant_ids:
+            chunks = session.scalars(
+                select(Chunk).where(Chunk.id.in_(relevant_ids)).order_by(Chunk.id.asc())
+            ).all()
+            context_parts = [chunk.text for chunk in chunks if chunk.text]
+            if context_parts:
+                return "\n\n".join(context_parts)
+
+        chunk_id = item.get("chunk_id")
+        if isinstance(chunk_id, int):
+            chunk = session.scalar(select(Chunk).where(Chunk.id == chunk_id))
+            if chunk and chunk.text:
+                return chunk.text
+
+        relevant_urls = item.get("relevant_urls")
+        if isinstance(relevant_urls, list) and relevant_urls:
+            chunks = session.scalars(
+                select(Chunk)
+                .where(Chunk.confluence_url.in_(relevant_urls))
+                .order_by(Chunk.id.asc())
+                .limit(5)
+            ).all()
+            context_parts = [chunk.text for chunk in chunks if chunk.text]
+            if context_parts:
+                return "\n\n".join(context_parts)
+
+        return ""
+
     def run_tier_1(
         self,
         dataset: List[Dict],
@@ -95,42 +161,78 @@ class RAGBenchmark:
 
         hit_rates = {k: 0 for k in [1, 5, 10]}
         reciprocal_ranks = []
+        retrieval_questions: List[str] = []
+        retrieval_results: Dict[str, List[str]] = {}
+        retrieval_ground_truth: Dict[str, Set[str]] = {}
 
         for item in dataset:
-            chunk_id = item["chunk_id"]
+            raw_chunk_id = item.get("chunk_id")
+            if raw_chunk_id is None:
+                relevant_ids = item.get("relevant_chunk_ids") or []
+                raw_chunk_id = relevant_ids[0] if relevant_ids else -1
+            chunk_id = int(raw_chunk_id)
             question = item["question"]
+            relevant_chunk_ids = self._extract_relevant_chunk_ids(item, chunk_id)
+            relevant_urls = self._extract_relevant_urls(item)
 
             question_embedding = self.encoder.encode(question)
 
             with Session(self.engine) as session:
                 top_chunks = session.scalars(
                     select(Chunk)
+                    .where(Chunk.embedding.isnot(None))
                     .order_by(Chunk.embedding.cosine_distance(question_embedding))
                     .limit(top_k)
                 ).all()
 
                 top_chunk_ids = [c.id for c in top_chunks]
+                top_urls = [c.confluence_url for c in top_chunks if c.confluence_url]
 
                 for k in [1, 5, 10]:
-                    if k <= top_k and chunk_id in top_chunk_ids[:k]:
+                    if k <= top_k and set(top_chunk_ids[:k]).intersection(
+                        relevant_chunk_ids
+                    ):
                         hit_rates[k] += 1
 
-                if chunk_id in top_chunk_ids:
-                    rank = top_chunk_ids.index(chunk_id) + 1
-                    reciprocal_ranks.append(1.0 / rank)
+                first_rank = 0
+                for idx, candidate_chunk_id in enumerate(top_chunk_ids, start=1):
+                    if candidate_chunk_id in relevant_chunk_ids:
+                        first_rank = idx
+                        break
+                reciprocal_ranks.append(1.0 / first_rank if first_rank else 0.0)
+
+                retrieval_key = str(item.get("id") or item.get("chunk_id") or question)
+                retrieval_questions.append(retrieval_key)
+                retrieval_results[retrieval_key] = top_urls
+                if relevant_urls:
+                    retrieval_ground_truth[retrieval_key] = relevant_urls
                 else:
-                    reciprocal_ranks.append(0.0)
+                    matched_urls = {
+                        chunk.confluence_url
+                        for chunk in top_chunks
+                        if chunk.id in relevant_chunk_ids and chunk.confluence_url
+                    }
+                    retrieval_ground_truth[retrieval_key] = matched_urls
 
         total = len(dataset)
 
-        metrics = {
+        metrics: Dict[str, float | int] = {
             "tier": 1,
             "total_queries": total,
             "hit_rate@1": hit_rates[1] / total if total > 0 else 0,
             "hit_rate@5": hit_rates[5] / total if total > 0 else 0,
             "hit_rate@10": hit_rates[10] / total if total > 0 else 0,
-            "mrr": np.mean(reciprocal_ranks) if reciprocal_ranks else 0,
+            "mrr": float(np.mean(reciprocal_ranks)) if reciprocal_ranks else 0.0,
         }
+
+        if retrieval_questions:
+            retrieval_metrics = compute_retrieval_metrics(
+                test_questions=retrieval_questions,
+                retrieved_results=retrieval_results,
+                ground_truth_urls=retrieval_ground_truth,
+                k_values=[1, 3, 5, 10],
+            )
+            metrics.update(retrieval_metrics)
 
         logger.info(f"Tier 1 завершён. MRR: {metrics['mrr']:.4f}")
 
@@ -161,7 +263,13 @@ class RAGBenchmark:
         for item in dataset:
             try:
                 question = item["question"]
-                context = item["chunk_text"]
+                with Session(self.engine) as session:
+                    context = self._resolve_context_for_item(item, session)
+
+                if not context:
+                    logger.warning("Не найден контекст для вопроса: %s", question[:50])
+                    errors += 1
+                    continue
 
                 system_answer = self.get_answer_func(question, context)
 
@@ -170,11 +278,13 @@ class RAGBenchmark:
                     errors += 1
                     continue
 
-                faithfulness = self.judge.evaluate_faithfulness(
+                judge = self._get_judge()
+
+                faithfulness = judge.evaluate_faithfulness(
                     question=question, context=context, answer=system_answer
                 )
 
-                relevance = self.judge.evaluate_answer_relevance(
+                relevance = judge.evaluate_answer_relevance(
                     question=question, answer=system_answer
                 )
 
@@ -196,12 +306,12 @@ class RAGBenchmark:
             "total_queries": len(dataset),
             "successful_evaluations": len(faithfulness_scores),
             "errors": errors,
-            "avg_faithfulness": np.mean(faithfulness_scores)
+            "avg_faithfulness": float(np.mean(faithfulness_scores))
             if faithfulness_scores
-            else 0,
-            "avg_answer_relevance": np.mean(relevance_scores)
+            else 0.0,
+            "avg_answer_relevance": float(np.mean(relevance_scores))
             if relevance_scores
-            else 0,
+            else 0.0,
         }
 
         logger.info(f"Tier 2 завершён. Faithfulness: {metrics['avg_faithfulness']:.2f}")
@@ -258,7 +368,9 @@ class RAGBenchmark:
                     errors += 1
                     continue
 
-                e2e_score = self.judge.evaluate_e2e_quality(
+                judge = self._get_judge()
+
+                e2e_score = judge.evaluate_e2e_quality(
                     question=question,
                     system_answer=system_answer,
                     ground_truth_answer=ground_truth,
@@ -293,10 +405,10 @@ class RAGBenchmark:
             "total_queries": len(dataset),
             "successful_evaluations": len(e2e_scores),
             "errors": errors,
-            "avg_e2e_score": np.mean(e2e_scores) if e2e_scores else 0,
-            "avg_semantic_similarity": np.mean(semantic_similarities)
+            "avg_e2e_score": float(np.mean(e2e_scores)) if e2e_scores else 0.0,
+            "avg_semantic_similarity": float(np.mean(semantic_similarities))
             if semantic_similarities
-            else 0,
+            else 0.0,
         }
 
         logger.info(f"Tier 3 завершён. E2E Score: {metrics['avg_e2e_score']:.2f}")

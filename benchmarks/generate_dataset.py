@@ -9,8 +9,9 @@ import logging
 import os
 import sys
 from datetime import datetime
-from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any, Dict, List
+
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,101 +32,159 @@ logger = logging.getLogger(__name__)
 load_dotenv(dotenv_path=".env.docker")
 
 
+def _load_existing_dataset(dataset_path: str) -> List[Dict[str, Any]]:
+    """Загрузить существующий датасет для инкрементального дополнения."""
+    if not dataset_path or not os.path.exists(dataset_path):
+        return []
+
+    with open(dataset_path, "r", encoding="utf-8") as file:
+        payload = json.load(file)
+
+    if not isinstance(payload, list):
+        logger.warning("Файл %s не является списком, пропускаем", dataset_path)
+        return []
+
+    return payload
+
+
 def generate_synthetic_dataset(
-    engine, num_samples: int, output_path: str, skip_existing: bool = True
+    engine,
+    max_questions: int,
+    output_path: str,
+    skip_existing_dataset: str | None = None,
+    generation_attempts: int = 3,
 ):
     """Сгенерировать синтетический датасет.
 
     Args:
         engine: Движок базы данных
-        num_samples: Количество сэмплов для генерации
+        max_questions: Максимальное количество пар вопрос-ответ
         output_path: Путь для сохранения датасета
-        skip_existing: Пропускать чанки, для которых уже есть вопросы
+        skip_existing_dataset: Путь к существующему датасету для дополнения
+        generation_attempts: Количество попыток генерации для одного чанка
     """
     from sqlalchemy import func, select
     from sqlalchemy.orm import Session
 
     judge = LLMJudge()
 
-    def normalize_question(question: str) -> str:
-        return " ".join(question.lower().split())
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    generation_errors: List[Dict[str, Any]] = []
 
-    def is_too_similar(candidate: str, existing: set[str]) -> bool:
-        normalized_candidate = normalize_question(candidate)
-        if normalized_candidate in existing:
-            return True
-        for existing_question in existing:
-            if (
-                SequenceMatcher(None, normalized_candidate, existing_question).ratio()
-                >= 0.92
-            ):
-                return True
-        return False
+    existing_dataset = _load_existing_dataset(skip_existing_dataset or "")
+    existing_chunk_ids = {
+        item.get("chunk_id")
+        for item in existing_dataset
+        if isinstance(item, dict) and item.get("chunk_id") is not None
+    }
+    dataset: List[Dict[str, Any]] = [
+        item for item in existing_dataset if isinstance(item, dict)
+    ]
+
+    if existing_dataset:
+        logger.info(
+            "Загружен существующий датасет: %s записей, %s уникальных chunk_id",
+            len(existing_dataset),
+            len(existing_chunk_ids),
+        )
 
     with Session(engine) as session:
-        total_chunks = session.scalars(select(func.count(Chunk.id))).one()
+        total_chunks = session.scalar(select(func.count(Chunk.id))) or 0
         logger.info(f"Всего чанков в БД: {total_chunks}")
 
         available_chunks = session.scalars(
             select(Chunk)
             .where(Chunk.embedding.isnot(None))
             .where(Chunk.text.isnot(None))
-            .order_by(func.random())
+            .where(Chunk.text != "")
+            .order_by(Chunk.id.asc())
         ).all()
 
-        logger.info(f"Чанков с эмбеддингами: {len(available_chunks)}")
-
-        if len(available_chunks) < num_samples:
-            logger.warning(
-                f"Недостаточно чанков с эмбеддингами: "
-                f"требуется {num_samples}, доступно {len(available_chunks)}"
-            )
-            num_samples = len(available_chunks)
-
-        dataset = []
-        seen_questions: set[str] = set()
+        available_chunks_total = len(available_chunks)
+        logger.info(f"Чанков с эмбеддингами: {available_chunks_total}")
 
         for i, chunk in enumerate(available_chunks, 1):
-            if len(dataset) >= num_samples:
+            if len(dataset) >= max_questions:
+                logger.info("Достигнут лимит max_questions=%s", max_questions)
                 break
-            try:
-                result = judge.generate_question_from_chunk(chunk.text)
-                question = result["question"].strip()
+            if chunk.id in existing_chunk_ids:
+                continue
 
-                if is_too_similar(question, seen_questions):
-                    logger.info(
-                        "Дубликат/слишком похожий вопрос, пропускаем: %s", question
+            try:
+                result = None
+                last_error: Exception | None = None
+                for attempt in range(1, generation_attempts + 1):
+                    try:
+                        result = judge.generate_question_from_chunk(chunk.text)
+                        break
+                    except Exception as error:  # noqa: PERF203
+                        last_error = error
+                        logger.warning(
+                            "Ошибка генерации chunk_id=%s (attempt %s/%s): %s",
+                            chunk.id,
+                            attempt,
+                            generation_attempts,
+                            error,
+                        )
+
+                if result is None:
+                    generation_errors.append(
+                        {
+                            "chunk_id": chunk.id,
+                            "reason": str(last_error or "generation_failed"),
+                        }
                     )
                     continue
-
-                seen_questions.add(normalize_question(question))
 
                 dataset_item = {
                     "chunk_id": chunk.id,
                     "chunk_text": chunk.text[:500],
-                    "question": question,
+                    "question": result["question"].strip(),
                     "ground_truth_answer": result["ground_truth_answer"],
                     "confluence_url": chunk.confluence_url,
                 }
 
                 dataset.append(dataset_item)
+                existing_chunk_ids.add(chunk.id)
 
-                logger.info(f"[{len(dataset)}/{num_samples}] Сгенерировано: {question}")
+                logger.info(
+                    "[%s/%s] chunk_id=%s, сгенерирован вопрос",
+                    len(dataset),
+                    max_questions,
+                    chunk.id,
+                )
 
                 if len(dataset) % 10 == 0:
-                    logger.info(f"Прогресс: {len(dataset)}/{num_samples}")
+                    logger.info(f"Прогресс: {len(dataset)}/{max_questions}")
 
             except Exception as e:
                 logger.error(f"Ошибка для чанка {chunk.id}: {e}")
+                generation_errors.append({"chunk_id": chunk.id, "reason": str(e)})
                 continue
+
+            if i % 200 == 0:
+                logger.info("Проверено чанков: %s/%s", i, available_chunks_total)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(dataset, f, ensure_ascii=False, indent=2)
 
+    error_report_path = f"benchmarks/data/dataset_errors_{timestamp}.json"
+    with open(error_report_path, "w", encoding="utf-8") as f:
+        json.dump(generation_errors, f, ensure_ascii=False, indent=2)
+
     logger.info(f"✅ Датасет сохранён: {output_path}")
     logger.info(f"📊 Сгенерировано {len(dataset)} пар вопрос-ответ")
+    logger.info("📛 Ошибок генерации: %s", len(generation_errors))
+    logger.info("🧾 Отчёт об ошибках: %s", error_report_path)
+
+    print("\n=== Итог генерации датасета ===")
+    print(f"Всего чанков с эмбеддингом: {available_chunks_total}")
+    print(f"Успешно сгенерировано пар: {len(dataset)}")
+    print(f"Ошибок генерации: {len(generation_errors)}")
+    print(f"Файл датасета: {output_path}")
+    print(f"Файл ошибок: {error_report_path}")
 
 
 def main():
@@ -135,10 +194,17 @@ def main():
     )
 
     parser.add_argument(
+        "--max-questions",
+        type=int,
+        default=500,
+        help="Максимальное количество пар вопрос-ответ (default: 500)",
+    )
+
+    parser.add_argument(
         "--num-samples",
         type=int,
-        default=100,
-        help="Количество сэмплов для генерации (default: 100)",
+        default=None,
+        help="Устаревший флаг (алиас для --max-questions)",
     )
 
     parser.add_argument(
@@ -152,6 +218,23 @@ def main():
         "--check-only",
         action="store_true",
         help="Только проверить существующий датасет",
+    )
+
+    parser.add_argument(
+        "--skip-existing-dataset",
+        type=str,
+        default=None,
+        help=(
+            "Путь к существующему датасету. Если указан и файл существует, "
+            "чанки из него будут пропущены"
+        ),
+    )
+
+    parser.add_argument(
+        "--generation-attempts",
+        type=int,
+        default=3,
+        help="Количество попыток генерации вопроса для одного чанка",
     )
 
     args = parser.parse_args()
@@ -173,7 +256,22 @@ def main():
             print(f"Датасет не найден: {output_path}")
         return
 
-    generate_synthetic_dataset(engine, args.num_samples, output_path)
+    max_questions = args.max_questions
+    if args.num_samples is not None:
+        max_questions = args.num_samples
+        logger.warning(
+            "Флаг --num-samples устарел, используйте --max-questions. "
+            "Используем max_questions=%s",
+            max_questions,
+        )
+
+    generate_synthetic_dataset(
+        engine,
+        max_questions=max_questions,
+        output_path=output_path,
+        skip_existing_dataset=args.skip_existing_dataset,
+        generation_attempts=max(1, args.generation_attempts),
+    )
 
 
 if __name__ == "__main__":

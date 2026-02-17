@@ -124,6 +124,8 @@ class BenchmarkRun(Base):
         tier_2_metrics (dict | None): метрики уровня Generation
         tier_3_metrics (dict | None): метрики end-to-end уровня
         overall_status (str): итоговый статус качества
+        dataset_type (str | None): тип датасета (synthetic/manual/real_users)
+        real_user_metrics (dict | None): метрики real-user retrieval
         created_at (datetime): время создания записи
         updated_at (datetime): время обновления записи
     """
@@ -139,6 +141,8 @@ class BenchmarkRun(Base):
     tier_1_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     tier_2_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     tier_3_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    real_user_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    dataset_type: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     overall_status: Mapped[str] = mapped_column(Text(), nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -152,6 +156,17 @@ def ensure_benchmark_runs_schema(engine: Engine) -> None:
         connection.execute(
             text(
                 "ALTER TABLE benchmark_runs ADD COLUMN IF NOT EXISTS dataset_file TEXT"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs ADD COLUMN IF NOT EXISTS dataset_type TEXT"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs "
+                "ADD COLUMN IF NOT EXISTS real_user_metrics JSON"
             )
         )
 

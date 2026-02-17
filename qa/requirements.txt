@@ -17,4 +17,3 @@ pgvector
 pytest
 openai
 tenacity
-gradio>=6.5.1

@@ -165,122 +165,34 @@ python benchmarks/load_database_dump.py --drop-tables-only
 ### `generate_embeddings.py`
 
 ```bash
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_embeddings.py --chunks
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_embeddings.py --all
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_embeddings.py --score 5
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_embeddings.py --check-coverage
+docker compose exec benchmarks python benchmarks/generate_embeddings.py --chunks
+docker compose exec benchmarks python benchmarks/generate_embeddings.py --all
+docker compose exec benchmarks python benchmarks/generate_embeddings.py --score 5
+docker compose exec benchmarks python benchmarks/generate_embeddings.py --check-coverage
 ```
 
 ### `generate_dataset.py`
 
 ```bash
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_dataset.py --max-questions 500
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/dataset_custom.json
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_dataset.py --check-only --output benchmarks/data/dataset_custom.json
+docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 500
+docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/dataset_custom.json
+docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
+docker compose exec benchmarks python benchmarks/generate_dataset.py --check-only --output benchmarks/data/dataset_custom.json
 ```
 
 ### `run_comprehensive_benchmark.py`
 
 ```bash
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
-  -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
-  -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" \
-  virtassist/qa:latest \
-  python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
-  -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
-  -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" \
-  virtassist/qa:latest \
-  python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
-  -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
-  -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" \
-  virtassist/qa:latest \
-  python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500 --top-k 10
+docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
+docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
+docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500 --top-k 10
 ```
 
 ### `run_dashboard.py`
 
 ```bash
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  -p 7860:7860 \
-  virtassist/qa:latest \
-  python benchmarks/run_dashboard.py
+docker compose exec benchmarks python benchmarks/generate_embeddings.py --chunks
+docker compose exec benchmarks python benchmarks/generate_embeddings.py --check-coverage
 ```
 
 ## Полный рабочий цикл
@@ -349,14 +261,7 @@ docker run --rm \
 ### Шаг 4. Генерация synthetic датасета
 
 ```bash
-cd Submodules/voproshalych
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/generate_dataset.py --max-questions 500
+docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 500
 ```
 
 ### Шаг 5. (Опционально) подготовка manual dataset
@@ -367,69 +272,31 @@ docker run --rm \
 ### Шаг 6. Запуск бенчмарков
 
 ```bash
-cd Submodules/voproshalych
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
-  -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
-  -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" \
-  virtassist/qa:latest \
-  python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_YYYYMMDD_HHMMSS.json
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
-  -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
-  -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" \
-  virtassist/qa:latest \
-  python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_YYYYMMDD_HHMMSS.json
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  -e BENCHMARK_GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)" \
-  -e BENCHMARK_GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
-  -e BENCHMARK_RUN_AUTHOR="$(git config user.name)" \
-  virtassist/qa:latest \
-  python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500
+docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_YYYYMMDD_HHMMSS.json
+docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_YYYYMMDD_HHMMSS.json
+docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500
 ```
 
 ### Шаг 7. Просмотр отчётов и дашборда
 
 ```bash
 cd Submodules/voproshalych
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  -p 7860:7860 \
-  virtassist/qa:latest \
-  python benchmarks/run_dashboard.py
+docker compose run --rm -p 7860:7860 benchmarks python benchmarks/run_dashboard.py
 ```
 
 Дашборд доступен по адресу: `http://localhost:7860`
 
-## Быстрые шорткаты (Makefile)
+## Быстрые шорткаты (docker compose)
 
-Из `Submodules/voproshalych/benchmarks`:
+Из `Submodules/voproshalych`:
 
 ```bash
-make load-dump
-make generate-embeddings
-make generate-dataset
-make run-benchmarks
-make run-dashboard
+docker compose exec benchmarks python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+docker compose exec benchmarks python benchmarks/generate_embeddings.py --chunks
+docker compose exec benchmarks python benchmarks/generate_dataset.py --max-questions 500
+docker compose exec benchmarks python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
+docker compose run --rm -p 7860:7860 benchmarks python benchmarks/run_dashboard.py
 ```
-
-**Примечание:** Makefile использует локальный Python. Для запуска через `docker run` используйте CLI команды выше.
 
 ## Архитектура
 

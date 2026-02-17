@@ -4,17 +4,20 @@ WORKDIR /usr/src/app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-
-RUN apt-get update && \
-    apt-get install -y git && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+ENV UV_SYSTEM_PYTHON=1
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/
 
-ENV UV_SYSTEM_PYTHON=1
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen
+COPY benchmarks/pyproject.toml benchmarks/uv.lock ./
 
-COPY . /usr/src/app/
+RUN uv sync --frozen --no-dev
+
+COPY benchmarks /usr/src/app/benchmarks
+COPY qa /usr/src/app/qa
+
+WORKDIR /usr/src/app

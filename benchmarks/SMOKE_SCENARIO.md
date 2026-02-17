@@ -59,7 +59,7 @@ docker run --rm \
   -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
   -w /workspace \
   virtassist/qa:latest \
-  python benchmarks/generate_dataset.py --max-questions 20
+  python benchmarks/generate_dataset.py --max-questions 500
 
 docker run --rm \
   --network voproshalych_chatbot-conn \

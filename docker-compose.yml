@@ -105,22 +105,7 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
-    benchmarks:
-        build: ./benchmarks
-        image: virtassist/benchmarks:latest
-        container_name: virtassist-benchmarks
-        restart: no
-        working_dir: /usr/src/app
-        env_file:
-            - .env.docker
-        volumes:
-            - ./:/usr/src/app
-        depends_on:
-            db:
-                condition: service_healthy
-        networks:
-            - chatbot-conn
-
+ 
 volumes:
     db-data:
 

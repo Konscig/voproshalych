@@ -5,7 +5,7 @@ WORKDIR /usr/src/app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-RUN apt-get update && apt-get install -y curl cron
+RUN apt-get update && apt-get install -y curl cron postgresql-client
 
 RUN crontab -l | { cat; echo "5 18 * * * curl -X POST http://localhost:8080/reindex/"; } | crontab -
 

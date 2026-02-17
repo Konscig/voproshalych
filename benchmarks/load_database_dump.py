@@ -1,15 +1,15 @@
-"""CLI скрипт для автоматической загрузки дампа БД.
+"""CLI скрипт для автоматической загрузки дампа БД через docker compose.
 
 Использование:
-    python load_database_dump.py --dump /path/to/dump.sql.gz
+    python load_database_dump.py --dump /path/to/dump.sql
     python load_database_dump.py --dump-dir /path/to/dump/dir/
 """
 
 import argparse
 import logging
-import sys
 import os
 import subprocess
+import sys
 from pathlib import Path
 from sys import path as sys_path
 from dotenv import load_dotenv
@@ -27,55 +27,98 @@ logger = logging.getLogger(__name__)
 load_dotenv(dotenv_path=".env.docker")
 
 
-def drop_tables(database_url: str) -> bool:
-    """Удалить существующие таблицы.
-
-    Args:
-        database_url: URL подключения к PostgreSQL
+def drop_tables_via_docker() -> bool:
+    """Удалить существующие таблицы через docker compose.
 
     Returns:
         True если успешно
     """
-    from sqlalchemy import create_engine, text
-    from sqlalchemy.orm import Session
-
     try:
-        engine = create_engine(database_url)
-        with Session(engine) as session:
-            session.execute(text("DROP TABLE IF EXISTS question_answer CASCADE"))
-            session.execute(text("DROP TABLE IF EXISTS chunk CASCADE"))
-            session.execute(text("DROP TABLE IF EXISTS holiday CASCADE"))
-            session.execute(text("DROP TABLE IF EXISTS admin CASCADE"))
-            session.commit()
+        cmd = [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "db",
+            "psql",
+            "-U",
+            os.environ.get("POSTGRES_USER", "postgres"),
+            "-d",
+            os.environ.get("POSTGRES_DB", "virtassist"),
+            "-c",
+            "DROP TABLE IF EXISTS question_answer CASCADE; DROP TABLE IF EXISTS chunk CASCADE; DROP TABLE IF EXISTS holiday CASCADE; DROP TABLE IF EXISTS admin CASCADE;",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode == 0:
             logger.info("Таблицы удалены")
-        return True
+            return True
+        else:
+            logger.error(f"Ошибка удаления таблиц: {result.stderr}")
+            return False
     except Exception as e:
         logger.error(f"Ошибка удаления таблиц: {e}")
         return False
 
 
-def load_dump_main(database_url: str, dump_path: str) -> bool:
-    """Главная функция для загрузки дампа.
+def load_dump_main(dump_path: str) -> bool:
+    """Главная функция для загрузки дампа через docker compose.
 
     Args:
-        database_url: URL подключения к PostgreSQL
         dump_path: Путь к дампу
 
     Returns:
         True если дамп загружен успешно
     """
+    dump_abs_path = os.path.abspath(dump_path)
+
+    if not os.path.exists(dump_abs_path):
+        logger.error(f"Файл дампа не найден: {dump_abs_path}")
+        return False
+
     try:
-        logger.info(f"Загрузка дампа: {dump_path}")
+        logger.info(f"Загрузка дампа: {dump_abs_path}")
 
-        cmd = ["psql", "-d", database_url, "-f", dump_path]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        db_container_name = "virtassist-db"
+        remote_path = "/tmp/dump.sql"
 
-        if result.returncode == 0:
+        logger.info("Копирование дампа в контейнер db...")
+        copy_cmd = [
+            "docker",
+            "cp",
+            dump_abs_path,
+            f"{db_container_name}:{remote_path}",
+        ]
+        copy_result = subprocess.run(copy_cmd, capture_output=True, text=True)
+
+        if copy_result.returncode != 0:
+            logger.error(f"Ошибка копирования дампа: {copy_result.stderr}")
+            return False
+
+        logger.info("Загрузка дампа через psql...")
+        psql_cmd = [
+            "docker",
+            "compose",
+            "exec",
+            "-T",
+            "db",
+            "psql",
+            "-U",
+            os.environ.get("POSTGRES_USER", "postgres"),
+            "-d",
+            os.environ.get("POSTGRES_DB", "virtassist"),
+            "-f",
+            remote_path,
+        ]
+        psql_result = subprocess.run(psql_cmd, capture_output=True, text=True)
+
+        if psql_result.returncode == 0:
             logger.info("Дамп загружен успешно")
             return True
         else:
-            logger.error(f"Ошибка загрузки дампа: {result.stderr}")
+            logger.error(f"Ошибка загрузки дампа: {psql_result.stderr}")
             return False
+
     except Exception as e:
         logger.error(f"Ошибка загрузки дампа: {e}")
         return False
@@ -84,7 +127,7 @@ def load_dump_main(database_url: str, dump_path: str) -> bool:
 def main():
     """Главная функция CLI скрипта."""
     parser = argparse.ArgumentParser(
-        description="Автоматическая загрузка дампа БД для бенчарков"
+        description="Автоматическая загрузка дампа БД для бенчарков через docker compose"
     )
 
     parser.add_argument(
@@ -112,22 +155,13 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    # Получаем URL БД из окружения
-    database_url = (
-        f"postgresql://{os.environ.get('POSTGRES_USER', 'voproshalych')}:"
-        f"{os.environ.get('POSTGRES_PASSWORD', 'voproshalych_password')}@"
-        f"{os.environ.get('POSTGRES_HOST', 'localhost:5432')}/"
-        f"{os.environ.get('POSTGRES_DB', 'virtassist')}"
-    )
-
-    logger.info(f"URL БД: {database_url}")
-
     if args.drop_tables:
         logger.info("Удаление существующих таблиц...")
-        drop_tables(database_url)
+        drop_tables_via_docker()
         sys.exit(0)
 
-    success = load_dump_main(database_url, args.dump if args.dump else args.dump_dir)
+    dump_path = args.dump if args.dump else args.dump_dir
+    success = load_dump_main(dump_path)
 
     if success:
         logger.info("✅ Дамп загружен успешно!")

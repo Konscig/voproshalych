@@ -18,14 +18,14 @@ docker compose ps
 
 ```bash
 cd Submodules/voproshalych
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/load_database_dump.py \
-  --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+```
+
+Если нужно полностью переинициализировать таблицы перед загрузкой:
+
+```bash
+cd Submodules/voproshalych
+python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump --drop-tables
 ```
 
 ## 2) Эмбеддинги

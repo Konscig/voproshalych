@@ -155,19 +155,8 @@ $$
 ### `load_database_dump.py`
 
 ```bash
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump --drop-tables
+python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump --drop-tables
 ```
 
 `--drop-tables` используйте для полной пересборки benchmark-среды в БД.
@@ -325,23 +314,14 @@ cp .env.docker.example .env.docker
 
 ```bash
 cd Submodules/voproshalych
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
 ```
 
 Если нужно полностью переинициализировать таблицы перед загрузкой:
 
 ```bash
-docker run --rm \
-  --network voproshalych_chatbot-conn \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  virtassist/qa:latest \
-  python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump --drop-tables
+cd Submodules/voproshalych
+python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump --drop-tables
 ```
 
 ### Шаг 3. Генерация эмбеддингов

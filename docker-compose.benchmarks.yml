@@ -112,7 +112,7 @@ services:
         build: ./benchmarks
         image: virtassist/benchmarks:latest
         container_name: virtassist-benchmarks
-        restart: no
+        restart: unless-stopped
         working_dir: /usr/src/app
         env_file:
             - .env.docker

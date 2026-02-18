@@ -99,14 +99,17 @@ class DatabaseDumpLoader:
                 sql_content = f.read()
 
             with self.Session() as session:
-                connection = session.connection()
+
                 try:
-                    connection.connection.execute(text(sql_content))
-                    connection.commit()
+                    session.execute(text(sql_content))
+                    session.commit()
                     logger.info("Дамп загружен успешно")
                     return True
-                finally:
-                    connection.close()
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Ошибка: {e}")
+                    return False
+
         except Exception as e:
             logger.error(f"Ошибка загрузки дампа: {e}")
             return False
@@ -120,14 +123,17 @@ class DatabaseDumpLoader:
                 sql_content = f.read()
 
             with self.Session() as session:
-                connection = session.connection()
+
                 try:
-                    connection.connection.execute(text(sql_content))
-                    connection.commit()
+                    session.execute(text(sql_content))
+                    session.commit()
                     logger.info("SQL дамп загружен успешно")
                     return True
-                finally:
-                    connection.close()
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Ошибка: {e}")
+                    return False
+
         except Exception as e:
             logger.error(f"Ошибка загрузки SQL дампа: {e}")
             return False
@@ -141,14 +147,17 @@ class DatabaseDumpLoader:
                 sql_content = f.read()
 
             with self.Session() as session:
-                connection = session.connection()
+
                 try:
-                    connection.connection.execute(text(sql_content))
-                    connection.commit()
+                    session.execute(text(sql_content))
+                    session.commit()
                     logger.info("Gzip дамп загружен успешно")
                     return True
-                finally:
-                    connection.close()
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Ошибка: {e}")
+                    return False
+
         except Exception as e:
             logger.error(f"Ошибка загрузки gzip дампа: {e}")
             return False
@@ -162,14 +171,17 @@ class DatabaseDumpLoader:
                 sql_content = f.read()
 
             with self.Session() as session:
-                connection = session.connection()
+
                 try:
-                    connection.connection.execute(text(sql_content))
-                    connection.commit()
+                    session.execute(text(sql_content))
+                    session.commit()
                     logger.info("SQL дамп загружен успешно")
                     return True
-                finally:
-                    connection.close()
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Ошибка: {e}")
+                    return False
+
         except Exception as e:
             logger.error(f"Ошибка загрузки SQL дампа: {e}")
             return False
@@ -190,7 +202,7 @@ class DatabaseDumpLoader:
                 return False
 
             with self.Session() as session:
-                connection = session.connection()
+
                 try:
                     # Получаем список файлов в архиве
                     members = tar.getmembers()
@@ -208,7 +220,7 @@ class DatabaseDumpLoader:
                             with gzip.open(member, "rt", encoding="utf-8") as f:
                                 sql_content = f.read()
 
-                            connection.connection.execute(text(sql_content))
+                            session.execute(text(sql_content))
 
                             logger.info("Gzip дамп загружен успешно")
                             return True
@@ -217,7 +229,7 @@ class DatabaseDumpLoader:
                             with open(member, "r", encoding="utf-8") as f:
                                 sql_content = f.read()
 
-                                connection.connection.execute(text(sql_content))
+                                session.execute(text(sql_content))
 
                                 logger.info("SQL дамп загружен успешно")
                                 return True
@@ -262,9 +274,9 @@ class DatabaseDumpLoader:
             logger.info(f"Найдено {len(sql_files)} SQL файлов в директории дампа")
 
             with self.Session() as session:
-                connection = session.connection()
+
                 try:
-                    connection.connection.execute(text("SET client_encoding to 'UTF8'"))
+                    session.execute(text("SET client_encoding to 'UTF8'"))
 
                     # Для каждого SQL файла
                     for sql_file in sql_files:
@@ -277,21 +289,24 @@ class DatabaseDumpLoader:
                             with open(sql_file, "r", encoding="utf-8") as f:
                                 sql_content = f.read()
 
-                        connection.connection.execute(text(sql_content))
+                        session.execute(text(sql_content))
 
-                    connection.commit()
+                    session.commit()
                     logger.info(
                         f"Загружено {len(sql_files)} файлов из директории дампа"
                     )
                     return True
-                finally:
-                    connection.close()
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Ошибка: {e}")
+                    return False
+
         except Exception as e:
             logger.error(f"Ошибка загрузки дампа из директории: {e}")
             return False
 
             with self.Session() as session:
-                connection = session.connection()
+
                 try:
                     for sql_file in sql_files:
                         logger.info(f"Загрузка файла: {sql_file}")
@@ -302,13 +317,16 @@ class DatabaseDumpLoader:
                             with open(sql_file, "r", encoding="utf-8") as f:
                                 sql_content = f.read()
 
-                        connection.connection.execute(text(sql_content))
+                        session.execute(text(sql_content))
 
-                    connection.commit()
+                    session.commit()
                     logger.info(f"Загружено {len(sql_files)} файлов из директории")
                     return True
-                finally:
-                    connection.close()
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Ошибка: {e}")
+                    return False
+
         except Exception as e:
             logger.error(f"Ошибка загрузки дампа из директории: {e}")
             return False

@@ -777,6 +777,20 @@ $$
         )
 
 
+def find_free_port(start_port=7860, max_port=7870):
+    """Найти свободный порт в диапазоне."""
+    import socket
+
+    for port in range(start_port, max_port + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("0.0.0.0", port))
+                return port
+            except OSError:
+                continue
+    return None
+
+
 def main():
     """Главная функция запуска дашборда."""
     if not GRADIO_AVAILABLE:
@@ -784,14 +798,37 @@ def main():
         print("Установите зависимости: uv sync --extra dashboard")
         return
 
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Запуск дашборда бенчмарков")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Порт для запуска дашборда (по умолчанию: первый свободный от 7860)",
+    )
+    args = parser.parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
 
+    # Определяем порт
+    if args.port:
+        port = args.port
+        logger.info(f"Используем указанный порт: {port}")
+    else:
+        port = find_free_port()
+        if port:
+            logger.info(f"Найден свободный порт: {port}")
+        else:
+            logger.error("Не удалось найти свободный порт в диапазоне 7860-7870")
+            return
+
     dashboard = RAGBenchmarkDashboard()
     interface = dashboard.create_interface()
-    interface.launch(server_name="0.0.0.0", share=False, debug=True)
+    interface.launch(server_name="0.0.0.0", server_port=port, share=False, debug=True)
 
 
 if __name__ == "__main__":

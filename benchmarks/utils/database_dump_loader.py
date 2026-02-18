@@ -88,7 +88,7 @@ class DatabaseDumpLoader:
             return False
 
     def _load_plain_dump(self) -> bool:
-        """Загрузить обычный дамп (без сжатия) через psql.
+        """Загрузить обычный дамп (без сжатия) через docker exec.
 
         Returns:
             True если дамп загружен успешно
@@ -105,35 +105,100 @@ class DatabaseDumpLoader:
             password = db_url.password
             database = db_url.database
 
-            env = os.environ.copy()
-            env['PGPASSWORD'] = password if password else ''
+            db_container = "virtassist-db"
 
             command = [
+                'docker', 'exec', '-i', db_container,
                 'psql',
                 f'--host={host}',
                 f'--port={port}' if port else '',
                 f'--username={user}',
                 f'--dbname={database}',
-                f'--file={self.dump_path}'
+                f'--file=/dev/stdin'
             ]
             
             command = [c for c in command if c]
-            
-            result = subprocess.run(
-                command,
-                env=env,
-                capture_output=True,
-                text=True
-            )
+
+            env = os.environ.copy()
+            env['PGPASSWORD'] = password if password else ''
+
+            with open(self.dump_path, 'rb') as f:
+                result = subprocess.run(
+                    command,
+                    stdin=f,
+                    env=env,
+                    capture_output=True,
+                    text=False
+                )
 
             if result.returncode == 0:
                 logger.info("Дамп загружен успешно")
                 return True
             else:
-                logger.error(f"Ошибка загрузки дампа: {result.stderr}")
+                stderr = result.stderr.decode('utf-8', errors='ignore') if result.stderr else ''
+                logger.error(f"Ошибка загрузки дампа: {stderr}")
                 return False
         except Exception as e:
             logger.error(f"Ошибка загрузки дампа: {e}")
+            return False
+
+    def _load_sql_dump(self) -> bool:
+        """Загрузить SQL дамп через docker exec."""
+        try:
+            logger.info(f"Загрузка SQL дампа: {self.dump_path}")
+            return self._load_plain_dump()
+        except Exception as e:
+            logger.error(f"Ошибка загрузки SQL дампа: {e}")
+            return False
+
+    def _load_gz_dump(self) -> bool:
+        """Загрузить gzip дамп."""
+        try:
+            logger.info(f"Загрузка gzip дампа: {self.dump_path}")
+
+            from sqlalchemy.engine.url import make_url
+            
+            db_url = make_url(self.database_url)
+            host = db_url.host
+            port = db_url.port
+            user = db_url.username
+            password = db_url.password
+            database = db_url.database
+
+            db_container = "virtassist-db"
+
+            command = [
+                'docker', 'exec', '-i', db_container,
+                'psql',
+                f'--host={host}',
+                f'--port={port}' if port else '',
+                f'--username={user}',
+                f'--dbname={database}'
+            ]
+            
+            command = [c for c in command if c]
+
+            env = os.environ.copy()
+            env['PGPASSWORD'] = password if password else ''
+
+            with gzip.open(self.dump_path, 'rt', encoding='utf-8') as f:
+                result = subprocess.run(
+                    command,
+                    env=env,
+                    stdin=f,
+                    capture_output=True,
+                    text=False
+                )
+
+            if result.returncode == 0:
+                logger.info("Gzip дамп загружен успешно")
+                return True
+            else:
+                stderr = result.stderr.decode('utf-8', errors='ignore') if result.stderr else ''
+                logger.error(f"Ошибка загрузки gzip дампа: {stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Ошибка загрузки gzip дампа: {e}")
             return False
 
     def _load_sql_dump(self) -> bool:

@@ -27,6 +27,29 @@ logger = logging.getLogger(__name__)
 load_dotenv(dotenv_path=".env.docker")
 
 
+def resolve_dump_path(dump_path: str) -> str:
+    """Разрешить путь к дампу для работы в Docker и локально.
+
+    Args:
+        dump_path: Путь к дампу (может быть относительным или абсолютным)
+
+    Returns:
+        Абсолютный путь к дампу
+    """
+    input_path = Path(dump_path)
+
+    if input_path.is_absolute():
+        return str(input_path)
+
+    if str(input_path).startswith("benchmarks/"):
+        return str(project_root / input_path)
+
+    if input_path.exists():
+        return str(input_path.absolute())
+
+    return str(project_root / input_path)
+
+
 def drop_tables_via_docker() -> bool:
     """Удалить существующие таблицы через docker compose.
 
@@ -70,7 +93,7 @@ def load_dump_main(dump_path: str) -> bool:
     Returns:
         True если дамп загружен успешно
     """
-    dump_abs_path = os.path.abspath(dump_path)
+    dump_abs_path = resolve_dump_path(dump_path)
 
     if not os.path.exists(dump_abs_path):
         logger.error(f"Файл дампа не найден: {dump_abs_path}")

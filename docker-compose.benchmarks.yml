@@ -44,6 +44,9 @@ services:
         command: sh -c "cron && python main.py"
         env_file:
             - .env.docker
+        volumes:
+            # Общий volume для кэша моделей HuggingFace
+            - model-cache:/root/.cache/huggingface
         depends_on:
             db:
                 condition: service_healthy
@@ -115,10 +118,10 @@ services:
         working_dir: /usr/src/app
         env_file:
             - .env.docker
-        environment:
-            - EMBEDDING_MODEL_PATH=/usr/src/app/saved_models/multilingual-e5-large-wikiutmn
         volumes:
             - ./:/usr/src/app
+            # Общий volume для кэша моделей HuggingFace (shared with qa)
+            - model-cache:/root/.cache/huggingface
             - benchmarks-reports:/usr/src/app/benchmarks/reports
             - benchmarks-data:/usr/src/app/benchmarks/data
             - /var/run/docker.sock:/var/run/docker.sock
@@ -136,6 +139,8 @@ services:
 
 volumes:
     db-data:
+    # Общий volume для кэша моделей HuggingFace
+    model-cache:
     benchmarks-reports:
     benchmarks-data:
 

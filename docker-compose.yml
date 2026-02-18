@@ -44,6 +44,9 @@ services:
         command: sh -c "cron && python main.py"
         env_file:
             - .env.docker
+        volumes:
+            # Общий volume для кэша моделей HuggingFace
+            - model-cache:/root/.cache/huggingface
         depends_on:
             db:
                 condition: service_healthy
@@ -108,6 +111,8 @@ services:
  
 volumes:
     db-data:
+    # Общий volume для кэша моделей HuggingFace (shared с benchmarks)
+    model-cache:
 
 networks:
     chatbot-conn:

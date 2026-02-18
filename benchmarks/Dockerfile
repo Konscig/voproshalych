@@ -25,21 +25,14 @@ COPY pyproject.toml uv.lock ./
 
 RUN uv sync --frozen --no-dev
 
-# Загружаем модель эмбеддингов во время сборки
-COPY save_models.py ./
-RUN uv run python save_models.py
-
-# Сохраняем кэш HuggingFace в образе
-ENV HF_HOME=/usr/src/app/.cache/huggingface
-RUN mkdir -p /usr/src/app/.cache/huggingface
+# Примечание: Модель эмбеддингов загружается в общий volume model-cache
+# через сервис qa при первом запуске
+# Volume: model-cache:/root/.cache/huggingface
 
 COPY models /usr/src/app/models
 COPY utils /usr/src/app/utils
 COPY *.py /usr/src/app/
 COPY README.md Makefile /usr/src/app/
-
-# Устанавливаем переменную окружения для использования локальной модели
-ENV EMBEDDING_MODEL_PATH=/usr/src/app/saved_models/multilingual-e5-large-wikiutmn
 
 WORKDIR /usr/src/app
 

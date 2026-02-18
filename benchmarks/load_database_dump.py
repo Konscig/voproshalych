@@ -41,28 +41,32 @@ def get_database_url() -> str:
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
 
 
-def drop_tables_via_docker() -> bool:
-    """Удалить существующие таблицы через docker compose.
+def drop_tables_via_docker(database_url: str) -> bool:
+    """Удалить существующие таблицы через прямое подключение к БД.
+
+    Args:
+        database_url: URL подключения к PostgreSQL
 
     Returns:
         True если успешно
     """
     try:
-        db_container_name = "virtassist-db"
+        from sqlalchemy import create_engine, text
 
-        result = subprocess.run(
-            f'docker exec {db_container_name} psql -U {os.environ.get("POSTGRES_USER", "postgres")} -d {os.environ.get("POSTGRES_DB", "virtassist")} -c "DROP TABLE IF EXISTS question_answer CASCADE; DROP TABLE IF EXISTS chunk CASCADE; DROP TABLE IF EXISTS holiday CASCADE; DROP TABLE IF EXISTS admin CASCADE;"',
-            capture_output=True,
-            text=True,
-            shell=True,
-        )
+        logger.info("Удаление таблиц...")
 
-        if result.returncode == 0:
-            logger.info("Таблицы удалены")
-            return True
-        else:
-            logger.error(f"Ошибка удаления таблиц: {result.stderr}")
-            return False
+        engine = create_engine(database_url)
+
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS question_answer CASCADE"))
+            conn.execute(text("DROP TABLE IF EXISTS chunk CASCADE"))
+            conn.execute(text("DROP TABLE IF EXISTS holiday CASCADE"))
+            conn.execute(text("DROP TABLE IF EXISTS admin CASCADE"))
+
+        engine.dispose()
+
+        logger.info("Таблицы успешно удалены")
+        return True
     except Exception as e:
         logger.error(f"Ошибка удаления таблиц: {e}")
         return False
@@ -111,7 +115,7 @@ def main():
 
     if args.drop_tables_only:
         logger.info("Режим: удаление таблиц")
-        if drop_tables_via_docker():
+        if drop_tables_via_docker(database_url):
             print("✅ Таблицы успешно удалены")
             sys.exit(0)
         else:

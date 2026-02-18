@@ -6,6 +6,7 @@
 import argparse
 import logging
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -40,6 +41,18 @@ def get_database_url() -> str:
 
     host = host.split(":")[0] if ":" in host else host
     port = port_str.split(":")[-1] if ":" in port_str else port_str
+
+    # Если хост 'db' не резолвится (локальный запуск вне Docker), используем localhost
+    if host == "db":
+        import socket
+
+        try:
+            socket.gethostbyname("db")
+        except socket.gaierror:
+            logger.info(
+                "Хост 'db' не доступен, используем 'localhost' для локального подключения"
+            )
+            host = "localhost"
 
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
 

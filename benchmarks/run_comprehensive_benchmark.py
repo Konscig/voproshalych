@@ -411,7 +411,10 @@ def main():
     engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
     model_path = Config.EMBEDDING_MODEL_PATH
+    logger.info(f"Загрузка модели эмбеддингов: {model_path}")
+    logger.info("Это может занять 1-2 минуты при первом запуске...")
     encoder = SentenceTransformer(model_path, device="cpu")
+    logger.info("Модель загружена успешно")
 
     resolved_dataset = resolve_dataset_path(args.dataset)
     if args.mode == "manual":

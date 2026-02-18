@@ -18,6 +18,188 @@ Enterprise-grade система бенчмарков для оценки Retriev
 - ✅ **Manual + Real Users режимы**: отдельные пайплайны для академичной оценки
 - ✅ **Версионированные артефакты**: JSON/Markdown отчёты + `benchmark_runs`
 
+## Выбор режима работы
+
+Модуль `benchmarks` поддерживает два режима работы:
+
+| Режим | Когда использовать | Окружение | Документация |
+|-------|-------------------|-------------|--------------|
+| **Локальный** | Разработка, отладка, быстрые проверки | Локальный Python 3.12+ + PostgreSQL | [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md) |
+| **Контейнерный** | CI/CD, интеграционное тестирование, продакшн | Docker + Docker Compose | [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md) |
+
+---
+
+## Локальный режим (без контейнеризации)
+
+Локальный режим предназначен для разработки и отладки. Все команды выполняются напрямую через `uv run` на хостовой машине.
+
+### Предварительные требования
+
+- Python 3.12+
+- Установленный UV: `curl -LsSf https://astral.sh/uv | sh`
+- PostgreSQL доступен локально или по сети
+- Переменные окружения в `.env` или `.env.docker`
+
+### Быстрый старт (локальный)
+
+```bash
+cd Submodules/voproshalych/benchmarks
+
+# Установка зависимостей
+make install-local
+
+# Подготовка БД
+make load-dump-local
+
+# Генерация эмбеддингов
+make generate-embeddings-local
+
+# Генерация датасета и запуск бенчмарков
+make generate-dataset-local
+make run-benchmarks-local
+
+# Запуск дашборда
+make run-dashboard-local
+```
+
+### Полный pipeline (локальный)
+
+```bash
+cd Submodules/voproshalych
+
+# Установка зависимостей
+uv sync
+
+# Подготовка БД
+uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+
+# Генерация эмбеддингов
+uv run python benchmarks/generate_embeddings.py --chunks
+uv run python benchmarks/generate_embeddings.py --check-coverage
+
+# Генерация датасета
+uv run python benchmarks/generate_dataset.py --max-questions 20
+
+# Запуск бенчмарков
+uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10
+
+# Запуск дашборда
+uv run python benchmarks/run_dashboard.py
+```
+
+### Доступные команды Makefile (локальный)
+
+```bash
+cd Submodules/voproshalych/benchmarks
+make help
+```
+
+| Команда | Описание |
+|---------|----------|
+| `install-local` | Установить зависимости через uv sync |
+| `load-dump-local` | Загрузить дамп БД |
+| `drop-tables-local` | Удалить таблицы БД |
+| `generate-embeddings-local` | Сгенерировать эмбеддинги |
+| `generate-dataset-local` | Сгенерировать датасет (20 вопросов) |
+| `run-benchmarks-local` | Запустить бенчмарки (synthetic mode, 10 вопросов) |
+| `run-dashboard-local` | Запустить дашборд локально |
+
+👉 **Подробные инструкции**: [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md)
+
+---
+
+## Контейнерный режим (docker-compose.benchmarks.yml)
+
+Контейнерный режим предназначен для CI/CD, интеграционного тестирования и продакшна. Все команды выполняются внутри контейнеров Docker.
+
+### Предварительные требования
+
+- Docker и Docker Compose установлены
+- `.env.docker` файл настроен с переменными окружения
+- Доступен PostgreSQL в сети Docker
+
+### Быстрый старт (Docker)
+
+```bash
+cd Submodules/voproshalych/benchmarks
+
+# Поднять стек с бенчмарками
+make COMPOSE_FILE=../docker-compose.benchmarks.yml up
+
+# Подготовка БД
+make COMPOSE_FILE=../docker-compose.benchmarks.yml load-dump
+
+# Генерация эмбеддингов
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-embeddings
+
+# Генерация датасета и запуск бенчмарков
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-dataset
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
+
+# Запуск дашборда
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
+
+# Остановка
+make COMPOSE_FILE=../docker-compose.benchmarks.yml down
+```
+
+### Полный pipeline (Docker)
+
+```bash
+cd Submodules/voproshalych
+
+# Поднять стек
+docker compose -f docker-compose.benchmarks.yml up -d --build
+
+# Проверить статус
+docker compose -f docker-compose.benchmarks.yml ps
+
+# Подготовка БД
+docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python benchmarks/load_database_dump.py \
+  --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+
+# Генерация эмбеддингов
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
+
+# Генерация датасета
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 20
+
+# Запуск бенчмарков
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode synthetic --limit 10
+
+# Запуск дашборда
+docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
+
+# Остановка
+docker compose -f docker-compose.benchmarks.yml down
+```
+
+### Доступные команды Makefile (Docker)
+
+```bash
+cd Submodules/voproshalych/benchmarks
+make help
+```
+
+| Команда | Описание |
+|---------|----------|
+| `up` | Поднять все сервисы (использует COMPOSE_FILE) |
+| `down` | Остановить все сервисы (использует COMPOSE_FILE) |
+| `load-dump` | Загрузить дамп БД через Docker |
+| `drop-tables` | Удалить таблицы БД через Docker |
+| `generate-embeddings` | Сгенерировать эмбеддинги через Docker |
+| `generate-dataset` | Сгенерировать датасет через Docker (500 вопросов) |
+| `run-benchmarks` | Запустить бенчмарки через Docker |
+| `run-dashboard` | Запустить дашборд через Docker |
+| `ps` | Показать статус сервисов |
+| `logs` | Показать логи сервиса benchmarks |
+
+👉 **Подробные инструкции**: [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md)
+
+---
+
 ## Структура проекта
 
 ```
@@ -25,7 +207,9 @@ benchmarks/
 ├── data/
 │   ├── dataset_YYYYMMDD_HHMMSS.json
 │   ├── manual_dataset_YYYYMMDD_HHMMSS.json
-│   └── dataset_errors_YYYYMMDD_HHMMSS.json
+│   ├── dataset_errors_YYYYMMDD_HHMMSS.json
+│   └── dump/
+│       └── virtassist_backup_20260213.dump
 ├── docs/
 │   └── manual_annotation_guide.md
 ├── models/
@@ -39,38 +223,13 @@ benchmarks/
 │   ├── evaluator.py
 │   └── embedding_generator.py
 ├── Makefile
-├── dashboard.py
+├── Dockerfile
 ├── generate_embeddings.py
 ├── generate_dataset.py
 ├── load_database_dump.py
 ├── run_comprehensive_benchmark.py
 └── run_dashboard.py
 ```
- 
-## Smoke-сценарии тестирования
-
-Для быстрого тестирования системы бенчмарков доступны два Smoke-сценария:
-
-### Локальное тестирование
-
-Полный сценарий для локального запуска без Docker:
-- 📄 [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md) - локальное тестирование с `uv run`
-- Требуется только PostgreSQL и Python 3.12+
-- Все команды выполняются локально через UV
-
-### Контейнеризация с Docker
-
-Полный сценарий для работы в Docker окружении:
-- 📄 [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md) - тестирование с `docker-compose.benchmarks.yml`
-- Изолированный стек с отдельными volumes для кэша, отчётов и данных
-- Все команды выполняются внутри контейнеров
-
-### Выбор сценария
-
-| Сценарий | Когда использовать | Окружение |
-|-----------|-------------------|-------------|
-| LOCAL | Разработка, отладка, быстрые проверки | Локальный Python + PostgreSQL |
-| DOCKER | CI/CD, интеграционное тестирование, продакшн | Docker + Docker Compose |
 
 ## Компоненты системы
 
@@ -172,24 +331,46 @@ $$
 $$
 
 $$
-\mathrm{cos\_sim}(u, v) = \frac{u \cdot v}{\|u\|\,\|v\|}
+\cos\_sim(u, v) = \frac{u \cdot v}{\|u\|\,\|v\|}
 $$
 
 ## CLI команды
 
 ### `load_database_dump.py`
 
+**Локальный режим:**
 ```bash
+cd Submodules/voproshalych
 uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
 uv run python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump
 uv run python benchmarks/load_database_dump.py --drop-tables-only
+```
+
+**Docker режим:**
+```bash
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python benchmarks/load_database_dump.py \
+  --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python benchmarks/load_database_dump.py \
+  --drop-tables-only
 ```
 
 **Важно:** При загрузке дампа таблицы автоматически очищаются перед загрузкой. Флаг `--drop-tables-only` используется для удаления таблиц без загрузки дампа.
 
 ### `generate_embeddings.py`
 
+**Локальный режим:**
 ```bash
+cd Submodules/voproshalych
+uv run python benchmarks/generate_embeddings.py --chunks
+uv run python benchmarks/generate_embeddings.py --all
+uv run python benchmarks/generate_embeddings.py --score 5
+uv run python benchmarks/generate_embeddings.py --check-coverage
+```
+
+**Docker режим:**
+```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --all
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --score 5
@@ -198,7 +379,18 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 
 ### `generate_dataset.py`
 
+**Локальный режим:**
 ```bash
+cd Submodules/voproshalych
+uv run python benchmarks/generate_dataset.py --max-questions 20
+uv run python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/dataset_custom.json
+uv run python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
+uv run python benchmarks/generate_dataset.py --check-only --output benchmarks/data/dataset_custom.json
+```
+
+**Docker режим:**
+```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/dataset_custom.json
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
@@ -207,17 +399,40 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 
 ### `run_comprehensive_benchmark.py`
 
+**Локальный режим:**
 ```bash
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500 --top-k 10
+cd Submodules/voproshalych
+uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
+uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
+uv run python benchmarks/run_comprehensive_benchmark.py --mode real-users --real-score 5 --real-limit 500 --top-k 10
+```
+
+**Docker режим:**
+```bash
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode synthetic --dataset benchmarks/data/dataset_20260216_124845.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode manual --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
+  --mode real-users --real-score 5 --real-limit 500 --top-k 10
 ```
 
 ### `run_dashboard.py`
 
+**Локальный режим:**
 ```bash
+cd Submodules/voproshalych
+uv run python benchmarks/run_dashboard.py
+```
+
+**Docker режим:**
+```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
 ```
+
+Дашборд доступен по адресу: `http://localhost:7860`
 
 ## Запуск с docker-compose.benchmarks.yml
 
@@ -250,39 +465,6 @@ docker compose -f docker-compose.benchmarks.yml down
 
 👉 **Подробные инструкции**: [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md)
 
-## Быстрые шорткаты (docker compose)
-
-Из `Submodules/voproshalych` с использованием `docker-compose.benchmarks.yml`:
-
-```bash
-uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
-docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
-```
-
-### Через Makefile
-
-```bash
-cd Submodules/voproshalych/benchmarks
-make install
-make load-dump
-make generate-embeddings
-make generate-dataset
-make run-benchmarks
-make run-dashboard
-make help
-```
-
-Доступные команды Makefile:
-- `up` - поднять основной стек
-- `down` - остановить основной стек
-- `up-benchmarks` - поднять стек с бенчмарками
-- `down-benchmarks` - остановить стек с бенчмарками
-- `ps` - показать статус сервисов
-- `logs` - показать логи сервиса benchmarks
-
 ## Архитектура
 
 ```mermaid
@@ -304,7 +486,7 @@ sequenceDiagram
     User->>Benchmarks: run_dashboard.py
     Benchmarks->>Postgres: SELECT benchmark_runs
     Benchmarks-->>User: interactive metrics dashboard
-    ```
+```
 
 ## Полезные ссылки
 

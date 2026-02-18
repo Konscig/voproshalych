@@ -10,24 +10,39 @@
 
 ## 0) Поднять контейнеры
 
-Для запуска полного стека с бенчмарками:
+### Вариант A: Полный стек с бенчмарками
 
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml up
+```
+
+Или напрямую:
 ```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml up -d --build
 ```
 
-Для запуска только основного приложения (без бенчмарков):
+### Вариант B: Только основной стек (без бенчмарков)
 
 ```bash
 cd Submodules/voproshalych
 docker compose up -d --build
 ```
 
+### Проверка статуса
+
 Дождитесь здорового состояния всех сервисов:
 
 ```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml ps
+```
+
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml ps
 ```
 
 Ожидайте пока все сервисы будут в статусе `healthy` или `running`.
@@ -44,19 +59,34 @@ cat .env.docker
 Обязательные переменные:
 - `MISTRAL_API`, `MISTRAL_MODEL`
 - `BENCHMARKS_JUDGE_API_KEY` (или `JUDGE_API`)
-- `EMBEDDING_MODEL_PATH` (путь к модели или используеться HF)
+- `EMBEDDING_MODEL_PATH` (путь к модели или используется HF)
 
 ## 2) Подготовка БД
 
+### Вариант A: Загрузка дампа
+
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml load-dump
+```
+
+Или напрямую:
 ```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python benchmarks/load_database_dump.py \
   --dump benchmarks/data/dump/virtassist_backup_20260213.dump
 ```
 
-Если нужно только удалить таблицы без загрузки дампа:
+### Вариант B: Только удаление таблиц
 
 ```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml drop-tables
+```
+
+Или напрямую:
+```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python benchmarks/load_database_dump.py \
   --drop-tables-only
 ```
@@ -65,6 +95,12 @@ docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python
 
 ## 3) Генерация эмбеддингов
 
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-embeddings
+```
+
+Или напрямую:
 ```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
@@ -76,6 +112,13 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 
 ## 4) Synthetic dataset + benchmark
 
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-dataset
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
+```
+
+Или напрямую:
 ```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 20
@@ -93,7 +136,18 @@ cd Submodules/voproshalych
 nano benchmarks/data/manual_dataset_smoke.json
 ```
 
+```json
+[
+  {
+    "question": "Ваш вопрос",
+    "ground_truth_answer": "Ожидаемый ответ",
+    "relevant_chunk_ids": [1, 2, 3]
+  }
+]
+```
+
 ```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode manual \
   --manual-dataset benchmarks/data/manual_dataset_smoke.json \
@@ -111,6 +165,12 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 ## 7) Проверка результатов через дашборд
 
 ```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
+```
+
+Или напрямую:
+```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
 ```
@@ -127,12 +187,19 @@ docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks
 Для просмотра логов сервиса benchmarks:
 
 ```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml logs -f benchmarks
 ```
 
-Для просмотра логов всех сервисов:
-
+Или через Makefile:
 ```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml logs
+```
+
+Для просмотра логов всех сервисов:
+```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml logs -f
 ```
 
@@ -147,41 +214,83 @@ docker volume inspect benchmarks-cache benchmarks-reports benchmarks-data
 ## 10) Остановка контейнеров
 
 ```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml down
+```
+
+Или напрямую:
+```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml down
 ```
 
 Для остановки с удалением volumes:
-
 ```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml down -v
 ```
 
-## Быстрые команды через Makefile
+## Полный pipeline через Makefile
 
 ```bash
 cd Submodules/voproshalych/benchmarks
 
-# Установка зависимостей (локально)
-make install
-
 # Управление стеком
-make up-benchmarks    # Поднять стек с бенчмарками
-make down-benchmarks   # Остановить стек с бенчмарками
+make COMPOSE_FILE=../docker-compose.benchmarks.yml up
+make COMPOSE_FILE=../docker-compose.benchmarks.yml ps
 
-# Бенчмарки
-make generate-embeddings
-make generate-dataset
-make run-benchmarks
+# Подготовка БД
+make COMPOSE_FILE=../docker-compose.benchmarks.yml load-dump
 
-# Дашборд
-make run-dashboard
+# Генерация эмбеддингов
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-embeddings
 
-# Статус и логи
-make ps               # Показать статус сервисов
-make logs             # Показать логи benchmarks
-make help             # Справка
+# Генерация датасета и запуск бенчмарков
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-dataset
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
+
+# Запуск дашборда
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
+
+# Логи и статус
+make COMPOSE_FILE=../docker-compose.benchmarks.yml logs
+make COMPOSE_FILE=../docker-compose.benchmarks.yml ps
+
+# Остановка
+make COMPOSE_FILE=../docker-compose.benchmarks.yml down
+```
+
+## Полный pipeline напрямую (без Makefile)
+
+```bash
+cd Submodules/voproshalych
+
+# Поднять стек
+docker compose -f docker-compose.benchmarks.yml up -d --build
+
+# Проверить статус
+docker compose -f docker-compose.benchmarks.yml ps
+
+# Подготовка БД
+docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python benchmarks/load_database_dump.py \
+  --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+
+# Генерация эмбеддингов
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
+
+# Генерация датасета
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 20
+
+# Запуск бенчмарков
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode synthetic --limit 10
+
+# Запуск дашборда
+docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
+
+# Остановка
+docker compose -f docker-compose.benchmarks.yml down
 ```
 
 ## Устранение проблем
@@ -189,35 +298,34 @@ make help             # Справка
 ### Проблема: "Контейнер не запускается"
 
 Проверьте логи:
-
 ```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml logs benchmarks
 ```
 
 Проверьте зависимости:
-
 ```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml ps
 ```
 
 ### Проблема: "Нет соединения с БД"
 
 Убедитесь что сервис `db` healthy:
-
 ```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml ps
 ```
 
 Проверьте переменные окружения в `.env.docker`:
-
 ```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml exec benchmarks env | grep POSTGRES
 ```
 
 ### Проблема: "Модели не кэшируются"
 
 Проверьте volume `benchmarks-cache`:
-
 ```bash
 docker volume ls | grep benchmarks
 ```
@@ -227,7 +335,6 @@ docker volume ls | grep benchmarks
 ### Проблема: "Нет отчётов"
 
 Проверьте volume `benchmarks-reports`:
-
 ```bash
 docker run --rm -v benchmarks-reports:/data alpine ls -lh /data
 ```
@@ -235,13 +342,11 @@ docker run --rm -v benchmarks-reports:/data alpine ls -lh /data
 ## Мониторинг ресурсов
 
 Для мониторинга ресурсов контейнеров:
-
 ```bash
 docker stats
 ```
 
 Для мониторинга только сервиса benchmarks:
-
 ```bash
 docker stats virtassist-benchmarks
 ```
@@ -249,15 +354,14 @@ docker stats virtassist-benchmarks
 ## Пересборка образа
 
 Если нужно пересобрать образ benchmarks:
-
 ```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml build --no-cache benchmarks
 ```
 
 Для пересборки с очисткой всех кэшей:
-
 ```bash
+cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml build --no-cache --pull benchmarks
 docker system prune -f
 ```
@@ -268,13 +372,13 @@ docker system prune -f
 ┌─────────────────────────────────────────┐
 │          chatbot-conn network          │
 ├─────────────────────────────────────────┤
-│  db (5432)                          │
-│  db-migrate                           │
-│  qa                                    │
-│  chatbot                              │
-│  adminpanel (80)                      │
-│  max                                  │
-│  benchmarks (7860)                    │
+│  db (5432)                              │
+│  db-migrate                             │
+│  qa                                     │
+│  chatbot                                │
+│  adminpanel (80)                        │
+│  max                                    │
+│  benchmarks (7860)                      │
 └─────────────────────────────────────────┘
 ```
 
@@ -295,11 +399,10 @@ docker system prune -f
 
 **Важно:** Контейнер не является сервисом-демоном, а интерактивной средой для выполнения задач.
 
-
 ## Политики перезапуска сервисов
 
 | Сервис | Policy | Поведение |
-|---------|---------|------------|
+|--------|--------|-----------|
 | db | unless-stopped | Автоматический перезапуск |
 | qa | unless-stopped | Автоматический перезапуск |
 | chatbot | unless-stopped | Автоматический перезапуск |
@@ -311,4 +414,3 @@ docker system prune -f
 - Контейнеру оставаться в состоянии `running` после запуска
 - Выполнять команды через `docker compose exec`
 - Запускать дашборд через `make run-dashboard`
-

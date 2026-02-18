@@ -277,5 +277,22 @@ docker system prune -f
 │  benchmarks (7860)                    │
 └─────────────────────────────────────────┘
 ```
-
+ 
 Все сервисы в одной сети `chatbot-conn` для взаимодействия.
+
+## Политики перезапуска сервисов
+
+| Сервис | Policy | Поведение |
+|---------|---------|------------|
+| db | unless-stopped | Автоматический перезапуск |
+| qa | unless-stopped | Автоматический перезапуск |
+| chatbot | unless-stopped | Автоматический перезапуск |
+| adminpanel | unless-stopped | Автоматический перезапуск |
+| max | unless-stopped | Автоматический перезапуск |
+| **benchmarks** | **unless-stopped** | **Контейнер остаётся running для exec команд** |
+
+**Важно:** Сервис `benchmarks` имеет `restart: unless-stopped`, что позволяет:
+- Контейнеру оставаться в состоянии `running` после запуска
+- Выполнять команды через `docker compose exec`
+- Запускать дашборд через `make run-dashboard`
+

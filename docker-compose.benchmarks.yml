@@ -115,9 +115,10 @@ services:
         working_dir: /usr/src/app
         env_file:
             - .env.docker
+        environment:
+            - EMBEDDING_MODEL_PATH=/usr/src/app/saved_models/multilingual-e5-large-wikiutmn
         volumes:
             - ./:/usr/src/app
-            - benchmarks-cache:/root/.cache
             - benchmarks-reports:/usr/src/app/benchmarks/reports
             - benchmarks-data:/usr/src/app/benchmarks/data
             - /var/run/docker.sock:/var/run/docker.sock
@@ -135,7 +136,6 @@ services:
 
 volumes:
     db-data:
-    benchmarks-cache:
     benchmarks-reports:
     benchmarks-data:
 

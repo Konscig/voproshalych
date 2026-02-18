@@ -29,6 +29,10 @@ RUN uv sync --frozen --no-dev
 COPY save_models.py ./
 RUN uv run python save_models.py
 
+# Сохраняем кэш HuggingFace в образе
+ENV HF_HOME=/usr/src/app/.cache/huggingface
+RUN mkdir -p /usr/src/app/.cache/huggingface
+
 COPY models /usr/src/app/models
 COPY utils /usr/src/app/utils
 COPY *.py /usr/src/app/

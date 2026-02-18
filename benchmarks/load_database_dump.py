@@ -108,44 +108,32 @@ def load_dump_main(dump_path: str) -> bool:
         logger.info(f"Загрузка дампа: {dump_abs_path}")
 
         db_container_name = "virtassist-db"
-        remote_path = "/tmp/dump.sql"
 
         logger.info("Копирование дампа в контейнер db...")
-        copy_cmd = [
-            "docker",
-            "cp",
-            dump_abs_path,
-            f"{db_container_name}:{remote_path}",
-        ]
-        copy_result = subprocess.run(copy_cmd, capture_output=True, text=True)
+        with open(dump_abs_path, "rb") as dump_file:
+            load_cmd = [
+                "docker",
+                "compose",
+                "-f",
+                str(project_root / "docker-compose.benchmarks.yml"),
+                "exec",
+                db_container_name,
+                "psql",
+                "-U",
+                os.environ.get("POSTGRES_USER", "postgres"),
+                "-d",
+                os.environ.get("POSTGRES_DB", "virtassist"),
+            ]
+            result = subprocess.run(
+                load_cmd, stdin=dump_file, capture_output=True, text=True
+            )
 
-        if copy_result.returncode != 0:
-            logger.error(f"Ошибка копирования дампа: {copy_result.stderr}")
+        if result.returncode != 0:
+            logger.error(f"Ошибка загрузки дампа: {result.stderr}")
             return False
 
-        logger.info("Загрузка дампа через psql...")
-        psql_cmd = [
-            "docker",
-            "compose",
-            "exec",
-            "-T",
-            "db",
-            "psql",
-            "-U",
-            os.environ.get("POSTGRES_USER", "postgres"),
-            "-d",
-            os.environ.get("POSTGRES_DB", "virtassist"),
-            "-f",
-            remote_path,
-        ]
-        psql_result = subprocess.run(psql_cmd, capture_output=True, text=True)
-
-        if psql_result.returncode == 0:
-            logger.info("Дамп загружен успешно")
-            return True
-        else:
-            logger.error(f"Ошибка загрузки дампа: {psql_result.stderr}")
-            return False
+        logger.info("✅ Дамп успешно загружен")
+        return True
 
     except Exception as e:
         logger.error(f"Ошибка загрузки дампа: {e}")

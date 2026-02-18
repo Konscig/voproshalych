@@ -277,8 +277,24 @@ docker system prune -f
 │  benchmarks (7860)                    │
 └─────────────────────────────────────────┘
 ```
- 
+
 Все сервисы в одной сети `chatbot-conn` для взаимодействия.
+
+## Поведение контейнера benchmarks
+
+**CMD в Dockerfile:** `tail -f /dev/null`
+
+**Почему это нужно:**
+- Контейнер benchmarks предназначен для ручного выполнения команд через `docker compose exec`
+- Без CMD контейнер бы завершался сразу после старта
+- `tail -f /dev/null` поддерживает контейнер в состоянии `running` бесконечно
+
+**Использование:**
+- Для запуска команд: `docker compose exec benchmarks uv run python ...`
+- Для запуска дашборда: `docker compose run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py`
+
+**Важно:** Контейнер не является сервисом-демоном, а интерактивной средой для выполнения задач.
+
 
 ## Политики перезапуска сервисов
 

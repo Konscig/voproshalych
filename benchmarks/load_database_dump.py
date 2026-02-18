@@ -98,12 +98,12 @@ def drop_tables_via_docker() -> bool:
         True если успешно
     """
     try:
+        db_container_name = "virtassist-db"
+
         cmd = [
             "docker",
-            "compose",
             "exec",
-            "-T",
-            "db",
+            db_container_name,
             "psql",
             "-U",
             os.environ.get("POSTGRES_USER", "postgres"),
@@ -151,12 +151,10 @@ def load_dump_main(dump_path: str) -> bool:
         db_container_name = "virtassist-db"
 
         logger.info("Копирование дампа в контейнер db...")
+        db_container_name = "virtassist-db"
         with open(dump_abs_path, "rb") as dump_file:
             load_cmd = [
                 "docker",
-                "compose",
-                "-f",
-                str(project_root / "docker-compose.benchmarks.yml"),
                 "exec",
                 db_container_name,
                 "psql",

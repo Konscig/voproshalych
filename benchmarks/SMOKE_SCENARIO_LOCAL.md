@@ -9,6 +9,26 @@
 - PostgreSQL доступен локально или по сети
 - Переменные окружения в `.env` или `.env.docker`
 
+## 0) Подготовка инфраструктуры (если PostgreSQL в Docker)
+
+**Важно:** Если PostgreSQL запущен в Docker, сначала поднимите контейнеры:
+
+```bash
+cd Submodules/voproshalych
+
+# Вариант A: Основной стек (db, qa, chatbot, adminpanel)
+docker compose up -d db
+
+# Вариант B: Полный стек с бенчмарками
+docker compose -f docker-compose.benchmarks.yml up -d db
+```
+
+Проверьте что БД доступна:
+```bash
+docker compose ps db
+# Статус должен быть "healthy"
+```
+
 ## 0) Установка зависимостей
 
 ```bash

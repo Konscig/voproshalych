@@ -100,9 +100,6 @@ def drop_tables_via_docker() -> bool:
     try:
         db_container_name = "virtassist-db"
 
-        sql_command = f"DROP TABLE IF EXISTS question_answer CASCADE; DROP TABLE IF EXISTS chunk CASCADE; DROP TABLE IF EXISTS holiday CASCADE; DROP TABLE IF EXISTS admin CASCADE;"
-        psql_cmd = f'docker exec {db_container_name} psql -U {os.environ.get("POSTGRES_USER", "postgres")} -d {os.environ.get("POSTGRES_DB", "virtassist")} -c "{sql_command}"'
-
         result = subprocess.run(
             [
                 "docker",

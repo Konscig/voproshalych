@@ -9,25 +9,27 @@
 - PostgreSQL доступен локально или по сети
 - Переменные окружения в `.env` или `.env.docker`
 
-## 0) Подготовка инфраструктуры (если PostgreSQL в Docker)
+## 0) Подготовка инфраструктуры (если используется Docker)
 
-**Важно:** Если PostgreSQL запущен в Docker, сначала поднимите контейнеры:
+**Важно:** Скрипты бенчмарков используют импорты из модуля `qa` (конфигурация, база данных, модели). Если вы используете Docker для инфраструктуры, необходимо поднять **всё приложение целиком**, а не только базу данных.
 
 ```bash
 cd Submodules/voproshalych
 
 # Вариант A: Основной стек (db, qa, chatbot, adminpanel)
-docker compose up -d db
+docker compose up -d
 
 # Вариант B: Полный стек с бенчмарками
-docker compose -f docker-compose.benchmarks.yml up -d db
+docker compose -f docker-compose.benchmarks.yml up -d
 ```
 
-Проверьте что БД доступна:
+Проверьте что все сервисы запущены:
 ```bash
-docker compose ps db
-# Статус должен быть "healthy"
+docker compose ps
+# Статус всех сервисов должен быть "Up" или "healthy"
 ```
+
+**Примечание:** При локальном запуске скриптов (через `uv run python`) на хостовой машине, код модулей `qa` должен быть доступен в `Submodules/voproshalych/qa/`.
 
 ## 0) Установка зависимостей
 

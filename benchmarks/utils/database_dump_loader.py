@@ -107,26 +107,32 @@ class DatabaseDumpLoader:
 
             db_container = "virtassist-db"
 
-            command = [
-                'docker', 'exec', '-i', db_container,
+            # Build command with environment variables
+            command = ['docker', 'exec', '-i']
+            
+            # Add environment variables
+            if password:
+                command.extend(['-e', f'PGPASSWORD={password}'])
+            
+            command.append(db_container)
+            command.extend([
                 'psql',
                 f'--host={host}',
-                f'--port={port}' if port else '',
+            ])
+            
+            if port:
+                command.append(f'--port={port}')
+            
+            command.extend([
                 f'--username={user}',
                 f'--dbname={database}',
-                f'--file=/dev/stdin'
-            ]
-            
-            command = [c for c in command if c]
-
-            env = os.environ.copy()
-            env['PGPASSWORD'] = password if password else ''
+                '--file=/dev/stdin'
+            ])
 
             with open(self.dump_path, 'rb') as f:
                 result = subprocess.run(
                     command,
                     stdin=f,
-                    env=env,
                     capture_output=True,
                     text=False
                 )
@@ -167,24 +173,30 @@ class DatabaseDumpLoader:
 
             db_container = "virtassist-db"
 
-            command = [
-                'docker', 'exec', '-i', db_container,
+            # Build command with environment variables
+            command = ['docker', 'exec', '-i']
+            
+            # Add environment variables
+            if password:
+                command.extend(['-e', f'PGPASSWORD={password}'])
+            
+            command.append(db_container)
+            command.extend([
                 'psql',
                 f'--host={host}',
-                f'--port={port}' if port else '',
+            ])
+            
+            if port:
+                command.append(f'--port={port}')
+            
+            command.extend([
                 f'--username={user}',
                 f'--dbname={database}'
-            ]
-            
-            command = [c for c in command if c]
-
-            env = os.environ.copy()
-            env['PGPASSWORD'] = password if password else ''
+            ])
 
             with gzip.open(self.dump_path, 'rt', encoding='utf-8') as f:
                 result = subprocess.run(
                     command,
-                    env=env,
                     stdin=f,
                     capture_output=True,
                     text=False

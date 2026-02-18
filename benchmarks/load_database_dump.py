@@ -101,7 +101,7 @@ def drop_tables_via_docker() -> bool:
         db_container_name = "virtassist-db"
 
         cmd = [
-            "/usr/bin/docker",
+            "docker",
             "exec",
             db_container_name,
             "psql",
@@ -112,7 +112,11 @@ def drop_tables_via_docker() -> bool:
             "-c",
             "DROP TABLE IF EXISTS question_answer CASCADE; DROP TABLE IF EXISTS chunk CASCADE; DROP TABLE IF EXISTS holiday CASCADE; DROP TABLE IF EXISTS admin CASCADE;",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        env = os.environ.copy()
+        env["PATH"] = "/usr/bin:/bin"
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=False, env=env
+        )
 
         if result.returncode == 0:
             logger.info("Таблицы удалены")
@@ -153,7 +157,7 @@ def load_dump_main(dump_path: str) -> bool:
         logger.info("Копирование дампа в контейнер db...")
         with open(dump_abs_path, "rb") as dump_file:
             load_cmd = [
-                "/usr/bin/docker",
+                "docker",
                 "exec",
                 db_container_name,
                 "psql",
@@ -162,12 +166,15 @@ def load_dump_main(dump_path: str) -> bool:
                 "-d",
                 os.environ.get("POSTGRES_DB", "virtassist"),
             ]
+            env = os.environ.copy()
+            env["PATH"] = "/usr/bin:/bin"
             result = subprocess.run(
                 load_cmd,
                 stdin=dump_file,
                 capture_output=True,
                 text=True,
                 check=False,
+                env=env,
             )
 
         if result.returncode != 0:

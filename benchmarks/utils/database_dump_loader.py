@@ -1,11 +1,11 @@
 """Модуль для автоматической загрузки дампа БД.
-import subprocess
 
 Подгружает дамп базы данных PostgreSQL и инициализирует
 таблицы для работы системы бенчарков.
 """
 
 import os
+import subprocess
 import io
 import logging
 import gzip
@@ -134,6 +134,61 @@ class DatabaseDumpLoader:
                 return False
         except Exception as e:
             logger.error(f"Ошибка загрузки дампа: {e}")
+            return False
+
+    def _load_sql_dump(self) -> bool:
+        """Загрузить SQL дамп через psql."""
+        try:
+            logger.info(f"Загрузка SQL дампа: {self.dump_path}")
+            return self._load_plain_dump()
+        except Exception as e:
+            logger.error(f"Ошибка загрузки SQL дампа: {e}")
+            return False
+
+    def _load_gz_dump(self) -> bool:
+        """Загрузить gzip дамп."""
+        try:
+            logger.info(f"Загрузка gzip дампа: {self.dump_path}")
+
+            from sqlalchemy.engine.url import make_url
+            
+            db_url = make_url(self.database_url)
+            host = db_url.host
+            port = db_url.port
+            user = db_url.username
+            password = db_url.password
+            database = db_url.database
+
+            env = os.environ.copy()
+            env['PGPASSWORD'] = password if password else ''
+
+            command = [
+                'psql',
+                f'--host={host}',
+                f'--port={port}' if port else '',
+                f'--username={user}',
+                f'--dbname={database}'
+            ]
+            
+            command = [c for c in command if c]
+            
+            with gzip.open(self.dump_path, 'rt', encoding='utf-8') as f:
+                result = subprocess.run(
+                    command,
+                    env=env,
+                    stdin=f,
+                    capture_output=True,
+                    text=True
+                )
+
+            if result.returncode == 0:
+                logger.info("Gzip дамп загружен успешно")
+                return True
+            else:
+                logger.error(f"Ошибка загрузки gzip дампа: {result.stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Ошибка загрузки gzip дампа: {e}")
             return False
 
     def _load_sql_dump(self) -> bool:

@@ -116,9 +116,7 @@ services:
         env_file:
             - .env.docker
         volumes:
-            - ./benchmarks:/usr/src/app/benchmarks
-            - ./qa:/usr/src/app/qa
-            - ./qa/main.py:/usr/src/app/qa/main.py
+            - ./:/usr/src/app
             - benchmarks-cache:/root/.cache
             - benchmarks-reports:/usr/src/app/benchmarks/reports
             - benchmarks-data:/usr/src/app/benchmarks/data

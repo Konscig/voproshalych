@@ -38,6 +38,7 @@ def get_database_url() -> str:
     password = os.environ.get("POSTGRES_PASSWORD", "")
     database = os.environ.get("POSTGRES_DB", "virtassist")
 
+    host = host.split(":")[0] if ":" in host else host
     port = port_str.split(":")[-1] if ":" in port_str else port_str
 
     return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"

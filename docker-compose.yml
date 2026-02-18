@@ -36,6 +36,7 @@ services:
                 condition: service_healthy
         networks:
             - chatbot-conn
+
     qa:
         build: ./qa
         image: virtassist/qa:latest
@@ -44,9 +45,6 @@ services:
         command: sh -c "cron && python main.py"
         env_file:
             - .env.docker
-        volumes:
-            # Общий volume для кэша моделей HuggingFace
-            - model-cache:/root/.cache/huggingface
         depends_on:
             db:
                 condition: service_healthy
@@ -70,6 +68,7 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
+
     adminpanel:
         build: ./adminpanel
         image: virtassist/adminpanel:latest
@@ -108,11 +107,9 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
- 
+
 volumes:
     db-data:
-    # Общий volume для кэша моделей HuggingFace (shared с benchmarks)
-    model-cache:
 
 networks:
     chatbot-conn:

@@ -120,6 +120,7 @@ services:
             - benchmarks-cache:/root/.cache
             - benchmarks-reports:/usr/src/app/benchmarks/reports
             - benchmarks-data:/usr/src/app/benchmarks/data
+            - /var/run/docker.sock:/var/run/docker.sock
         ports:
             - "7860:7860"
         depends_on:

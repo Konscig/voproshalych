@@ -140,7 +140,9 @@ def resolve_dataset_path(dataset_path: str) -> str:
     if os.path.exists(dataset_path):
         return dataset_path
 
+    # Ищем датасеты, исключая файлы с ошибками (_errors)
     candidates = sorted(glob.glob("benchmarks/data/dataset_*.json"))
+    candidates = [c for c in candidates if "_errors" not in c]
     if candidates:
         latest = candidates[-1]
         logger.info("Используем последний versioned датасет: %s", latest)

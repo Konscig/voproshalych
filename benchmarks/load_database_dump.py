@@ -118,6 +118,7 @@ def drop_tables_via_docker() -> bool:
             ],
             capture_output=True,
             text=True,
+            shell=True,
             check=False,
         )
 

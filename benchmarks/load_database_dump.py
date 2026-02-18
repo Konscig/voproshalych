@@ -41,13 +41,21 @@ def resolve_dump_path(dump_path: str) -> str:
     if input_path.is_absolute():
         return str(input_path)
 
-    if str(input_path).startswith("benchmarks/"):
-        return str(project_root / input_path)
+    benchmarks_dir = Path(__file__).parent
+
+    if str(input_path).startswith("benchmarks/") or str(input_path).startswith(
+        "./benchmarks/"
+    ):
+        resolved_path = benchmarks_dir / str(input_path).replace(
+            "benchmarks/", ""
+        ).replace("./benchmarks/", "")
+        return str(resolved_path)
 
     if input_path.exists():
         return str(input_path.absolute())
 
-    return str(project_root / input_path)
+    resolved_path = benchmarks_dir / input_path
+    return str(resolved_path)
 
 
 def drop_tables_via_docker() -> bool:

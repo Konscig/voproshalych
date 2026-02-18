@@ -38,10 +38,14 @@ def resolve_dump_path(dump_path: str) -> str:
     """
     input_path = Path(dump_path)
 
+    logger.info(f"🔍 Разрешение пути: dump_path='{dump_path}'")
+
     if input_path.is_absolute():
+        logger.info(f"  → Абсолютный путь: {input_path}")
         return str(input_path)
 
     benchmarks_dir = Path(__file__).parent
+    logger.info(f"  → benchmarks_dir: {benchmarks_dir}")
 
     if str(input_path).startswith("benchmarks/") or str(input_path).startswith(
         "./benchmarks/"
@@ -49,7 +53,28 @@ def resolve_dump_path(dump_path: str) -> str:
         resolved_path = benchmarks_dir / str(input_path).replace(
             "benchmarks/", ""
         ).replace("./benchmarks/", "")
-        return str(resolved_path)
+        logger.info(
+            f"  → Путь начинается с 'benchmarks/', относительный: {resolved_path}"
+        )
+        resolved_abs = resolved_path.resolve()
+        logger.info(f"  → Resolve absolute: {resolved_abs}")
+        logger.info(f"  → Существует: {resolved_abs.exists()}")
+        return str(resolved_abs)
+
+    if input_path.exists():
+        logger.info(
+            f"  → Путь существует в текущей директории: {input_path.absolute()}"
+        )
+        return str(input_path.absolute())
+
+    resolved_path = benchmarks_dir / input_path
+    logger.info(
+        f"  → Относительный путь, база: {benchmarks_dir}, результат: {resolved_path}"
+    )
+    resolved_abs = resolved_path.resolve()
+    logger.info(f"  → Resolve absolute: {resolved_abs}")
+    logger.info(f"  → Существует: {resolved_abs.exists()}")
+    return str(resolved_abs)
 
     if input_path.exists():
         return str(input_path.absolute())

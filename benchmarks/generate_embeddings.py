@@ -16,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from qa.config import Config
 from qa.database import create_engine
-from sentence_transformers import SentenceTransformer
 
 from benchmarks.utils.embedding_generator import EmbeddingGenerator
 
@@ -77,20 +76,9 @@ def main():
 
     engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
-    model_path = Config.EMBEDDING_MODEL_PATH
-    encoder = SentenceTransformer(model_path, device="cpu")
-
-    generator = EmbeddingGenerator(engine, encoder)
-
-    if args.chunks:
-        stats = generator.generate_for_chunks(overwrite=args.overwrite)
-        print(f"\nРезультат генерации для чанков:")
-        print(f"Всего чанков: {stats['total_chunks']}")
-        print(f"Обработано: {stats['processed']}")
-        print(f"Пропущено: {stats['skipped']}")
-        print(f"Ошибок: {stats['errors']}")
-
-    elif args.check_coverage:
+    if args.check_coverage:
+        # Для проверки покрытия модель не нужна
+        generator = EmbeddingGenerator(engine, encoder=None)
         stats = generator.check_coverage()
         print(f"\nСтатистика покрытия эмбеддингов (вопросы):")
         print(f"Всего вопросов: {stats['total_questions']}")
@@ -104,6 +92,22 @@ def main():
         print(f"С эмбеддингами: {chunks_stats['with_embeddings']}")
         print(f"Без эмбеддингов: {chunks_stats['without_embeddings']}")
         print(f"Покрытие: {chunks_stats['coverage_percent']:.2f}%")
+        return
+
+    # Для генерации эмбеддингов нужно загрузить модель
+    from sentence_transformers import SentenceTransformer
+
+    model_path = Config.EMBEDDING_MODEL_PATH
+    encoder = SentenceTransformer(model_path, device="cpu")
+    generator = EmbeddingGenerator(engine, encoder)
+
+    if args.chunks:
+        stats = generator.generate_for_chunks(overwrite=args.overwrite)
+        print(f"\nРезультат генерации для чанков:")
+        print(f"Всего чанков: {stats['total_chunks']}")
+        print(f"Обработано: {stats['processed']}")
+        print(f"Пропущено: {stats['skipped']}")
+        print(f"Ошибок: {stats['errors']}")
 
     elif args.all:
         stats = generator.generate_for_all_questions(overwrite=args.overwrite)

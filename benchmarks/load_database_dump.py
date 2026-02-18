@@ -112,7 +112,9 @@ def drop_tables_via_docker() -> bool:
             "-c",
             "DROP TABLE IF EXISTS question_answer CASCADE; DROP TABLE IF EXISTS chunk CASCADE; DROP TABLE IF EXISTS holiday CASCADE; DROP TABLE IF EXISTS admin CASCADE;",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            " ".join(cmd), capture_output=True, text=True, shell=True
+        )
 
         if result.returncode == 0:
             logger.info("Таблицы удалены")
@@ -163,7 +165,11 @@ def load_dump_main(dump_path: str) -> bool:
                 os.environ.get("POSTGRES_DB", "virtassist"),
             ]
             result = subprocess.run(
-                load_cmd, stdin=dump_file, capture_output=True, text=True, check=False
+                " ".join(load_cmd),
+                stdin=dump_file,
+                capture_output=True,
+                text=True,
+                shell=True,
             )
 
         if result.returncode != 0:

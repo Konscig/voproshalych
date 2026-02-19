@@ -53,7 +53,9 @@ run-benchmarks:
 		benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
 
 run-dashboard:
-	docker compose -f $(COMPOSE_FILE) exec -d benchmarks uv run python benchmarks/run_dashboard.py
+	docker compose -f $(COMPOSE_FILE) stop benchmarks
+	docker compose -f $(COMPOSE_FILE) run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
+	docker compose -f $(COMPOSE_FILE) up -d benchmarks
 
 ps:
 	docker compose -f $(COMPOSE_FILE) ps

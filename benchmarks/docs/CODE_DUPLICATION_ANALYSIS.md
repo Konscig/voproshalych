@@ -119,12 +119,21 @@ if get_answer_func is None:
 | Модель | Mistral (JUDGE_API) | DeepSeek/Qwen (BENCHMARKS_JUDGE_API_KEY) |
 | Промпт | Yes/No бинарный | Шкала 1-5 |
 | Результат | bool | float |
+| Использование | Production RAG pipeline | Tier Judge benchmark |
 
 ### Рекомендация
 
 Не объединять. Это разные сценарии:
-- `assess_answer` — продакшн judge для фильтрации ответов
-- `LLMJudge` — бенчмарк judge для метрик качества
+- `assess_answer` — production judge (Mistral) для фильтрации ответов в реальном пайплайне
+- `LLMJudge` — benchmark judge (Qwen) для метрик качества в Tier Judge
+- `run_tier_judge_pipeline` — тестирование production judge через сравнение с ground truth
+
+### Два типа judge в бенчмарках
+
+| Tier | Переменные окружения | Модель | Назначение |
+|------|---------------------|--------|------------|
+| Tier Judge | BENCHMARKS_JUDGE_API_KEY, BENCHMARKS_JUDGE_MODEL | Qwen/DeepSeek | Тестирование согласованности judge |
+| Tier Judge Pipeline | JUDGE_API, JUDGE_MODEL | Mistral | Тестирование production pipeline judge |
 
 ---
 

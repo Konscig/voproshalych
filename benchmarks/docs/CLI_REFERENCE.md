@@ -133,7 +133,7 @@ uv run python benchmarks/generate_dataset.py --check-only --output benchmarks/da
 
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--tier` | str | "all" | Уровень бенчмарка: "1", "2", "3", "all" |
+| `--tier` | str | "all" | Уровень бенчмарка: "0", "1", "2", "3", "judge", "judge_pipeline", "ux", "all" |
 | `--mode` | str | "synthetic" | Режим: "synthetic", "manual", "real-users" |
 | `--dataset` | str | "benchmarks/data/golden_dataset_synthetic.json" | Путь к датасету |
 | `--manual-dataset` | str | None | Путь к manual датасету (для --mode manual) |
@@ -185,7 +185,8 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
 | 1 | Retrieval Accuracy | HitRate@K, MRR, NDCG@K, Recall@K, Precision@K |
 | 2 | Generation Quality | avg_faithfulness, avg_answer_relevance, avg_rouge1_f, avg_rougeL_f, avg_bleu |
 | 3 | End-to-End | avg_e2e_score, avg_semantic_similarity, avg_rouge1_f, avg_bleu |
-| judge | LLM-as-a-Judge Quality | consistency_score, error_rate, avg_latency_ms |
+| judge | LLM-as-a-Judge Quality (Qwen) | consistency_score, error_rate, avg_latency_ms |
+| judge_pipeline | Production Judge Quality (Mistral) | accuracy, precision, recall, f1_score, avg_latency_ms |
 | ux | User Experience Quality | cache_hit_rate, context_preservation, multi_turn_consistency |
 | all | Все уровни | Все метрики |
 

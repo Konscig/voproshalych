@@ -246,6 +246,26 @@ sequenceDiagram
 
 ---
 
+### Фаза 6b: Запуск бенчмарков (Tier Judge Pipeline)
+
+**Шаг 62:** Пользователь запускает `run_comprehensive_benchmark.py --tier judge_pipeline`. Создаётся `RAGBenchmark`.
+
+**Шаг 63-65:** Для оценки production judge (Mistral):
+- Загружается датасет `dataset_judge_pipeline_*.json` с парами (question, answer, ground_truth_show)
+- Для каждой пары вызывается production judge через `qa/config.py:get_judge_prompt()`
+- Сравнивается решение judge ("Yes"/"No") с ground truth
+- Вычисляются метрики: accuracy, precision, recall, F1
+
+**Шаг 66:** Результаты сохраняются.
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge_pipeline()`.
+
+**Отличия от Tier Judge:**
+- **Tier Judge** тестирует `BENCHMARKS_JUDGE_*` (Qwen) — согласованность оценок при повторном запуске
+- **Tier Judge Pipeline** тестирует `JUDGE_*` (Mistral) — решение "показывать ответ или нет" в реальном RAG-пайплайне
+
+---
+
 ### Фаза 6c: Запуск бенчмарков (Tier UX)
 
 **Шаг 66:** Пользователь запускает `run_comprehensive_benchmark.py --tier ux`. Создаётся `RAGBenchmark`.
@@ -336,7 +356,8 @@ sequenceDiagram
 | tier_1_metrics | json | Метрики Tier 1 (Retrieval) |
 | tier_2_metrics | json | Метрики Tier 2 (Generation) |
 | tier_3_metrics | json | Метрики Tier 3 (End-to-End) |
-| tier_judge_metrics | json | Метрики Tier Judge (LLM Quality) |
+| tier_judge_metrics | json | Метрики Tier Judge (LLM Quality, Qwen) |
+| tier_judge_pipeline_metrics | json | Метрики Tier Judge Pipeline (Production Judge, Mistral) |
 | tier_ux_metrics | json | Метрики Tier UX (User Experience) |
 | real_user_metrics | json | Метрики real-users |
 | overall_status | text | Итоговый статус |

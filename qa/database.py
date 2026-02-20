@@ -369,3 +369,52 @@ def delete_score(engine: Engine, qa_id: int) -> None:
                 .values(score=None)
             )
             session.commit()
+
+
+class BenchmarkAnnotation(Base):
+    """Ручные аннотации к записям датасета бенчмарка.
+
+    Позволяет хранить ручные метки для оценки качества RAG-системы:
+    - Бинарные метки (is_question_ok, is_answer_ok, is_pair_ok)
+    - Категориальные метки (relevance, quality_category)
+    - Текстовые заметки и комментарии
+
+    Args:
+        id (int): id аннотации
+        dataset_file (str): имя файла датасета
+        item_id (str): id записи в датасете (question hash или порядковый номер)
+        item_question (str): текст вопроса
+        item_answer (str): текст ответа (если есть)
+        is_question_ok (int): 1/0 - корректность вопроса
+        is_answer_ok (int): 1/0 - корректность ответа
+        is_pair_ok (int): 1/0 - корректность пары вопрос-ответ
+        relevance_score (int): 0-5 оценка релевантности
+        quality_category (str): категория качества (good/medium/poor/bad)
+        notes (str): текстовые заметки аннотатора
+        annotator (str): имя/идентификатор аннотатора
+        created_at (datetime): время создания аннотации
+        updated_at (datetime): время обновления аннотации
+    """
+
+    __tablename__ = "benchmark_annotations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    dataset_file: Mapped[str] = mapped_column(Text(), nullable=False)
+    item_id: Mapped[str] = mapped_column(Text(), nullable=False)
+    item_question: Mapped[Optional[str]] = mapped_column(Text())
+    item_answer: Mapped[Optional[str]] = mapped_column(Text())
+    is_question_ok: Mapped[Optional[int]] = mapped_column(default=1)
+    is_answer_ok: Mapped[Optional[int]] = mapped_column(default=1)
+    is_pair_ok: Mapped[Optional[int]] = mapped_column(default=1)
+    relevance_score: Mapped[Optional[int]] = mapped_column(default=5)
+    quality_category: Mapped[Optional[str]] = mapped_column(Text())
+    notes: Mapped[Optional[str]] = mapped_column(Text())
+    annotator: Mapped[Optional[str]] = mapped_column(Text())
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+def ensure_benchmark_annotations_schema(engine: Engine) -> None:
+    """Создать таблицу benchmark_annotations при необходимости."""
+    Base.metadata.create_all(bind=engine, tables=[BenchmarkAnnotation.__table__])

@@ -21,6 +21,9 @@ requires-python = ">=3.12"
     "alembic>=1.18.4",
     "gradio>=6.5.1",
     "openai",
+    "rouge-score",
+    "sacrebleu",
+    "scikit-learn",
 ]
 
 [tool.black]

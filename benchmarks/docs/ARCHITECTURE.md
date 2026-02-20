@@ -146,6 +146,21 @@ sequenceDiagram
 
 **Реализация:** `benchmarks/generate_dataset.py`, функция `generate_synthetic_dataset()`.
 
+### Альтернативные режимы генерации
+
+| Режим | Команда | Описание |
+|-------|---------|----------|
+| Synthetic | `--mode synthetic` | Генерация вопросов из чанков через LLM |
+| From Real Questions | `--mode from-real-questions` | Использование реальных вопросов из QuestionAnswer |
+| Score 5 | `--mode from-real-questions-score-5` | Только вопросы с оценкой score=5 |
+| Export Annotation | `--mode export-annotation` | Экспорт для ручной аннотации |
+
+При использовании режимов `from-real-questions` или `from-real-questions-score-5`:
+- Вопросы берутся из таблицы `QuestionAnswer`
+- Для каждого вопроса выполняется similarity search для нахождения релевантных чанков
+- Ground truth answer берётся из `QuestionAnswer.answer`
+- Сохраняются `user_score` и `question_answer_id` для трассировки
+
 ---
 
 ### Фаза 3: Запуск бенчмарков (Tier 1)

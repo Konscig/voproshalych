@@ -9,9 +9,9 @@ else
   PROFILE_FLAG := --profile $(PROFILE)
 endif
 
-.PHONY: install load-dump drop-tables generate-embeddings generate-dataset run-benchmarks run-dashboard up down ps logs
+.PHONY: install load-dump drop-tables generate-embeddings generate-dataset generate-dataset-real generate-dataset-score5 run-benchmarks run-dashboard up down ps logs
 .PHONY: up-api up-full
-.PHONY: install-local load-dump-local drop-tables-local generate-embeddings-local generate-dataset-local run-benchmarks-local run-dashboard-local
+.PHONY: install-local load-dump-local drop-tables-local generate-embeddings-local generate-dataset-local generate-dataset-real-local generate-dataset-score5-local run-benchmarks-local run-dashboard-local
 
 # Локальный режим (без контейнеризации)
 install-local:
@@ -28,7 +28,13 @@ generate-embeddings-local:
 	uv run python $(ROOT_DIR)/benchmarks/generate_embeddings.py --check-coverage
 
 generate-dataset-local:
-	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --max-questions 20
+	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode synthetic --max-questions 20
+
+generate-dataset-real-local:
+	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions --max-questions 20
+
+generate-dataset-score5-local:
+	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 20
 
 run-benchmarks-local:
 	uv run python $(ROOT_DIR)/benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10
@@ -60,7 +66,13 @@ generate-embeddings:
 	docker compose -f $(COMPOSE_FILE) exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
 
 generate-dataset:
-	docker compose -f $(COMPOSE_FILE) exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
+	docker compose -f $(COMPOSE_FILE) exec benchmarks uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 500
+
+generate-dataset-real:
+	docker compose -f $(COMPOSE_FILE) exec benchmarks uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 500
+
+generate-dataset-score5:
+	docker compose -f $(COMPOSE_FILE) exec benchmarks uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 500
 
 run-benchmarks:
 	docker compose -f $(COMPOSE_FILE) exec -e BENCHMARK_GIT_BRANCH=$$(git rev-parse --abbrev-ref HEAD) \
@@ -84,11 +96,13 @@ help:
 	@echo "Доступные команды:"
 	@echo ""
 	@echo "Локальный режим (без контейнеризации):"
-	@echo "  install-local              - Установить зависимости через uv sync"
-	@echo "  load-dump-local            - Загрузить дамп БД"
-	@echo "  drop-tables-local          - Удалить таблицы БД"
+	@echo "  install-local                - Установить зависимости через uv sync"
+	@echo "  load-dump-local             - Загрузить дамп БД"
+	@echo "  drop-tables-local           - Удалить таблицы БД"
 	@echo "  generate-embeddings-local  - Сгенерировать эмбеддинги"
-	@echo "  generate-dataset-local     - Сгенерировать датасет (20 вопросов)"
+	@echo "  generate-dataset-local     - Сгенерировать synthetic датасет (20 вопросов)"
+	@echo "  generate-dataset-real-local - Сгенерировать датасет из реальных вопросов (20 вопросов)"
+	@echo "  generate-dataset-score5-local - Сгенерировать датасет из вопросов с оценкой 5"
 	@echo "  run-benchmarks-local       - Запустить бенчмарки (synthetic mode, 10 вопросов)"
 	@echo "  run-dashboard-local        - Запустить дашборд локально"
 	@echo ""
@@ -100,7 +114,9 @@ help:
 	@echo "  load-dump                  - Загрузить дамп БД через Docker"
 	@echo "  drop-tables                - Удалить таблицы БД через Docker"
 	@echo "  generate-embeddings        - Сгенерировать эмбеддинги через Docker"
-	@echo "  generate-dataset           - Сгенерировать датасет через Docker (500 вопросов)"
+	@echo "  generate-dataset           - Сгенерировать synthetic датасет через Docker (500 вопросов)"
+	@echo "  generate-dataset-real      - Сгенерировать датасет из реальных вопросов через Docker"
+	@echo "  generate-dataset-score5    - Сгенерировать датасет из вопросов с оценкой 5 через Docker"
 	@echo "  run-benchmarks             - Запустить бенчмарки через Docker"
 	@echo "  run-dashboard              - Запустить дашборд через Docker"
 	@echo "  ps                         - Показать статус сервисов"

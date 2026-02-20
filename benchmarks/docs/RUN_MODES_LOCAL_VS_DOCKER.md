@@ -66,8 +66,18 @@ uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virta
 # 3. Генерация эмбеддингов
 uv run python benchmarks/generate_embeddings.py --chunks
 
-# 4. Генерация датасета
-uv run python benchmarks/generate_dataset.py --max-questions 20
+# 4. Генерация датасета (несколько режимов)
+# 4a. Synthetic — из чанков через LLM (по умолчанию)
+uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 20
+
+# 4b. Из реальных вопросов пользователей
+uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 100
+
+# 4c. Только вопросы с оценкой 5
+uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 50
+
+# 4d. Экспорт для ручной аннотации
+uv run python benchmarks/generate_dataset.py --mode export-annotation --output benchmarks/data/dataset_latest.json
 
 # 5. Запуск бенчмарков
 uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10
@@ -168,8 +178,18 @@ docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python
 # 3. Генерация эмбеддингов
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
 
-# 4. Генерация датасета
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 500
+# 4. Генерация датасета (несколько режимов)
+# 4a. Synthetic — из чанков через LLM
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
+  --mode synthetic --max-questions 500
+
+# 4b. Из реальных вопросов пользователей
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
+  --mode from-real-questions --max-questions 500
+
+# 4c. Только вопросы с оценкой 5
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
+  --mode from-real-questions-score-5 --max-questions 500
 
 # 5. Запуск бенчмарков
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \

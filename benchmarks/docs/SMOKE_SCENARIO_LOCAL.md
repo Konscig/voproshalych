@@ -114,7 +114,20 @@ make run-benchmarks-local
 Или напрямую:
 ```bash
 cd Submodules/voproshalych
-uv run python benchmarks/generate_dataset.py --max-questions 20
+
+# Режимы генерации датасета:
+# 1) Synthetic — из чанков через LLM
+uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 20
+
+# 2) Из реальных вопросов пользователей
+uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 20
+
+# 3) Только вопросы с оценкой 5
+uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 20
+
+# 4) Экспорт для ручной аннотации
+uv run python benchmarks/generate_dataset.py --mode export-annotation --output benchmarks/data/dataset_latest.json
+
 uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10
 ```
 
@@ -220,8 +233,12 @@ uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virta
 uv run python benchmarks/generate_embeddings.py --chunks
 uv run python benchmarks/generate_embeddings.py --check-coverage
 
-# Генерация датасета
-uv run python benchmarks/generate_dataset.py --max-questions 20
+# Генерация датасета (несколько режимов)
+uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 20
+# или
+uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 20
+# или
+uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 20
 
 # Запуск бенчмарков
 uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10

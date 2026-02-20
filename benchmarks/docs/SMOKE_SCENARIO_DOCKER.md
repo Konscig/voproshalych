@@ -146,7 +146,23 @@ make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
 Или напрямую:
 ```bash
 cd Submodules/voproshalych
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 20
+
+# Режимы генерации датасета:
+# 1) Synthetic — из чанков через LLM
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
+  --mode synthetic --max-questions 20
+
+# 2) Из реальных вопросов пользователей
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
+  --mode from-real-questions --max-questions 20
+
+# 3) Только вопросы с оценкой 5
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
+  --mode from-real-questions-score-5 --max-questions 20
+
+# 4) Экспорт для ручной аннотации
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
+  --mode export-annotation --output benchmarks/data/dataset_latest.json
 
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode synthetic --limit 10
@@ -304,8 +320,10 @@ docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
 
-# Генерация датасета
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --max-questions 20
+# Генерация датасета (несколько режимов)
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 20
+# или
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 20
 
 # Запуск бенчмарков
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \

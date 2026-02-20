@@ -86,16 +86,26 @@ uv run python benchmarks/generate_embeddings.py --chunks --overwrite
 
 ## generate_dataset.py
 
-Генерация синтетического датасета для бенчмарков.
+Генерация датасета для бенчмарков. Поддерживает различные режимы: synthetic, из реальных вопросов пользователей, экспорт для аннотации.
 
 **Файл:** `benchmarks/generate_dataset.py`
 
-**Парсинг аргументов:** функция `main()`, строки 190-244
+**Парсинг аргументов:** функция `main()`
+
+### Режимы (--mode)
+
+| Режим | Описание |
+|-------|---------|
+| `synthetic` | Генерация вопросов из чанков через LLM (по умолчанию) |
+| `from-real-questions` | Использование реальных вопросов из QuestionAnswer |
+| `from-real-questions-score-5` | Только вопросы с оценкой score=5 |
+| `export-annotation` | Экспорт датасета для ручной аннотации |
 
 ### Аргументы
 
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
+| `--mode` | str | "synthetic" | Режим генерации |
 | `--max-questions` | int | 500 | Максимальное количество пар вопрос-ответ |
 | `--num-samples` | int | None | Устаревший алиас для `--max-questions` |
 | `--output` | str | None | Путь для сохранения (по умолчанию versioned) |
@@ -106,8 +116,14 @@ uv run python benchmarks/generate_embeddings.py --chunks --overwrite
 ### Примеры
 
 ```bash
-# Генерация 20 вопросов
-uv run python benchmarks/generate_dataset.py --max-questions 20
+# Synthetic — генерация вопросов из чанков (по умолчанию)
+uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 500
+
+# Из реальных вопросов пользователей
+uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 500
+
+# Только вопросы с оценкой 5
+uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 500
 
 # Генерация с кастомным путём
 uv run python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/custom_dataset.json
@@ -117,6 +133,9 @@ uv run python benchmarks/generate_dataset.py --max-questions 500 --skip-existing
 
 # Проверка существующего датасета
 uv run python benchmarks/generate_dataset.py --check-only --output benchmarks/data/custom_dataset.json
+
+# Экспорт для ручной аннотации
+uv run python benchmarks/generate_dataset.py --mode export-annotation --output benchmarks/data/dataset_20260220.json
 ```
 
 ---

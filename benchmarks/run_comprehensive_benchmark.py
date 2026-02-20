@@ -544,7 +544,9 @@ def main():
         real_score_filter=args.real_score,
         real_limit=args.real_limit,
         real_latest=args.real_latest,
-        judge_pipeline_dataset_path=args.dataset,
+        judge_pipeline_dataset_path=None
+        if args.tier == "judge_pipeline"
+        else args.dataset,
     )
 
     dataset_name = resolved_dataset

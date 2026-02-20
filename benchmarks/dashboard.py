@@ -75,31 +75,6 @@ QUALITY_BASELINES = {
     "hit_rate@1": 0.7,
     "hit_rate@5": 0.9,
     "hit_rate@10": 0.95,
-    "avg_faithfulness": 4.5,
-    "avg_answer_relevance": 4.2,
-    "avg_e2e_score": 4.2,
-    "avg_semantic_similarity": 0.85,
-    "avg_rouge1_f": 0.50,
-    "avg_rougeL_f": 0.45,
-    "avg_bleu": 30.0,
-    "consistency_score": 0.90,
-    "error_rate": 0.05,
-    "accuracy": 0.85,
-    "precision": 0.85,
-    "recall": 0.85,
-    "f1_score": 0.85,
-    "cache_hit_rate": 0.40,
-    "context_preservation": 0.70,
-}
-
-QUALITY_BASELINES = {
-    "avg_intra_cluster_sim": 0.85,
-    "avg_inter_cluster_dist": 0.30,
-    "silhouette_score": 0.50,
-    "mrr": 0.8,
-    "hit_rate@1": 0.7,
-    "hit_rate@5": 0.9,
-    "hit_rate@10": 0.95,
     "recall@1": 0.7,
     "recall@5": 0.9,
     "recall@10": 0.95,
@@ -234,10 +209,17 @@ class RAGBenchmarkDashboard:
         """Построить строки для gr.LinePlot с baseline-линией."""
         rows: List[Dict[str, str | float]] = []
 
-        rendered_dates = dates[:]
+        rendered_dates = []
+        for d in dates:
+            if "_" in d:
+                date_part, time_part = d.split("_", 1)
+                rendered_dates.append(f"{date_part}-{time_part[:2]}")
+            else:
+                rendered_dates.append(d[:8])
+
         rendered_values = values[:]
         if len(rendered_dates) == 1:
-            rendered_dates.append(f"{rendered_dates[0]}_point")
+            rendered_dates.append(f"{rendered_dates[0]}_p")
             rendered_values.append(rendered_values[0])
 
         for date, value in zip(rendered_dates, rendered_values):
@@ -815,97 +797,129 @@ class RAGBenchmarkDashboard:
 
     def _create_reference_tab(self):
         gr.Markdown(
-            r"""
-### Методология оценки RAG
+            """
+# Справка по системе оценки RAG
 
-- **Tier 0 (Embedding Quality):** внутреннее качество эмбеддингов (intra-cluster similarity, inter-cluster distance, silhouette score).
-- **Tier 1 (Retrieval):** оценка ранжирования чанков в векторном поиске.
-- **Tier 2 (Generation):** оценка качества ответа при релевантном контексте.
-- **Tier 3 (End-to-End):** оценка полного пайплайна retrieval + generation.
-- **Tier Judge (Qwen):** оценка согласованности judge-модели при повторных запусках.
-- **Tier Judge Pipeline (Mistral):** оценка production judge, который решает "показывать ответ или нет".
-- **Tier UX:** анализ пользовательского опыта (cache hit rate, context preservation).
-- **Real Users:** retrieval-метрики на реальных вопросах пользователей.
+## Назначение
+
+Дашборд предназначен для мониторинга качества Retrieval-Augmented Generation системы. 
+Он позволяет отслеживать метрики на различных этапах пайплайна и анализировать динамику изменений между запусками.
+
+---
+
+## Уровни оценки (Tiers)
 
 ### Tier 0: Embedding Quality
 
-Метрики качества эмбеддингов без использования LLM:
-- **avg_intra_cluster_sim:** средняя косинусная близость внутри кластера (выше = лучше)
-- **avg_inter_cluster_dist:** среднее расстояние между кластерами (выше = лучше)
-- **silhouette_score:** силуэт-коэффициент (-1 до 1, выше = лучше)
+Оценивает внутреннее качество эмбеддингов без использования LLM.
 
-### Retrieval-метрики
+- **avg_intra_cluster_sim**: средняя косинусная близость внутри кластера. Чем выше, тем лучше embeddings группируются по смыслу.
+- **avg_inter_cluster_dist**: среднее расстояние между кластерами. Чем выше, тем лучше разделены тематические группы.
+- **silhouette_score**: силуэт-коэффициент от -1 до 1. Значения ближе к 1 указывают на хорошую кластеризацию.
 
-Для множества запросов $Q$:
+### Tier 1: Retrieval
 
-$$
-\mathrm{HitRate@K} = \frac{1}{|Q|} \sum_{q \in Q} \mathbf{1}[\exists d \in \mathrm{TopK}(q): d \in G_q]
-$$
+Оценивает качество векторного поиска релевантных документов.
 
-$$
-\mathrm{Recall@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{|\mathrm{TopK}(q) \cap G_q|}{|G_q|}
-$$
+- **HitRate@K**: доля запросов, для которых хотя бы один релевантный документ найден в топ-K.
+- **MRR (Mean Reciprocal Rank)**: среднее значение обратного ранга первого релевантного документа.
+- **Recall@K**: полнота - доля найденных релевантных документов от общего числа.
+- **Precision@K**: точность - доля релевантных документов среди топ-K.
+- **NDCG@K**: нормализованная дисконтированная накопленная выгода.
 
-$$
-\mathrm{Precision@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{|\mathrm{TopK}(q) \cap G_q|}{K}
-$$
+Интерпретация: высокие значения MRR и Recall означают, что система находит релевантные документы.
 
-$$
-\mathrm{MRR} = \frac{1}{|Q|} \sum_{q \in Q} \frac{1}{\mathrm{rank}_q}
-$$
+### Tier 2: Generation
 
-$$
-\mathrm{NDCG@K} = \frac{1}{|Q|} \sum_{q \in Q} \frac{\mathrm{DCG@K}(q)}{\mathrm{IDCG@K}(q)}
-$$
+Оценивает качество сгенерированного ответа при известном релевантном контексте.
 
-### Generation и End-to-End (LLM-as-a-Judge)
+- **avg_faithfulness**: насколько ответ соответствует предоставленному контексту (шкала 1-5).
+- **avg_answer_relevance**: насколько ответ релевантен вопросу (шкала 1-5).
 
-Судья выставляет оценки $s_i \in \{1,2,3,4,5\}$.
+Эти метрики выставляются LLM-судьей. Значения выше 4.0 считаются хорошими.
 
-$$
-\mathrm{avg\_faithfulness} = \frac{1}{N} \sum_{i=1}^{N} s_i
-$$
+### Tier 3: End-to-End
 
-$$
-\mathrm{avg\_answer\_relevance} = \frac{1}{N} \sum_{i=1}^{N} s_i
-$$
+Оценивает полный пайплайн retrieval + generation.
 
-$$
-\mathrm{avg\_e2e\_score} = \frac{1}{N} \sum_{i=1}^{N} s_i
-$$
+- **avg_e2e_score**: общая оценка качества ответа LLM-судьей (шкала 1-5).
+- **avg_semantic_similarity**: косинусная близость между сгенерированным и эталонным ответами.
 
-Шкала 1-5 трактуется как **ordinal scale** (упорядоченная, не строго линейная).
+### Tier Judge (Qwen)
 
-### Алгоритмические метрики
+Оценивает согласованность judge-модели при повторных запусках.
 
-- **ROUGE (Recall-Oriented Understudy for Gisting Evaluation):** n-gram overlap с reference.
-- **BLEU (Bilingual Evaluation Understudy):** precision n-gram с штрафом за краткость.
-- **Semantic Similarity:** косинусная близость эмбеддингов:
+- **consistency_score**: доля запросов, где оценка не изменилась при повторном запуске.
+- **error_rate**: доля запросов, где произошла ошибка API.
+- **avg_latency_ms**: среднее время отклика API в миллисекундах.
 
-$$
-\mathrm{cos\_sim}(u, v) = \frac{u \cdot v}{\|u\|\,\|v\|}
-$$
+### Tier Judge Pipeline (Mistral)
 
-### Tier Judge: Согласованность judge-модели
+Тестирует production judge, который решает "показывать ответ пользователю или нет".
 
-- **consistency_score:** доля согласованных оценок при повторном запуске
-- **error_rate:** доля ошибок API
-- **avg_latency_ms:** среднее время отклика API
+- **accuracy**: точность решений судьи по сравнению с размеченными данными.
+- **precision/recall/f1_score**: для класса "показывать ответ".
 
-### Tier Judge Pipeline: Production Judge
+### Tier UX
 
-- **accuracy:** точность решений judge (по сравнению с ground truth)
-- **precision/recall/f1_score:** для класса "показывать ответ"
+Анализирует пользовательский опыт взаимодействия.
 
-### Baseline-пороги
+- **cache_hit_rate**: доля запросов, найденных в кэше похожих вопросов.
+- **context_preserve**: сохранение контекста в многоturn диалогах.
+- **multi_turn_consistency**: согласованность ответов в рамках одной сессии.
 
-- Tier 0: `avg_intra_cluster_sim >= 0.85`, `silhouette_score >= 0.50`
-- Tier 1: `MRR >= 0.80`, `HitRate@5 >= 0.90`, `HitRate@10 >= 0.95`
-- Tier 2: `Faithfulness >= 4.5`, `Answer Relevance >= 4.2`
-- Tier 3: `E2E Score >= 4.2`, `Semantic Similarity >= 0.85`
-- Tier Judge: `consistency_score >= 0.90`, `error_rate <= 0.05`
-- Tier Judge Pipeline: `accuracy >= 0.85`, `f1_score >= 0.85`
-- Real Users: `MRR`, `Recall@K`, `NDCG@K` анализируются в динамике по релизам
+### Real Users
+
+Метрики на реальных вопросах пользователей из таблицы QuestionAnswer.
+
+- Используются те же метрики retrieval: MRR, Recall@K, Precision@K, NDCG@K.
+- Позволяют оценить качество на реальном трафике.
+
+---
+
+## Типы запусков
+
+### Synthetic
+
+Автоматически сгенерированный датасет из чанков через LLM. Используется для быстрой проверки и регрессионного тестирования.
+
+### Manual / Аннотация
+
+Датасет, подготовленный для ручной разметки. Позволяет оценить качество с участием человека-эксперта.
+
+### Real Users
+
+Использование реальных вопросов из таблицы QuestionAnswer. Наиболее репрезентативный сценарий.
+
+---
+
+## Рекомендуемые пороги (Baseline)
+
+| Tier | Метрика | Порог |
+|------|---------|-------|
+| Tier 0 | avg_intra_cluster_sim | >= 0.85 |
+| Tier 0 | silhouette_score | >= 0.50 |
+| Tier 1 | MRR | >= 0.80 |
+| Tier 1 | HitRate@5 | >= 0.90 |
+| Tier 1 | HitRate@10 | >= 0.95 |
+| Tier 2 | Faithfulness | >= 4.5 |
+| Tier 2 | Answer Relevance | >= 4.2 |
+| Tier 3 | E2E Score | >= 4.2 |
+| Tier 3 | Semantic Similarity | >= 0.85 |
+| Tier Judge | consistency_score | >= 0.90 |
+| Tier Judge | error_rate | <= 0.05 |
+| Tier Judge Pipeline | accuracy | >= 0.85 |
+| Tier Judge Pipeline | f1_score | >= 0.85 |
+
+---
+
+## Работа с историей
+
+- **Metric History**: отслеживание динамики конкретной метрики во времени.
+- **Tier Comparison**: сравнение производительности разных уровней на одной метрике.
+- **Runs Registry**: список всех запусков с основными метриками для быстрого обзора.
+
+При анализе регрессий обращайте внимание на метрики ниже baseline - они указывают на потенциальные проблемы в системе.
             """
         )
 

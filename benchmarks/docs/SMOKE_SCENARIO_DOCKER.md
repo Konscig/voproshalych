@@ -168,32 +168,26 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
   --tier all --mode synthetic --limit 10
 ```
 
-## 5) Manual dataset + benchmark
+## 5) Manual dataset + benchmark (ручная аннотация)
 
-Создайте файл `benchmarks/data/manual_dataset_smoke.json` с 3-5 записями на хосте:
-
-```bash
-cd Submodules/voproshalych
-nano benchmarks/data/manual_dataset_smoke.json
-```
-
-```json
-[
-  {
-    "question": "Ваш вопрос",
-    "ground_truth_answer": "Ожидаемый ответ",
-    "relevant_chunk_ids": [1, 2, 3]
-  }
-]
-```
+Рекомендуемый workflow для ручной аннотации:
 
 ```bash
-cd Submodules/voproshalych
+# 1. Экспорт существующего датасета для аннотации
+docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
+  --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
+
+# 2. Отредактируйте файл вручную - добавьте метки качества
+# Поля для заполнения: is_question_ok, is_answer_ok, is_pair_ok, quality_category, notes
+
+# 3. Запуск бенчмарка на аннотированном датасете
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode manual \
-  --manual-dataset benchmarks/data/manual_dataset_smoke.json \
+  --manual-dataset benchmarks/data/dataset_for_annotation.json \
   --limit 5
 ```
+
+Также можно использовать `--mode manual` с любым JSON файлом в новом формате.
 
 ## 6) Real users benchmark
 

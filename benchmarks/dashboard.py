@@ -100,18 +100,30 @@ QUALITY_BASELINES = {
     "hit_rate@1": 0.7,
     "hit_rate@5": 0.9,
     "hit_rate@10": 0.95,
+    "recall@1": 0.7,
+    "recall@5": 0.9,
+    "recall@10": 0.95,
+    "precision@1": 0.7,
+    "precision@5": 0.18,
+    "ndcg@5": 0.8,
     "avg_faithfulness": 4.5,
     "avg_answer_relevance": 4.2,
     "avg_e2e_score": 4.2,
     "avg_semantic_similarity": 0.85,
+    "avg_rouge1_f": 0.50,
+    "avg_rouge2_f": 0.30,
+    "avg_rougeL_f": 0.45,
+    "avg_bleu": 30.0,
     "consistency_score": 0.90,
     "error_rate": 0.05,
+    "avg_latency_ms": 3000.0,
     "accuracy": 0.85,
     "precision": 0.85,
     "recall": 0.85,
     "f1_score": 0.85,
     "cache_hit_rate": 0.40,
     "context_preservation": 0.70,
+    "multi_turn_consistency": 0.70,
 }
 
 
@@ -308,74 +320,89 @@ class RAGBenchmarkDashboard:
         )
 
         summary_rows = []
-        summary_rows.append(
-            {
-                "Tier": "Tier 1 (Retrieval)",
-                "HitRate@5": round(
-                    _safe_float(latest_run.get("tier_1", {}).get("hit_rate@5")), 4
-                ),
-                "MRR": round(_safe_float(latest_run.get("tier_1", {}).get("mrr")), 4),
-                "Faithfulness": "-",
-                "Relevance": "-",
-                "E2E Score": "-",
-            }
-        )
-        summary_rows.append(
-            {
-                "Tier": "Tier 2 (Generation)",
-                "HitRate@5": "-",
-                "MRR": "-",
-                "Faithfulness": round(
-                    _safe_float(latest_run.get("tier_2", {}).get("avg_faithfulness")),
-                    4,
-                ),
-                "Relevance": round(
-                    _safe_float(
-                        latest_run.get("tier_2", {}).get("avg_answer_relevance")
-                    ),
-                    4,
-                ),
-                "E2E Score": "-",
-            }
-        )
-        summary_rows.append(
-            {
-                "Tier": "Tier 3 (E2E)",
-                "HitRate@5": "-",
-                "MRR": "-",
-                "Faithfulness": "-",
-                "Relevance": "-",
-                "E2E Score": round(
-                    _safe_float(latest_run.get("tier_3", {}).get("avg_e2e_score")), 4
-                ),
-            }
-        )
+
+        tier_0 = latest_run.get("tier_0", {})
+        if tier_0:
+            summary_rows.append(
+                {
+                    "Tier": "Tier 0 (Embedding Quality)",
+                    "Primary Metric": f"Intra Sim: {round(_safe_float(tier_0.get('avg_intra_cluster_sim')), 3)}",
+                    "Additional": f"Silhouette: {round(_safe_float(tier_0.get('silhouette_score')), 3)}",
+                }
+            )
+
+        tier_1 = latest_run.get("tier_1", {})
+        if tier_1:
+            summary_rows.append(
+                {
+                    "Tier": "Tier 1 (Retrieval)",
+                    "Primary Metric": f"MRR: {round(_safe_float(tier_1.get('mrr')), 4)}",
+                    "Additional": f"HitRate@5: {round(_safe_float(tier_1.get('hit_rate@5')), 4)}",
+                }
+            )
+
+        tier_2 = latest_run.get("tier_2", {})
+        if tier_2:
+            summary_rows.append(
+                {
+                    "Tier": "Tier 2 (Generation)",
+                    "Primary Metric": f"Faithfulness: {round(_safe_float(tier_2.get('avg_faithfulness')), 2)}",
+                    "Additional": f"Relevance: {round(_safe_float(tier_2.get('avg_answer_relevance')), 2)}",
+                }
+            )
+
+        tier_3 = latest_run.get("tier_3", {})
+        if tier_3:
+            summary_rows.append(
+                {
+                    "Tier": "Tier 3 (End-to-End)",
+                    "Primary Metric": f"E2E Score: {round(_safe_float(tier_3.get('avg_e2e_score')), 2)}",
+                    "Additional": f"Semantic Sim: {round(_safe_float(tier_3.get('avg_semantic_similarity')), 3)}",
+                }
+            )
+
+        tier_judge = latest_run.get("tier_judge", {})
+        if tier_judge:
+            summary_rows.append(
+                {
+                    "Tier": "Tier Judge (Qwen)",
+                    "Primary Metric": f"Consistency: {round(_safe_float(tier_judge.get('consistency_score')), 2)}",
+                    "Additional": f"Error Rate: {round(_safe_float(tier_judge.get('error_rate')), 2)}",
+                }
+            )
+
+        tier_judge_pipeline = latest_run.get("tier_judge_pipeline", {})
+        if tier_judge_pipeline:
+            summary_rows.append(
+                {
+                    "Tier": "Tier Judge Pipeline (Mistral)",
+                    "Primary Metric": f"Accuracy: {round(_safe_float(tier_judge_pipeline.get('accuracy')), 2)}",
+                    "Additional": f"F1: {round(_safe_float(tier_judge_pipeline.get('f1_score')), 2)}",
+                }
+            )
+
+        tier_ux = latest_run.get("tier_ux", {})
+        if tier_ux:
+            summary_rows.append(
+                {
+                    "Tier": "Tier UX",
+                    "Primary Metric": f"Context Preserv: {round(_safe_float(tier_ux.get('context_preservation')), 2)}",
+                    "Additional": f"Cache Hit: {round(_safe_float(tier_ux.get('cache_hit_rate')), 2)}",
+                }
+            )
 
         if latest_run.get("tier_real_users"):
             summary_rows.append(
                 {
                     "Tier": "Real Users (Retrieval)",
-                    "HitRate@5": "-",
-                    "MRR": round(
-                        _safe_float(latest_run.get("tier_real_users", {}).get("mrr")),
-                        4,
-                    ),
-                    "Faithfulness": "-",
-                    "Relevance": "-",
-                    "E2E Score": "-",
+                    "Primary Metric": f"MRR: {round(_safe_float(latest_run.get('tier_real_users', {}).get('mrr')), 4)}",
+                    "Additional": f"Recall@5: {round(_safe_float(latest_run.get('tier_real_users', {}).get('recall@5')), 4)}",
                 }
             )
 
         gr.Dataframe(
             value=summary_rows,
-            headers=[
-                "Tier",
-                "HitRate@5",
-                "MRR",
-                "Faithfulness",
-                "Relevance",
-                "E2E Score",
-            ],
+            headers=["Tier", "Primary Metric", "Additional"],
             label="Latest Metrics Summary",
             interactive=False,
             wrap=True,
@@ -384,10 +411,12 @@ class RAGBenchmarkDashboard:
     def _create_history_tab(self):
         gr.Markdown("### Historical trend for selected metric")
 
+        all_tiers = list(METRICS_BY_TIER.keys())
+
         default_tier = "tier_1"
         default_metric = "mrr"
         if not self.get_metric_history(default_tier, default_metric)[0]:
-            for candidate_tier in ["tier_1", "tier_2", "tier_3", "tier_real_users"]:
+            for candidate_tier in all_tiers:
                 for candidate_metric in self._metric_options_for_tier(candidate_tier):
                     if self.get_metric_history(candidate_tier, candidate_metric)[0]:
                         default_tier = candidate_tier
@@ -398,7 +427,7 @@ class RAGBenchmarkDashboard:
 
         with gr.Row():
             tier_dropdown = gr.Dropdown(
-                choices=["tier_1", "tier_2", "tier_3", "tier_real_users"],
+                choices=all_tiers,
                 value=default_tier,
                 label="Tier",
             )
@@ -467,6 +496,17 @@ class RAGBenchmarkDashboard:
             {metric for metrics in METRICS_BY_TIER.values() for metric in metrics}
         )
 
+        tier_labels = {
+            "tier_0": "Tier 0 (Embedding)",
+            "tier_1": "Tier 1 (Retrieval)",
+            "tier_2": "Tier 2 (Generation)",
+            "tier_3": "Tier 3 (E2E)",
+            "tier_judge": "Tier Judge (Qwen)",
+            "tier_judge_pipeline": "Tier Judge Pipeline",
+            "tier_ux": "Tier UX",
+            "tier_real_users": "Real Users",
+        }
+
         metric_dropdown = gr.Dropdown(
             choices=comparison_metrics,
             value="mrr",
@@ -474,17 +514,13 @@ class RAGBenchmarkDashboard:
         )
 
         initial_comparison_rows: List[Dict[str, str | float]] = []
-        for tier_name, label in {
-            "tier_1": "Tier 1",
-            "tier_2": "Tier 2",
-            "tier_3": "Tier 3",
-            "tier_real_users": "Real Users",
-        }.items():
-            dates, values = self.get_metric_history(tier_name, "mrr")
-            if dates:
-                initial_comparison_rows.extend(
-                    self._build_series_rows(dates, values, "mrr", label)
-                )
+        for tier_name, label in tier_labels.items():
+            if tier_name in METRICS_BY_TIER:
+                dates, values = self.get_metric_history(tier_name, "mrr")
+                if dates:
+                    initial_comparison_rows.extend(
+                        self._build_series_rows(dates, values, "mrr", label)
+                    )
 
         plot = gr.LinePlot(
             value=pd.DataFrame(initial_comparison_rows),
@@ -782,10 +818,21 @@ class RAGBenchmarkDashboard:
             r"""
 ### Методология оценки RAG
 
+- **Tier 0 (Embedding Quality):** внутреннее качество эмбеддингов (intra-cluster similarity, inter-cluster distance, silhouette score).
 - **Tier 1 (Retrieval):** оценка ранжирования чанков в векторном поиске.
 - **Tier 2 (Generation):** оценка качества ответа при релевантном контексте.
 - **Tier 3 (End-to-End):** оценка полного пайплайна retrieval + generation.
+- **Tier Judge (Qwen):** оценка согласованности judge-модели при повторных запусках.
+- **Tier Judge Pipeline (Mistral):** оценка production judge, который решает "показывать ответ или нет".
+- **Tier UX:** анализ пользовательского опыта (cache hit rate, context preservation).
 - **Real Users:** retrieval-метрики на реальных вопросах пользователей.
+
+### Tier 0: Embedding Quality
+
+Метрики качества эмбеддингов без использования LLM:
+- **avg_intra_cluster_sim:** средняя косинусная близость внутри кластера (выше = лучше)
+- **avg_inter_cluster_dist:** среднее расстояние между кластерами (выше = лучше)
+- **silhouette_score:** силуэт-коэффициент (-1 до 1, выше = лучше)
 
 ### Retrieval-метрики
 
@@ -829,17 +876,35 @@ $$
 
 Шкала 1-5 трактуется как **ordinal scale** (упорядоченная, не строго линейная).
 
-Для semantic similarity используется косинусная близость эмбеддингов:
+### Алгоритмические метрики
+
+- **ROUGE (Recall-Oriented Understudy for Gisting Evaluation):** n-gram overlap с reference.
+- **BLEU (Bilingual Evaluation Understudy):** precision n-gram с штрафом за краткость.
+- **Semantic Similarity:** косинусная близость эмбеддингов:
 
 $$
 \mathrm{cos\_sim}(u, v) = \frac{u \cdot v}{\|u\|\,\|v\|}
 $$
 
+### Tier Judge: Согласованность judge-модели
+
+- **consistency_score:** доля согласованных оценок при повторном запуске
+- **error_rate:** доля ошибок API
+- **avg_latency_ms:** среднее время отклика API
+
+### Tier Judge Pipeline: Production Judge
+
+- **accuracy:** точность решений judge (по сравнению с ground truth)
+- **precision/recall/f1_score:** для класса "показывать ответ"
+
 ### Baseline-пороги
 
+- Tier 0: `avg_intra_cluster_sim >= 0.85`, `silhouette_score >= 0.50`
 - Tier 1: `MRR >= 0.80`, `HitRate@5 >= 0.90`, `HitRate@10 >= 0.95`
 - Tier 2: `Faithfulness >= 4.5`, `Answer Relevance >= 4.2`
 - Tier 3: `E2E Score >= 4.2`, `Semantic Similarity >= 0.85`
+- Tier Judge: `consistency_score >= 0.90`, `error_rate <= 0.05`
+- Tier Judge Pipeline: `accuracy >= 0.85`, `f1_score >= 0.85`
 - Real Users: `MRR`, `Recall@K`, `NDCG@K` анализируются в динамике по релизам
             """
         )

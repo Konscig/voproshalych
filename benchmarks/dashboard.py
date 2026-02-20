@@ -382,9 +382,12 @@ class RAGBenchmarkDashboard:
                 }
             )
 
+        headers = ["Tier", "Primary Metric", "Additional"]
+        table_data = [[row.get(h, "-") for h in headers] for row in summary_rows]
+
         gr.Dataframe(
-            value=summary_rows,
-            headers=["Tier", "Primary Metric", "Additional"],
+            value=table_data,
+            headers=headers,
             label="Latest Metrics Summary",
             interactive=False,
             wrap=True,

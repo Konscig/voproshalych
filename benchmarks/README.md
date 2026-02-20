@@ -67,6 +67,12 @@ make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
 
 ## Уровни тестирования
 
+### Tier 0: Intrinsic Embedding Quality
+
+Оценка внутреннего качества эмбеддингов через кластерный анализ.
+
+**Метрики:** `avg_intra_cluster_sim`, `avg_inter_cluster_dist`, `silhouette_score`
+
 ### Tier 1: Retrieval Accuracy
 
 Оценка качества векторного поиска через pgvector.
@@ -77,13 +83,25 @@ make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
 
 Оценка качества генерации ответов при идеальном контексте.
 
-**Метрики:** `avg_faithfulness`, `avg_answer_relevance` (LLM Judge 1-5)
+**Метрики:** `avg_faithfulness`, `avg_answer_relevance` (LLM Judge 1-5), `avg_rouge1_f`, `avg_rougeL_f`, `avg_bleu`
 
 ### Tier 3: End-to-End
 
 Оценка полного пайплайна RAG-системы.
 
-**Метрики:** `avg_e2e_score`, `avg_semantic_similarity`
+**Метрики:** `avg_e2e_score`, `avg_semantic_similarity`, `avg_rouge1_f`, `avg_bleu`
+
+### Tier Judge: LLM-as-a-Judge Quality
+
+Оценка качества и стабильности LLM-судьи.
+
+**Метрики:** `consistency_score`, `error_rate`, `avg_latency_ms`
+
+### Tier UX: User Experience Quality
+
+Оценка качества пользовательского опыта и работы кэша.
+
+**Метрики:** `cache_hit_rate`, `context_preservation`, `multi_turn_consistency`
 
 ### Real Users
 

@@ -171,6 +171,7 @@ sequenceDiagram
 - Определяется контекст из датасета (`chunk_text`, `relevant_chunk_ids`, или `chunk_id`)
 - Вызывается `qa.main.get_answer()` для генерации ответа
 - `LLMJudge` оценивает faithfulness (фактичность) и answer_relevance (релевантность)
+- Вычисляются алгоритмические метрики: ROUGE-1, ROUGE-L, BLEU
 
 **Шаг 34-35:** Результаты сохраняются.
 
@@ -188,6 +189,7 @@ sequenceDiagram
 - Генерируется ответ через `qa.main.get_answer()`
 - `LLMJudge` оценивает E2E качество
 - Вычисляется cosine similarity между системным и эталонным ответом
+- Вычисляются алгоритмические метрики: ROUGE-1, ROUGE-L, BLEU
 
 **Шаг 45-46:** Результаты сохраняются.
 
@@ -208,6 +210,55 @@ sequenceDiagram
 **Шаг 55-56:** Результаты сохраняются.
 
 **Реализация:** `benchmarks/models/real_queries_benchmark.py`, метод `run()`.
+
+---
+
+### Фаза 6a: Запуск бенчмарков (Tier 0)
+
+**Шаг 56a:** Пользователь запускает `run_comprehensive_benchmark.py --tier 0`. Создаётся `RAGBenchmark`.
+
+**Шаг 57-59:** Для кластерного анализа эмбеддингов:
+- Извлекаются тексты и метки кластеров из датасета
+- Вычисляются эмбеддинги для каждого текста
+- Рассчитываются intra-cluster similarity (внутриклассовое сходство)
+- Рассчитываются inter-cluster distance (межклассовое расстояние)
+- Вычисляется silhouette score
+
+**Шаг 60:** Результаты сохраняются.
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_0()`.
+
+---
+
+### Фаза 6b: Запуск бенчмарков (Tier Judge)
+
+**Шаг 61:** Пользователь запускает `run_comprehensive_benchmark.py --tier judge`. Создаётся `RAGBenchmark`.
+
+**Шаг 62-64:** Для оценки качества LLM-судьи:
+- Вызывается `LLMJudge.evaluate_faithfulness()` первый раз
+- При включенной проверке консистентности — повторный вызов
+- Сравниваются оценки для вычисления consistency score
+- Замеряется latency каждого вызова
+
+**Шаг 65:** Результаты сохраняются.
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge()`.
+
+---
+
+### Фаза 6c: Запуск бенчмарков (Tier UX)
+
+**Шаг 66:** Пользователь запускает `run_comprehensive_benchmark.py --tier ux`. Создаётся `RAGBenchmark`.
+
+**Шаг 67-69:** Для оценки пользовательского опыта:
+- Загружаются вопросы с `score=5` из `QuestionAnswer`
+- Для каждого вопроса в сессии ищется похожий вопрос в кэше
+- Вычисляется cache hit rate (попадания в кэш)
+- Для многотуровых сессий вычисляется context preservation
+
+**Шаг 70:** Результаты сохраняются.
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_ux()`.
 
 ---
 
@@ -238,10 +289,11 @@ sequenceDiagram
 | `generate_embeddings.py` | Генерация эмбеддингов |
 | `run_dashboard.py` | Запуск дашборда |
 | `dashboard.py` | Gradio дашборд |
-| `models/rag_benchmark.py` | Tier 1/2/3 бенчмарки |
+| `models/rag_benchmark.py` | Tier 0/1/2/3/Judge/UX бенчмарки |
 | `models/real_queries_benchmark.py` | Real-users benchmark |
 | `utils/llm_judge.py` | LLM-судья для оценки качества |
 | `utils/evaluator.py` | Метрики: HitRate, MRR, NDCG |
+| `utils/text_metrics.py` | Алгоритмические метрики: ROUGE, BLEU, BERTScore |
 | `utils/embedding_generator.py` | Генерация эмбеддингов |
 
 ---
@@ -280,9 +332,12 @@ sequenceDiagram
 | run_author | text | Автор запуска |
 | dataset_file | text | Имя файла датасета |
 | dataset_type | text | synthetic/manual/real-users |
-| tier_1_metrics | json | Метрики Tier 1 |
-| tier_2_metrics | json | Метрики Tier 2 |
-| tier_3_metrics | json | Метрики Tier 3 |
+| tier_0_metrics | json | Метрики Tier 0 (Embedding Quality) |
+| tier_1_metrics | json | Метрики Tier 1 (Retrieval) |
+| tier_2_metrics | json | Метрики Tier 2 (Generation) |
+| tier_3_metrics | json | Метрики Tier 3 (End-to-End) |
+| tier_judge_metrics | json | Метрики Tier Judge (LLM Quality) |
+| tier_ux_metrics | json | Метрики Tier UX (User Experience) |
 | real_user_metrics | json | Метрики real-users |
 | overall_status | text | Итоговый статус |
 

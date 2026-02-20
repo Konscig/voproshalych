@@ -201,13 +201,31 @@ def run_benchmark(
     dataset = dataset or []
 
     if tier == "all":
-        return benchmark.run_all_tiers(dataset, top_k=top_k)
+        results = benchmark.run_all_tiers(dataset, top_k=top_k)
+        results["tier_0"] = benchmark.run_tier_0(dataset)
+        results["tier_judge"] = benchmark.run_tier_judge(dataset)
+        results["tier_ux"] = benchmark.run_tier_ux(
+            [{"questions": [item["question"] for item in dataset]}] if dataset else []
+        )
+        return results
     elif tier == "1":
         return {"tier_1": benchmark.run_tier_1(dataset, top_k=top_k)}
     elif tier == "2":
         return {"tier_2": benchmark.run_tier_2(dataset)}
     elif tier == "3":
         return {"tier_3": benchmark.run_tier_3(dataset)}
+    elif tier == "0":
+        return {"tier_0": benchmark.run_tier_0(dataset)}
+    elif tier == "judge":
+        return {"tier_judge": benchmark.run_tier_judge(dataset)}
+    elif tier == "ux":
+        return {
+            "tier_ux": benchmark.run_tier_ux(
+                [{"questions": [item["question"] for item in dataset]}]
+                if dataset
+                else []
+            )
+        }
     else:
         raise ValueError(f"Неизвестный уровень бенчмарка: {tier}")
 
@@ -280,9 +298,12 @@ def save_results(
                 run_author=run_metadata["run_author"],
                 dataset_file=os.path.basename(dataset_name),
                 dataset_type=mode,
+                tier_0_metrics=normalized_results.get("tier_0"),
                 tier_1_metrics=normalized_results.get("tier_1"),
                 tier_2_metrics=normalized_results.get("tier_2"),
                 tier_3_metrics=normalized_results.get("tier_3"),
+                tier_judge_metrics=normalized_results.get("tier_judge"),
+                tier_ux_metrics=normalized_results.get("tier_ux"),
                 real_user_metrics=normalized_results.get("tier_real_users"),
                 overall_status=overall_status,
             )
@@ -331,9 +352,9 @@ def main():
     parser.add_argument(
         "--tier",
         type=str,
-        choices=["1", "2", "3", "all"],
+        choices=["0", "1", "2", "3", "judge", "ux", "all"],
         default="all",
-        help="Уровень бенчмарка (1, 2, 3 или all)",
+        help="Уровень бенчмарка (0, 1, 2, 3, judge, ux или all)",
     )
 
     parser.add_argument(

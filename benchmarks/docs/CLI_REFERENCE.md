@@ -181,9 +181,12 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
 
 | Tier | Что проверяет | Метрики |
 |------|---------------|---------|
+| 0 | Intrinsic Embedding Quality | avg_intra_cluster_sim, avg_inter_cluster_dist, silhouette_score |
 | 1 | Retrieval Accuracy | HitRate@K, MRR, NDCG@K, Recall@K, Precision@K |
-| 2 | Generation Quality | avg_faithfulness, avg_answer_relevance |
-| 3 | End-to-End | avg_e2e_score, avg_semantic_similarity |
+| 2 | Generation Quality | avg_faithfulness, avg_answer_relevance, avg_rouge1_f, avg_rougeL_f, avg_bleu |
+| 3 | End-to-End | avg_e2e_score, avg_semantic_similarity, avg_rouge1_f, avg_bleu |
+| judge | LLM-as-a-Judge Quality | consistency_score, error_rate, avg_latency_ms |
+| ux | User Experience Quality | cache_hit_rate, context_preservation, multi_turn_consistency |
 | all | Все уровни | Все метрики |
 
 ---

@@ -1,7 +1,16 @@
 ROOT_DIR := ..
 COMPOSE_FILE ?= docker-compose.yml
+PROFILE ?=
+
+# Формирование флага профиля
+ifeq ($(PROFILE),)
+  PROFILE_FLAG :=
+else
+  PROFILE_FLAG := --profile $(PROFILE)
+endif
 
 .PHONY: install load-dump drop-tables generate-embeddings generate-dataset run-benchmarks run-dashboard up down ps logs
+.PHONY: up-api up-full
 .PHONY: install-local load-dump-local drop-tables-local generate-embeddings-local generate-dataset-local run-benchmarks-local run-dashboard-local
 
 # Локальный режим (без контейнеризации)
@@ -29,10 +38,17 @@ run-dashboard-local:
 
 # Docker режим (используется COMPOSE_FILE, по умолчанию docker-compose.benchmarks.yml)
 up:
-	docker compose -f $(COMPOSE_FILE) up -d --build
+	docker compose -f $(COMPOSE_FILE) $(PROFILE_FLAG) up -d --build
 
 down:
-	docker compose -f $(COMPOSE_FILE) down
+	docker compose -f $(COMPOSE_FILE) $(PROFILE_FLAG) down
+
+# Запуск с профилями
+up-api:
+	docker compose -f $(COMPOSE_FILE) --profile api up -d --build
+
+up-full:
+	docker compose -f $(COMPOSE_FILE) --profile full up -d --build
 
 load-dump:
 	docker compose -f $(COMPOSE_FILE) exec -T benchmarks uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
@@ -77,8 +93,10 @@ help:
 	@echo "  run-dashboard-local        - Запустить дашборд локально"
 	@echo ""
 	@echo "Docker режим (используется COMPOSE_FILE):"
-	@echo "  up                         - Поднять все сервисы (использует COMPOSE_FILE)"
-	@echo "  down                       - Остановить все сервисы (использует COMPOSE_FILE)"
+	@echo "  up                         - Поднять базовые сервисы (db, benchmarks)"
+	@echo "  up-api                     - Поднять с api сервисами (qa, adminpanel)"
+	@echo "  up-full                    - Поднять все сервисы"
+	@echo "  down                       - Остановить сервисы"
 	@echo "  load-dump                  - Загрузить дамп БД через Docker"
 	@echo "  drop-tables                - Удалить таблицы БД через Docker"
 	@echo "  generate-embeddings        - Сгенерировать эмбеддинги через Docker"
@@ -89,7 +107,8 @@ help:
 	@echo "  logs                       - Показать логи сервиса benchmarks"
 	@echo ""
 	@echo "Переменные:"
-	@echo "  COMPOSE_FILE                - Docker compose файл (по умолчанию: docker-compose.yml)"
+	@echo "  COMPOSE_FILE               - Docker compose файл (по умолчанию: docker-compose.yml)"
+	@echo "  PROFILE                    - Docker compose профиль (api, bot, full)"
 	@echo ""
 	@echo "Примеры:"
 	@echo ""

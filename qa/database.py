@@ -138,9 +138,12 @@ class BenchmarkRun(Base):
     git_commit_hash: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     run_author: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     dataset_file: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    tier_0_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     tier_1_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     tier_2_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     tier_3_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    tier_judge_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    tier_ux_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     real_user_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     dataset_type: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     overall_status: Mapped[str] = mapped_column(Text(), nullable=False)
@@ -167,6 +170,24 @@ def ensure_benchmark_runs_schema(engine: Engine) -> None:
             text(
                 "ALTER TABLE benchmark_runs "
                 "ADD COLUMN IF NOT EXISTS real_user_metrics JSON"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs "
+                "ADD COLUMN IF NOT EXISTS tier_0_metrics JSON"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs "
+                "ADD COLUMN IF NOT EXISTS tier_judge_metrics JSON"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs "
+                "ADD COLUMN IF NOT EXISTS tier_ux_metrics JSON"
             )
         )
 

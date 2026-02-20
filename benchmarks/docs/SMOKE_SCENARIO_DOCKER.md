@@ -10,7 +10,7 @@
 
 ## 0) Поднять контейнеры
 
-### Вариант A: Полный стек с бенчмарками
+### Вариант A: Базовый стек (рекомендуется для бенчмарков)
 
 ```bash
 cd Submodules/voproshalych/benchmarks
@@ -23,12 +23,37 @@ cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml up -d --build
 ```
 
-### Вариант B: Только основной стек (без бенчмарков)
+**Запускаются:** db, db-migrate, benchmarks
+
+### Вариант B: С API сервисами (qa, adminpanel)
 
 ```bash
-cd Submodules/voproshalych
-docker compose up -d --build
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml up-api
 ```
+
+Или напрямую:
+```bash
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml --profile api up -d --build
+```
+
+**Запускаются:** + qa, adminpanel
+
+### Вариант C: Полный стек
+
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml up-full
+```
+
+Или напрямую:
+```bash
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml --profile full up -d --build
+```
+
+**Запускаются:** Все сервисы (db, qa, chatbot, adminpanel, max, benchmarks)
 
 ### Проверка статуса
 

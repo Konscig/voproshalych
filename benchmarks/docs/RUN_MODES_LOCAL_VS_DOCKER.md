@@ -103,6 +103,30 @@ uv run python benchmarks/run_dashboard.py
 
 **Важно:** Код `qa` импортируется внутрь контейнера benchmarks, поэтому HTTP доступ к qa не требуется.
 
+### Профили Docker Compose
+
+Для управления опциональными сервисами используются профили:
+
+| Профиль | Запуск команды | Сервисы |
+|---------|----------------|---------|
+| (без профиля) | `docker compose -f docker-compose.benchmarks.yml up -d` | db, db-migrate, benchmarks |
+| `api` | `--profile api up -d` | + qa, adminpanel |
+| `bot` | `--profile bot up -d` | + chatbot |
+| `full` | `--profile full up -d` | Все сервисы |
+
+**Примеры:**
+
+```bash
+# Базовый стек (рекомендуется для бенчмарков)
+docker compose -f docker-compose.benchmarks.yml up -d
+
+# С qa и adminpanel (для HTTP API тестов)
+docker compose -f docker-compose.benchmarks.yml --profile api up -d
+
+# Полный стек
+docker compose -f docker-compose.benchmarks.yml --profile full up -d
+```
+
 ### Хранение данных
 
 | Тип данных | Где хранится | Persistence |

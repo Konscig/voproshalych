@@ -28,9 +28,28 @@ logger = logging.getLogger(__name__)
 APP_TITLE = "RAG Quality Assurance System"
 
 METRICS_BY_TIER = {
+    "tier_0": ["avg_intra_cluster_sim", "avg_inter_cluster_dist", "silhouette_score"],
     "tier_1": ["mrr", "hit_rate@1", "hit_rate@5", "hit_rate@10"],
-    "tier_2": ["avg_faithfulness", "avg_answer_relevance"],
-    "tier_3": ["avg_e2e_score", "avg_semantic_similarity"],
+    "tier_2": [
+        "avg_faithfulness",
+        "avg_answer_relevance",
+        "avg_rouge1_f",
+        "avg_rougeL_f",
+        "avg_bleu",
+    ],
+    "tier_3": [
+        "avg_e2e_score",
+        "avg_semantic_similarity",
+        "avg_rouge1_f",
+        "avg_bleu",
+    ],
+    "tier_judge": [
+        "consistency_score",
+        "error_rate",
+        "avg_latency_ms",
+        "avg_faithfulness",
+    ],
+    "tier_ux": ["cache_hit_rate", "context_preservation", "multi_turn_consistency"],
     "tier_real_users": [
         "mrr",
         "recall@1",
@@ -42,6 +61,9 @@ METRICS_BY_TIER = {
 }
 
 QUALITY_BASELINES = {
+    "avg_intra_cluster_sim": 0.85,
+    "avg_inter_cluster_dist": 0.30,
+    "silhouette_score": 0.50,
     "mrr": 0.8,
     "hit_rate@1": 0.7,
     "hit_rate@5": 0.9,
@@ -50,6 +72,31 @@ QUALITY_BASELINES = {
     "avg_answer_relevance": 4.2,
     "avg_e2e_score": 4.2,
     "avg_semantic_similarity": 0.85,
+    "avg_rouge1_f": 0.50,
+    "avg_rougeL_f": 0.45,
+    "avg_bleu": 30.0,
+    "consistency_score": 0.90,
+    "error_rate": 0.05,
+    "cache_hit_rate": 0.40,
+    "context_preservation": 0.70,
+}
+
+QUALITY_BASELINES = {
+    "avg_intra_cluster_sim": 0.85,
+    "avg_inter_cluster_dist": 0.30,
+    "silhouette_score": 0.50,
+    "mrr": 0.8,
+    "hit_rate@1": 0.7,
+    "hit_rate@5": 0.9,
+    "hit_rate@10": 0.95,
+    "avg_faithfulness": 4.5,
+    "avg_answer_relevance": 4.2,
+    "avg_e2e_score": 4.2,
+    "avg_semantic_similarity": 0.85,
+    "consistency_score": 0.90,
+    "error_rate": 0.05,
+    "cache_hit_rate": 0.40,
+    "context_preservation": 0.70,
 }
 
 
@@ -105,9 +152,12 @@ class RAGBenchmarkDashboard:
                     "dataset_file": record.dataset_file or "unknown",
                     "dataset_type": record.dataset_type or "synthetic",
                     "overall_status": record.overall_status,
+                    "tier_0": normalize_metrics(record.tier_0_metrics),
                     "tier_1": normalize_metrics(record.tier_1_metrics),
                     "tier_2": normalize_metrics(record.tier_2_metrics),
                     "tier_3": normalize_metrics(record.tier_3_metrics),
+                    "tier_judge": normalize_metrics(record.tier_judge_metrics),
+                    "tier_ux": normalize_metrics(record.tier_ux_metrics),
                     "tier_real_users": normalize_metrics(record.real_user_metrics),
                 }
             )

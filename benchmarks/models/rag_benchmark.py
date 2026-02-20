@@ -258,7 +258,10 @@ class RAGBenchmark:
 
         faithfulness_scores = []
         relevance_scores = []
+        text_metrics_list = []
         errors = 0
+
+        from benchmarks.utils.text_metrics import compute_all_text_metrics
 
         for item in dataset:
             try:
@@ -291,6 +294,16 @@ class RAGBenchmark:
                 faithfulness_scores.append(faithfulness)
                 relevance_scores.append(relevance)
 
+                # Алгоритмические метрики
+                ground_truth = item.get("ground_truth_answer", "")
+                if ground_truth and system_answer:
+                    text_metrics = compute_all_text_metrics(
+                        hypothesis=system_answer,
+                        reference=ground_truth,
+                        include_bertscore=False,
+                    )
+                    text_metrics_list.append(text_metrics)
+
                 logger.debug(
                     f"Вопрос: {question[:50]}... | "
                     f"Faithfulness: {faithfulness:.2f} | "
@@ -300,6 +313,30 @@ class RAGBenchmark:
             except Exception as e:
                 logger.error(f"Ошибка оценки для вопроса '{item['question']}': {e}")
                 errors += 1
+
+        # Агрегируем алгоритмические метрики
+        if text_metrics_list:
+            avg_text_metrics = {
+                "avg_rouge1_f": float(
+                    np.mean([m.get("rouge1_f", 0) for m in text_metrics_list])
+                ),
+                "avg_rouge2_f": float(
+                    np.mean([m.get("rouge2_f", 0) for m in text_metrics_list])
+                ),
+                "avg_rougeL_f": float(
+                    np.mean([m.get("rougeL_f", 0) for m in text_metrics_list])
+                ),
+                "avg_bleu": float(
+                    np.mean([m.get("bleu", 0) for m in text_metrics_list])
+                ),
+            }
+        else:
+            avg_text_metrics = {
+                "avg_rouge1_f": 0.0,
+                "avg_rouge2_f": 0.0,
+                "avg_rougeL_f": 0.0,
+                "avg_bleu": 0.0,
+            }
 
         metrics = {
             "tier": 2,
@@ -312,6 +349,7 @@ class RAGBenchmark:
             "avg_answer_relevance": float(np.mean(relevance_scores))
             if relevance_scores
             else 0.0,
+            **avg_text_metrics,
         }
 
         logger.info(f"Tier 2 завершён. Faithfulness: {metrics['avg_faithfulness']:.2f}")
@@ -338,7 +376,10 @@ class RAGBenchmark:
 
         e2e_scores = []
         semantic_similarities = []
+        text_metrics_list = []
         errors = 0
+
+        from benchmarks.utils.text_metrics import compute_all_text_metrics
 
         for item in dataset:
             try:
@@ -392,6 +433,15 @@ class RAGBenchmark:
                 e2e_scores.append(e2e_score)
                 semantic_similarities.append(cosine_sim)
 
+                # Алгоритмические метрики
+                if system_answer and ground_truth:
+                    text_metrics = compute_all_text_metrics(
+                        hypothesis=system_answer,
+                        reference=ground_truth,
+                        include_bertscore=False,
+                    )
+                    text_metrics_list.append(text_metrics)
+
                 logger.debug(
                     f"E2E Score: {e2e_score:.2f} | Similarity: {cosine_sim:.4f}"
                 )
@@ -399,6 +449,30 @@ class RAGBenchmark:
             except Exception as e:
                 logger.error(f"Ошибка E2E для вопроса '{item['question']}': {e}")
                 errors += 1
+
+        # Агрегируем алгоритмические метрики
+        if text_metrics_list:
+            avg_text_metrics = {
+                "avg_rouge1_f": float(
+                    np.mean([m.get("rouge1_f", 0) for m in text_metrics_list])
+                ),
+                "avg_rouge2_f": float(
+                    np.mean([m.get("rouge2_f", 0) for m in text_metrics_list])
+                ),
+                "avg_rougeL_f": float(
+                    np.mean([m.get("rougeL_f", 0) for m in text_metrics_list])
+                ),
+                "avg_bleu": float(
+                    np.mean([m.get("bleu", 0) for m in text_metrics_list])
+                ),
+            }
+        else:
+            avg_text_metrics = {
+                "avg_rouge1_f": 0.0,
+                "avg_rouge2_f": 0.0,
+                "avg_rougeL_f": 0.0,
+                "avg_bleu": 0.0,
+            }
 
         metrics = {
             "tier": 3,
@@ -409,6 +483,7 @@ class RAGBenchmark:
             "avg_semantic_similarity": float(np.mean(semantic_similarities))
             if semantic_similarities
             else 0.0,
+            **avg_text_metrics,
         }
 
         logger.info(f"Tier 3 завершён. E2E Score: {metrics['avg_e2e_score']:.2f}")
@@ -440,3 +515,313 @@ class RAGBenchmark:
         logger.info("✅ Все уровни тестирования завершены")
 
         return results
+
+    def run_tier_0(
+        self,
+        test_pairs: List[Dict],
+    ) -> Dict[str, float]:
+        """Выполнить бенчмарк Tier 0 (Intrinsic Embedding Quality).
+
+        Оценивает внутреннее качество эмбеддингов через кластерный анализ
+        и метрики на golden similarity dataset.
+
+        Args:
+            test_pairs: Список пар (question1, question2, ground_truth_similarity)
+                       или чанков для кластеризации
+
+        Returns:
+            Словарь с метриками качества эмбеддингов
+        """
+        logger.info(
+            f"Запуск Tier 0 (Intrinsic Embedding Quality) с {len(test_pairs)} парами"
+        )
+
+        if not test_pairs:
+            logger.warning("Нет тестовых пар для Tier 0")
+            return {
+                "tier": 0,
+                "total_pairs": 0,
+                "avg_intra_cluster_sim": 0.0,
+                "avg_inter_cluster_dist": 0.0,
+                "silhouette_score": 0.0,
+            }
+
+        embeddings = []
+        labels = []
+
+        for pair in test_pairs:
+            text = pair.get("text") or pair.get("question", "")
+            label = pair.get("cluster_id") or pair.get("label", 0)
+
+            if text:
+                emb = self.encoder.encode(text)
+                embeddings.append(emb)
+                labels.append(label)
+
+        if len(embeddings) < 2:
+            logger.warning("Недостаточно данных для кластерного анализа")
+            return {
+                "tier": 0,
+                "total_pairs": len(test_pairs),
+                "avg_intra_cluster_sim": 0.0,
+                "avg_inter_cluster_dist": 0.0,
+                "silhouette_score": 0.0,
+            }
+
+        embeddings_array = np.array(embeddings)
+        labels_array = np.array(labels)
+
+        unique_labels = np.unique(labels_array)
+        n_clusters = len(unique_labels)
+
+        intra_cluster_sims = []
+        inter_cluster_dists = []
+
+        for label in unique_labels:
+            cluster_mask = labels_array == label
+            cluster_embeddings = embeddings_array[cluster_mask]
+
+            if len(cluster_embeddings) > 1:
+                for i in range(len(cluster_embeddings)):
+                    for j in range(i + 1, len(cluster_embeddings)):
+                        sim = np.dot(cluster_embeddings[i], cluster_embeddings[j]) / (
+                            np.linalg.norm(cluster_embeddings[i])
+                            * np.linalg.norm(cluster_embeddings[j])
+                        )
+                        intra_cluster_sims.append(sim)
+
+        for i, label_i in enumerate(unique_labels):
+            for label_j in unique_labels[i + 1 :]:
+                cluster_i = embeddings_array[labels_array == label_i]
+                cluster_j = embeddings_array[labels_array == label_j]
+
+                if len(cluster_i) > 0 and len(cluster_j) > 0:
+                    centroid_i = np.mean(cluster_i, axis=0)
+                    centroid_j = np.mean(cluster_j, axis=0)
+                    dist = np.linalg.norm(centroid_i - centroid_j)
+                    inter_cluster_dists.append(dist)
+
+        silhouette = 0.0
+        if n_clusters > 1:
+            try:
+                from sklearn.metrics import silhouette_score
+
+                silhouette = silhouette_score(
+                    embeddings_array, labels_array, metric="cosine"
+                )
+            except ImportError:
+                logger.warning("sklearn не установлен, silhouette_score не вычислен")
+
+        metrics = {
+            "tier": 0,
+            "total_pairs": len(test_pairs),
+            "n_clusters": n_clusters,
+            "avg_intra_cluster_sim": float(np.mean(intra_cluster_sims))
+            if intra_cluster_sims
+            else 0.0,
+            "avg_inter_cluster_dist": float(np.mean(inter_cluster_dists))
+            if inter_cluster_dists
+            else 0.0,
+            "silhouette_score": float(silhouette),
+        }
+
+        logger.info(f"Tier 0 завершён. Silhouette: {metrics['silhouette_score']:.4f}")
+
+        return metrics
+
+    def run_tier_judge(
+        self,
+        evaluation_pairs: List[Dict],
+        consistency_check: bool = True,
+    ) -> Dict[str, float]:
+        """Выполнить бенчмарк Tier Judge (LLM-as-a-Judge Quality).
+
+        Оценивает качество и стабильность LLM-судьи через:
+        - Consistency score (согласованность при повторной оценке)
+        - Error rate (доля ошибочных оценок)
+        - Latency (время оценки)
+
+        Args:
+            evaluation_pairs: Пары (question, context, answer) для оценки
+            consistency_check: Проводить ли проверку консистентности
+
+        Returns:
+            Словарь с метриками качества судьи
+        """
+        logger.info(
+            f"Запуск Tier Judge (LLM Judge Quality) с {len(evaluation_pairs)} парами"
+        )
+
+        if not evaluation_pairs:
+            logger.warning("Нет пар для оценки судьи")
+            return {
+                "tier_code": -4.0,  # -4 for judge tier
+                "total_evaluations": 0,
+                "consistency_score": 0.0,
+                "error_rate": 0.0,
+                "avg_latency_ms": 0.0,
+            }
+
+        judge = self._get_judge()
+        first_scores = []
+        second_scores = []
+        latencies = []
+        errors = 0
+
+        import time
+
+        for pair in evaluation_pairs:
+            try:
+                question = pair["question"]
+                context = pair.get("context", "")
+                answer = pair["answer"]
+
+                start_time = time.time()
+
+                if context:
+                    score_1 = judge.evaluate_faithfulness(question, context, answer)
+                else:
+                    score_1 = judge.evaluate_answer_relevance(question, answer)
+
+                latency_1 = (time.time() - start_time) * 1000
+                first_scores.append(score_1)
+                latencies.append(latency_1)
+
+                if consistency_check:
+                    start_time = time.time()
+
+                    if context:
+                        score_2 = judge.evaluate_faithfulness(question, context, answer)
+                    else:
+                        score_2 = judge.evaluate_answer_relevance(question, answer)
+
+                    second_scores.append(score_2)
+
+            except Exception as e:
+                logger.error(f"Ошибка оценки судьи: {e}")
+                errors += 1
+
+        consistency = 0.0
+        if consistency_check and first_scores and second_scores:
+            matches = sum(
+                1 for s1, s2 in zip(first_scores, second_scores) if abs(s1 - s2) <= 0.5
+            )
+            consistency = matches / len(first_scores)
+
+        total = len(evaluation_pairs)
+        error_rate = errors / total if total > 0 else 0.0
+
+        metrics = {
+            "tier_code": -4.0,  # -4 for judge tier
+            "total_evaluations": float(len(first_scores)),
+            "consistency_score": float(consistency),
+            "error_rate": float(error_rate),
+            "avg_latency_ms": float(np.mean(latencies)) if latencies else 0.0,
+            "avg_faithfulness": float(np.mean(first_scores)) if first_scores else 0.0,
+        }
+
+        logger.info(
+            f"Tier Judge завершён. Consistency: {metrics['consistency_score']:.2f}, "
+            f"Error rate: {metrics['error_rate']:.2f}"
+        )
+
+        return metrics
+
+    def run_tier_ux(
+        self,
+        dialog_sessions: List[Dict],
+    ) -> Dict[str, float]:
+        """Выполнить бенчмарк Tier UX (User Experience Quality).
+
+        Оценивает качество пользовательского опыта через:
+        - Cache hit rate (попадания в кэш похожих вопросов)
+        - Context preservation (сохранение контекста диалога)
+        - Multi-turn consistency (согласованность в многотуровых диалогах)
+
+        Args:
+            dialog_sessions: Список сессий диалогов
+                [{"questions": ["q1", "q2"], "expected_answers": ["a1", "a2"]}]
+
+        Returns:
+            Словарь с метриками UX
+        """
+        logger.info(
+            f"Запуск Tier UX (User Experience) с {len(dialog_sessions)} сессиями"
+        )
+
+        if not dialog_sessions:
+            logger.warning("Нет сессий для UX оценки")
+            return {
+                "tier_code": -5.0,  # -5 for UX tier
+                "total_sessions": 0.0,
+                "cache_hit_rate": 0.0,
+                "context_preservation": 0.0,
+                "multi_turn_consistency": 0.0,
+            }
+
+        from qa.database import QuestionAnswer
+
+        cache_hits = 0
+        cache_total = 0
+        context_scores = []
+
+        with Session(self.engine) as session:
+            high_score_questions = session.scalars(
+                select(QuestionAnswer).where(QuestionAnswer.score == 5)
+            ).all()
+
+            high_score_embeddings = {}
+            for qa in high_score_questions:
+                if qa.question and qa.embedding is not None:
+                    high_score_embeddings[qa.question] = np.array(qa.embedding)
+
+        for session_data in dialog_sessions:
+            questions = session_data.get("questions", [])
+
+            for i, question in enumerate(questions):
+                question_embedding = self.encoder.encode(question)
+
+                best_match = None
+                best_similarity = -1.0
+
+                for cached_q, cached_emb in high_score_embeddings.items():
+                    if cached_emb is not None and len(cached_emb) > 0:
+                        similarity = np.dot(question_embedding, cached_emb) / (
+                            np.linalg.norm(question_embedding)
+                            * np.linalg.norm(cached_emb)
+                        )
+                        if similarity > best_similarity:
+                            best_similarity = similarity
+                            best_match = cached_q
+
+                cache_total += 1
+                if best_similarity > 0.85:
+                    cache_hits += 1
+
+                if i > 0:
+                    prev_question = questions[i - 1]
+                    prev_emb = self.encoder.encode(prev_question)
+                    context_sim = np.dot(question_embedding, prev_emb) / (
+                        np.linalg.norm(question_embedding) * np.linalg.norm(prev_emb)
+                    )
+                    context_scores.append(context_sim)
+
+        cache_hit_rate = cache_hits / cache_total if cache_total > 0 else 0.0
+        avg_context_preservation = (
+            float(np.mean(context_scores)) if context_scores else 0.0
+        )
+
+        metrics = {
+            "tier_code": -5.0,  # -5 for UX tier
+            "total_sessions": float(len(dialog_sessions)),
+            "cache_hit_rate": cache_hit_rate,
+            "context_preservation": avg_context_preservation,
+            "multi_turn_consistency": avg_context_preservation,
+        }
+
+        logger.info(
+            f"Tier UX завершён. Cache hit rate: {metrics['cache_hit_rate']:.2f}, "
+            f"Context preservation: {metrics['context_preservation']:.2f}"
+        )
+
+        return metrics

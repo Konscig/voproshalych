@@ -36,6 +36,7 @@ services:
         networks:
             - chatbot-conn
 
+    # QA сервис с профилем "api" - нужен только для HTTP API тестов
     qa:
         build: ./qa
         image: virtassist/qa:latest
@@ -52,7 +53,11 @@ services:
                 condition: service_healthy
         networks:
             - chatbot-conn
+        profiles:
+            - api
+            - full
 
+    # Chatbot с профилем "bot" - нужен только для интеграционных тестов
     chatbot:
         build: ./chatbot
         image: virtassist/chatbot:latest
@@ -70,7 +75,11 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
+        profiles:
+            - bot
+            - full
 
+    # Admin Panel с профилем "api"
     adminpanel:
         build: ./adminpanel
         image: virtassist/adminpanel:latest
@@ -92,7 +101,11 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
+        profiles:
+            - api
+            - full
 
+    # Max с профилем "full"
     max:
         build: ./max
         image: virtassist/max:latest
@@ -109,7 +122,11 @@ services:
                 condition: service_completed_successfully
         networks:
             - chatbot-conn
+        profiles:
+            - full
 
+    # Benchmarks - базовый сервис для бенчмарков
+    # Импортирует код из qa/ напрямую, не требует запущенного qa контейнера
     benchmarks:
         build: ./benchmarks
         image: virtassist/benchmarks:latest
@@ -128,8 +145,6 @@ services:
         depends_on:
             db:
                 condition: service_healthy
-            qa:
-                condition: service_started
             db-migrate:
                 condition: service_completed_successfully
         networks:

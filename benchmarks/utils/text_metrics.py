@@ -1,4 +1,4 @@
- """Алгоритмические метрики для оценки качества текста.
+"""Алгоритмические метрики для оценки качества текста.
 
 Предоставляет функции для вычисления различных метрик качества генерации:
 - ROUGE (Recall-Oriented Understudy for Gisting Evaluation)
@@ -24,9 +24,7 @@ def _get_rouge_scorer():
             ["rouge1", "rouge2", "rougeL"], use_stemmer=True
         )
     except ImportError as e:
-        logger.warning(
-            "rouge-score не установлен. Установите: pip install rouge-score"
-        )
+        logger.warning("rouge-score не установлен. Установите: pip install rouge-score")
         raise e
 
 
@@ -37,9 +35,7 @@ def _get_sacrebleu():
 
         return sacrebleu
     except ImportError as e:
-        logger.warning(
-            "sacrebleu не установлен. Установите: pip install sacrebleu"
-        )
+        logger.warning("sacrebleu не установлен. Установите: pip install sacrebleu")
         raise e
 
 
@@ -50,9 +46,7 @@ def _get_bert_score():
 
         return bert_score
     except ImportError as e:
-        logger.warning(
-            "bert-score не установлен. Установите: pip install bert-score"
-        )
+        logger.warning("bert-score не установлен. Установите: pip install bert-score")
         raise e
 
 
@@ -139,9 +133,7 @@ def compute_lexical_overlap(
 
     def get_ngrams(text: str, n: int) -> set:
         tokens = text.lower().split()
-        return set(
-            tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)
-        )
+        return set(tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1))
 
     hyp_ngrams = get_ngrams(hypothesis, n)
     ref_ngrams = get_ngrams(reference, n)
@@ -150,11 +142,7 @@ def compute_lexical_overlap(
 
     precision = len(overlap) / len(hyp_ngrams) if hyp_ngrams else 0.0
     recall = len(overlap) / len(ref_ngrams) if ref_ngrams else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if (precision + recall)
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
 
     return {
         f"{n}gram_precision": precision,

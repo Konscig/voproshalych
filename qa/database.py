@@ -149,6 +149,8 @@ class BenchmarkRun(Base):
     tier_ux_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     real_user_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     dataset_type: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    judge_model: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    generation_model: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     overall_status: Mapped[str] = mapped_column(Text(), nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -197,6 +199,14 @@ def ensure_benchmark_runs_schema(engine: Engine) -> None:
             text(
                 "ALTER TABLE benchmark_runs "
                 "ADD COLUMN IF NOT EXISTS tier_ux_metrics JSON"
+            )
+        )
+        connection.execute(
+            text("ALTER TABLE benchmark_runs ADD COLUMN IF NOT EXISTS judge_model TEXT")
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs ADD COLUMN IF NOT EXISTS generation_model TEXT"
             )
         )
 

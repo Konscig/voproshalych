@@ -37,7 +37,11 @@ generate-dataset-score5-local:
 	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 20
 
 run-benchmarks-local:
-	uv run python $(ROOT_DIR)/benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10
+	@GIT_BRANCH=$$(git rev-parse --abbrev-ref HEAD) && \
+	GIT_COMMIT=$$(git rev-parse --short HEAD) && \
+	GIT_AUTHOR=$$(git config user.name) && \
+	echo "Using git branch: $$GIT_BRANCH, commit: $$GIT_COMMIT, author: $$GIT_AUTHOR" && \
+	BENCHMARK_GIT_BRANCH=$$GIT_BRANCH BENCHMARK_GIT_COMMIT_HASH=$$GIT_COMMIT BENCHMARK_RUN_AUTHOR=$$GIT_AUTHOR uv run python $(ROOT_DIR)/benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
 
 run-dashboard-local:
 	uv run python $(ROOT_DIR)/benchmarks/run_dashboard.py
@@ -75,10 +79,11 @@ generate-dataset-score5:
 	docker compose -f $(COMPOSE_FILE) exec benchmarks uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 500
 
 run-benchmarks:
-	docker compose -f $(COMPOSE_FILE) exec -e BENCHMARK_GIT_BRANCH=$$(git rev-parse --abbrev-ref HEAD) \
-		-e BENCHMARK_GIT_COMMIT_HASH=$$(git rev-parse --short HEAD) \
-		-e BENCHMARK_RUN_AUTHOR=$$(git config user.name) \
-		benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
+	@GIT_BRANCH=$$(git rev-parse --abbrev-ref HEAD) && \
+	GIT_COMMIT=$$(git rev-parse --short HEAD) && \
+	GIT_AUTHOR=$$(git config user.name) && \
+	echo "Using git branch: $$GIT_BRANCH, commit: $$GIT_COMMIT, author: $$GIT_AUTHOR" && \
+	docker compose -f $(COMPOSE_FILE) exec -e BENCHMARK_GIT_BRANCH=$$GIT_BRANCH -e BENCHMARK_GIT_COMMIT_HASH=$$GIT_COMMIT -e BENCHMARK_RUN_AUTHOR=$$GIT_AUTHOR benchmarks uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
 
 run-dashboard:
 	docker compose -f $(COMPOSE_FILE) stop benchmarks

@@ -153,6 +153,8 @@ class RAGBenchmarkDashboard:
                     "run_author": record.run_author or "unknown",
                     "dataset_file": record.dataset_file or "unknown",
                     "dataset_type": record.dataset_type or "synthetic",
+                    "judge_model": record.judge_model or "unknown",
+                    "generation_model": record.generation_model or "unknown",
                     "overall_status": record.overall_status,
                     "tier_0": normalize_metrics(record.tier_0_metrics),
                     "tier_1": normalize_metrics(record.tier_1_metrics),
@@ -259,17 +261,17 @@ class RAGBenchmarkDashboard:
                     )
                 )
 
-            with gr.Tab("Latest Run"):
-                self._create_latest_run_tab()
+            with gr.Tab("Run Details"):
+                self._create_run_details_tab()
+
+            with gr.Tab("Runs Registry"):
+                self._create_all_runs_tab()
 
             with gr.Tab("Metric History"):
                 self._create_history_tab()
 
             with gr.Tab("Tier Comparison"):
                 self._create_comparison_tab()
-
-            with gr.Tab("Runs Registry"):
-                self._create_all_runs_tab()
 
             with gr.Tab("Run Dataset"):
                 self._create_run_dataset_tab()
@@ -279,118 +281,184 @@ class RAGBenchmarkDashboard:
 
         return demo
 
-    def _create_latest_run_tab(self):
-        latest_run = self.get_latest_run()
-        if not latest_run:
+    def _create_run_details_tab(self):
+        if not self.runs:
             gr.Markdown("Нет данных о запусках бенчмарков в таблице benchmark_runs.")
             return
 
-        gr.Markdown(
-            "\n".join(
+        ordered_runs = list(reversed(self.runs))
+
+        def format_run_choice(run: Dict) -> str:
+            return (
+                f"{run['timestamp_readable']} | {run.get('dataset_type', 'synthetic')} | "
+                f"{run['git_commit_hash'][:7]} | {run.get('dataset_file', 'N/A')}"
+            )
+
+        run_choices = [format_run_choice(r) for r in ordered_runs]
+
+        gr.Markdown("### Выберите запуск для просмотра метрик")
+
+        def get_run_metrics(selected: str) -> tuple:
+            run = next(
+                (r for r in ordered_runs if format_run_choice(r) == selected),
+                None,
+            )
+            if not run:
+                return "Запуск не найден", []
+
+            info = "\n".join(
                 [
-                    "### Latest benchmark run",
-                    f"- Timestamp: `{latest_run['timestamp_readable']}`",
-                    f"- Branch: `{latest_run['git_branch']}`",
-                    f"- Commit: `{latest_run['git_commit_hash']}`",
-                    f"- Author: `{latest_run['run_author']}`",
-                    f"- Dataset: `{latest_run['dataset_file']}`",
-                    f"- Dataset type: `{latest_run.get('dataset_type', 'synthetic')}`",
-                    f"- Judge model: `{os.getenv('BENCHMARKS_JUDGE_MODEL') or os.getenv('JUDGE_MODEL') or Config.JUDGE_MODEL or 'unknown'}`",
-                    f"- Overall status: `{latest_run['overall_status']}`",
+                    f"### Запуск: {run['timestamp_readable']}",
+                    f"- **Branch:** `{run['git_branch']}`",
+                    f"- **Commit:** `{run['git_commit_hash']}`",
+                    f"- **Author:** `{run['run_author']}`",
+                    f"- **Dataset:** `{run.get('dataset_file', 'N/A')}`",
+                    f"- **Dataset type:** `{run.get('dataset_type', 'synthetic')}`",
+                    f"- **Judge model:** `{run.get('judge_model', 'N/A')}`",
+                    f"- **Generation model:** `{run.get('generation_model', 'N/A')}`",
+                    f"- **Overall status:** `{run['overall_status']}`",
                 ]
             )
+
+            rows = []
+
+            tier_0 = run.get("tier_0", {})
+            for m in [
+                "avg_intra_cluster_sim",
+                "avg_inter_cluster_dist",
+                "silhouette_score",
+            ]:
+                rows.append(
+                    [
+                        "Tier 0 (Embedding)",
+                        m.replace("_", " ").title(),
+                        round(_safe_float(tier_0.get(m)), 4),
+                    ]
+                )
+
+            tier_1 = run.get("tier_1", {})
+            for m in ["mrr", "hit_rate@1", "hit_rate@5", "hit_rate@10"]:
+                rows.append(
+                    [
+                        "Tier 1 (Retrieval)",
+                        m.replace("_", " ").title(),
+                        round(_safe_float(tier_1.get(m)), 4),
+                    ]
+                )
+
+            tier_2 = run.get("tier_2", {})
+            for m in [
+                "avg_faithfulness",
+                "avg_answer_relevance",
+                "avg_rouge1_f",
+                "avg_rougeL_f",
+                "avg_bleu",
+            ]:
+                rows.append(
+                    [
+                        "Tier 2 (Generation)",
+                        m.replace("_", " ").title(),
+                        round(_safe_float(tier_2.get(m)), 4),
+                    ]
+                )
+
+            tier_3 = run.get("tier_3", {})
+            for m in [
+                "avg_e2e_score",
+                "avg_semantic_similarity",
+                "avg_rouge1_f",
+                "avg_bleu",
+            ]:
+                rows.append(
+                    [
+                        "Tier 3 (End-to-End)",
+                        m.replace("_", " ").title(),
+                        round(_safe_float(tier_3.get(m)), 4),
+                    ]
+                )
+
+            tier_judge = run.get("tier_judge", {})
+            for m in [
+                "consistency_score",
+                "error_rate",
+                "avg_latency_ms",
+                "avg_faithfulness",
+            ]:
+                rows.append(
+                    [
+                        "Tier Judge (Qwen)",
+                        m.replace("_", " ").title(),
+                        round(_safe_float(tier_judge.get(m)), 4),
+                    ]
+                )
+
+            tier_judge_pipeline = run.get("tier_judge_pipeline", {})
+            for m in ["accuracy", "precision", "recall", "f1_score", "avg_latency_ms"]:
+                rows.append(
+                    [
+                        "Tier Judge Pipeline (Mistral)",
+                        m.replace("_", " ").title(),
+                        round(_safe_float(tier_judge_pipeline.get(m)), 4),
+                    ]
+                )
+
+            tier_ux = run.get("tier_ux", {})
+            for m in [
+                "cache_hit_rate",
+                "context_preservation",
+                "multi_turn_consistency",
+            ]:
+                rows.append(
+                    [
+                        "Tier UX",
+                        m.replace("_", " ").title(),
+                        round(_safe_float(tier_ux.get(m)), 4),
+                    ]
+                )
+
+            tier_real = run.get("tier_real_users", {})
+            for m in [
+                "mrr",
+                "recall@1",
+                "recall@5",
+                "precision@1",
+                "precision@5",
+                "ndcg@5",
+            ]:
+                rows.append(
+                    [
+                        "Real Users (Retrieval)",
+                        m.replace("_", " ").title(),
+                        round(_safe_float(tier_real.get(m)), 4),
+                    ]
+                )
+
+            return info, rows
+
+        initial_info, initial_rows = get_run_metrics(run_choices[0])
+
+        run_selector = gr.Dropdown(
+            choices=run_choices,
+            value=run_choices[0],
+            label="Выберите запуск",
         )
-
-        summary_rows = []
-
-        tier_0 = latest_run.get("tier_0", {})
-        if tier_0:
-            summary_rows.append(
-                {
-                    "Tier": "Tier 0 (Embedding Quality)",
-                    "Primary Metric": f"Intra Sim: {round(_safe_float(tier_0.get('avg_intra_cluster_sim')), 3)}",
-                    "Additional": f"Silhouette: {round(_safe_float(tier_0.get('silhouette_score')), 3)}",
-                }
-            )
-
-        tier_1 = latest_run.get("tier_1", {})
-        if tier_1:
-            summary_rows.append(
-                {
-                    "Tier": "Tier 1 (Retrieval)",
-                    "Primary Metric": f"MRR: {round(_safe_float(tier_1.get('mrr')), 4)}",
-                    "Additional": f"HitRate@5: {round(_safe_float(tier_1.get('hit_rate@5')), 4)}",
-                }
-            )
-
-        tier_2 = latest_run.get("tier_2", {})
-        if tier_2:
-            summary_rows.append(
-                {
-                    "Tier": "Tier 2 (Generation)",
-                    "Primary Metric": f"Faithfulness: {round(_safe_float(tier_2.get('avg_faithfulness')), 2)}",
-                    "Additional": f"Relevance: {round(_safe_float(tier_2.get('avg_answer_relevance')), 2)}",
-                }
-            )
-
-        tier_3 = latest_run.get("tier_3", {})
-        if tier_3:
-            summary_rows.append(
-                {
-                    "Tier": "Tier 3 (End-to-End)",
-                    "Primary Metric": f"E2E Score: {round(_safe_float(tier_3.get('avg_e2e_score')), 2)}",
-                    "Additional": f"Semantic Sim: {round(_safe_float(tier_3.get('avg_semantic_similarity')), 3)}",
-                }
-            )
-
-        tier_judge = latest_run.get("tier_judge", {})
-        if tier_judge:
-            summary_rows.append(
-                {
-                    "Tier": "Tier Judge (Qwen)",
-                    "Primary Metric": f"Consistency: {round(_safe_float(tier_judge.get('consistency_score')), 2)}",
-                    "Additional": f"Error Rate: {round(_safe_float(tier_judge.get('error_rate')), 2)}",
-                }
-            )
-
-        tier_judge_pipeline = latest_run.get("tier_judge_pipeline", {})
-        if tier_judge_pipeline:
-            summary_rows.append(
-                {
-                    "Tier": "Tier Judge Pipeline (Mistral)",
-                    "Primary Metric": f"Accuracy: {round(_safe_float(tier_judge_pipeline.get('accuracy')), 2)}",
-                    "Additional": f"F1: {round(_safe_float(tier_judge_pipeline.get('f1_score')), 2)}",
-                }
-            )
-
-        tier_ux = latest_run.get("tier_ux", {})
-        if tier_ux:
-            summary_rows.append(
-                {
-                    "Tier": "Tier UX",
-                    "Primary Metric": f"Context Preserv: {round(_safe_float(tier_ux.get('context_preservation')), 2)}",
-                    "Additional": f"Cache Hit: {round(_safe_float(tier_ux.get('cache_hit_rate')), 2)}",
-                }
-            )
-
-        if latest_run.get("tier_real_users"):
-            summary_rows.append(
-                {
-                    "Tier": "Real Users (Retrieval)",
-                    "Primary Metric": f"MRR: {round(_safe_float(latest_run.get('tier_real_users', {}).get('mrr')), 4)}",
-                    "Additional": f"Recall@5: {round(_safe_float(latest_run.get('tier_real_users', {}).get('recall@5')), 4)}",
-                }
-            )
-
-        headers = ["Tier", "Primary Metric", "Additional"]
-        table_data = [[row.get(h, "-") for h in headers] for row in summary_rows]
-
-        gr.Dataframe(
-            value=table_data,
-            headers=headers,
-            label="Latest Metrics Summary",
+        run_info = gr.Markdown(value=initial_info)
+        metrics_table = gr.Dataframe(
+            value=initial_rows,
+            headers=["Tier", "Metric", "Value"],
             interactive=False,
             wrap=True,
+        )
+
+        def update_run(selected: str):
+            info, rows = get_run_metrics(selected)
+            return info, rows
+            return info, rows
+
+        run_selector.change(
+            fn=update_run,
+            inputs=[run_selector],
+            outputs=[run_info, metrics_table],
         )
 
     def _create_history_tab(self):
@@ -591,20 +659,6 @@ class RAGBenchmarkDashboard:
             value="all",
             label="Фильтр по типу датасета",
         )
-        table = gr.Dataframe(
-            value=[],
-            headers=[
-                "Timestamp",
-                "Branch / Commit",
-                "T1: HitRate@5",
-                "T1: MRR",
-                "T2: Faithfulness",
-                "T2: Relevance",
-                "T3: E2E Score",
-            ],
-            interactive=False,
-            wrap=True,
-        )
 
         def build_registry_rows(filter_mode: str):
             rows = []
@@ -612,45 +666,62 @@ class RAGBenchmarkDashboard:
                 run_mode = run.get("dataset_type", "synthetic")
                 if filter_mode != "all" and run_mode != filter_mode:
                     continue
-                tier_1 = run.get("tier_1", {})
-                tier_2 = run.get("tier_2", {})
-                tier_3 = run.get("tier_3", {})
+                t1 = run.get("tier_1", {})
+                t2 = run.get("tier_2", {})
+                t3 = run.get("tier_3", {})
+                tjp = run.get("tier_judge_pipeline", {})
                 rows.append(
                     [
-                        str(run["timestamp_readable"]),
-                        f"{run['git_branch']} / {run['git_commit_hash']}",
-                        round(_safe_float(tier_1.get("hit_rate@5")), 4),
-                        round(_safe_float(tier_1.get("mrr")), 4),
-                        round(_safe_float(tier_2.get("avg_faithfulness")), 4),
-                        round(_safe_float(tier_2.get("avg_answer_relevance")), 4),
-                        round(_safe_float(tier_3.get("avg_e2e_score")), 4),
+                        run["timestamp_readable"][:16],
+                        run["git_branch"][:12] if run.get("git_branch") else "N/A",
+                        run.get("dataset_type", "synthetic")[:8],
+                        round(_safe_float(t1.get("mrr")), 2),
+                        round(_safe_float(t1.get("hit_rate@5")), 2),
+                        round(_safe_float(t2.get("avg_faithfulness")), 2),
+                        round(_safe_float(t2.get("avg_answer_relevance")), 2),
+                        round(_safe_float(t3.get("avg_e2e_score")), 2),
+                        round(_safe_float(tjp.get("accuracy")), 2) if tjp else "-",
+                        run["overall_status"][:8],
                     ]
                 )
             return rows
 
         headers = [
-            "Timestamp",
-            "Branch / Commit",
-            "T1: HitRate@5",
-            "T1: MRR",
-            "T2: Faithfulness",
-            "T2: Relevance",
-            "T3: E2E Score",
+            "Time",
+            "Branch",
+            "Type",
+            "MRR",
+            "Hit@5",
+            "Faith",
+            "Relev",
+            "E2E",
+            "TJP Acc",
+            "Status",
         ]
 
-        mode_filter.change(
-            fn=lambda f: build_registry_rows(f), inputs=[mode_filter], outputs=[table]
+        initial_rows = build_registry_rows("all")
+        table = gr.Dataframe(
+            value=initial_rows,
+            headers=headers,
+            interactive=False,
+            wrap=False,
         )
-        table.value = build_registry_rows("all")
+
+        def update_table(filter_mode: str):
+            return gr.Dataframe(value=build_registry_rows(filter_mode), headers=headers)
+
+        mode_filter.change(
+            fn=update_table,
+            inputs=[mode_filter],
+            outputs=[table],
+        )
 
     def _create_run_dataset_tab(self):
-        mode_filter = gr.Dropdown(
-            choices=["all", "synthetic", "manual", "real-users"],
-            value="all",
-            label="Тип запуска",
-        )
-
         ordered_runs = list(reversed(self.runs))
+
+        if not ordered_runs:
+            gr.Markdown("Нет запусков для просмотра привязанного датасета.")
+            return
 
         def format_run_choice(run: Dict) -> str:
             return (
@@ -667,32 +738,7 @@ class RAGBenchmarkDashboard:
                 if run.get("dataset_type") == filter_mode
             ]
 
-        run_choices = get_run_choices("all")
-
-        if not run_choices:
-            gr.Markdown("Нет запусков для просмотра привязанного датасета.")
-            return
-
-        run_selector = gr.Dropdown(
-            choices=run_choices,
-            value=run_choices[0],
-            label="Выберите запуск",
-        )
-        dataset_meta = gr.Markdown()
-        dataset_preview = gr.Dataframe(
-            headers=[
-                "chunk_id",
-                "question",
-                "ground_truth_answer",
-                "confluence_url",
-                "relevant_chunk_ids",
-                "relevant_urls",
-            ],
-            interactive=False,
-            wrap=True,
-        )
-
-        def update_dataset_preview(selected: str):
+        def load_dataset_preview(selected: str) -> tuple:
             if not selected:
                 return "", []
 
@@ -717,8 +763,6 @@ class RAGBenchmarkDashboard:
                 return info, []
 
             dataset_file = run.get("dataset_file") or ""
-            # TODO: вынести датасеты в отдельную таблицу benchmark_datasets,
-            # чтобы хранить snapshot записи вместе с запуском в БД.
             benchmark_dir = Path(__file__).resolve().parent
             project_root = benchmark_dir.parent
             candidate_paths = [
@@ -783,28 +827,66 @@ class RAGBenchmarkDashboard:
                     [],
                 )
 
-        def update_run_choices(filter_mode: str):
+        mode_filter = gr.Dropdown(
+            choices=["all", "synthetic", "manual", "real-users"],
+            value="all",
+            label="Тип запуска",
+        )
+
+        run_choices = get_run_choices("all")
+
+        initial_meta, initial_preview = load_dataset_preview(run_choices[0])
+
+        run_selector = gr.Dropdown(
+            choices=run_choices,
+            value=run_choices[0],
+            label="Выберите запуск",
+        )
+        dataset_meta = gr.Markdown(value=initial_meta)
+        dataset_preview = gr.Dataframe(
+            value=initial_preview,
+            headers=[
+                "chunk_id",
+                "question",
+                "ground_truth_answer",
+                "confluence_url",
+                "relevant_chunk_ids",
+                "relevant_urls",
+            ],
+            interactive=False,
+            wrap=True,
+        )
+
+        def update_on_filter_change(filter_mode: str):
             options = get_run_choices(filter_mode)
             if not options:
-                return gr.Dropdown(choices=[], value=None), "", []
-            meta, preview = update_dataset_preview(options[0])
-            return gr.Dropdown(choices=options, value=options[0]), meta, preview
+                return (
+                    gr.Dropdown(choices=[], value=None),
+                    "",
+                    [[]],
+                )
+            meta, preview = load_dataset_preview(options[0])
+            return (
+                gr.Dropdown(choices=options, value=options[0]),
+                meta,
+                preview,
+            )
+
+        def update_on_run_select(selected: str):
+            meta, preview = load_dataset_preview(selected)
+            return meta, preview
 
         mode_filter.change(
-            fn=update_run_choices,
+            fn=update_on_filter_change,
             inputs=[mode_filter],
             outputs=[run_selector, dataset_meta, dataset_preview],
         )
 
         run_selector.change(
-            fn=update_dataset_preview,
+            fn=update_on_run_select,
             inputs=[run_selector],
             outputs=[dataset_meta, dataset_preview],
         )
-
-        initial_meta, initial_preview = update_dataset_preview(run_choices[0])
-        dataset_meta.value = initial_meta
-        dataset_preview.value = initial_preview
 
     def _create_reference_tab(self):
         gr.Markdown(

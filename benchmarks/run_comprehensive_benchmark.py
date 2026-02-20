@@ -356,6 +356,10 @@ def save_results(
                 run_author=run_metadata["run_author"],
                 dataset_file=os.path.basename(dataset_name),
                 dataset_type=mode,
+                judge_model=os.getenv("BENCHMARKS_JUDGE_MODEL")
+                or os.getenv("JUDGE_MODEL")
+                or Config.JUDGE_MODEL,
+                generation_model=os.getenv("GENERATION_MODEL") or Config.MISTRAL_MODEL,
                 tier_0_metrics=normalized_results.get("tier_0"),
                 tier_1_metrics=normalized_results.get("tier_1"),
                 tier_2_metrics=normalized_results.get("tier_2"),

@@ -135,6 +135,10 @@ services:
         working_dir: /usr/src/app
         env_file:
             - .env.docker
+        environment:
+            - BENCHMARK_GIT_BRANCH=${BENCHMARK_GIT_BRANCH:-main}
+            - BENCHMARK_GIT_COMMIT_HASH=${BENCHMARK_GIT_COMMIT_HASH:-unknown}
+            - BENCHMARK_RUN_AUTHOR=${BENCHMARK_RUN_AUTHOR:-unknown}
         volumes:
             - ./:/usr/src/app
             # Общий volume для кэша моделей HuggingFace (shared with qa)

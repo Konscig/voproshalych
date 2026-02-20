@@ -7,7 +7,8 @@
 """
 
 import logging
-from typing import Callable, Dict, List, Optional, Set
+import requests
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -723,6 +724,185 @@ class RAGBenchmark:
         logger.info(
             f"Tier Judge завершён. Consistency: {metrics['consistency_score']:.2f}, "
             f"Error rate: {metrics['error_rate']:.2f}"
+        )
+
+        return metrics
+
+    def run_tier_judge_pipeline(
+        self,
+        evaluation_pairs: List[Dict],
+    ) -> Dict[str, Any]:
+        """Выполнить бенчмарк Tier Judge Pipeline (Production Judge Quality).
+
+        Оценивает качество production judge (Mistral), который используется в реальном
+        RAG-пайплайне для решения "показывать ответ пользователю или нет".
+
+        Использует JUDGE_API и JUDGE_MODEL из конфигурации qa.
+
+        Метрики:
+        - Accuracy (согласованность с ground truth)
+        - Precision/Recall/F1 для класса "Yes" (показывать ответ)
+        - Latency (время оценки)
+
+        Args:
+            evaluation_pairs: Пары для оценки с ground_truth_show
+                [{"question": "...", "answer": "...", "context": "...", "ground_truth_show": true/false}]
+
+        Returns:
+            Словарь с метриками качества production judge
+        """
+        import time
+
+        logger.info(
+            f"Запуск Tier Judge Pipeline (Production Judge) с {len(evaluation_pairs)} парами"
+        )
+
+        if not evaluation_pairs:
+            logger.warning("Нет пар для оценки production judge")
+            return {
+                "tier_code": -6.0,  # -6 for judge pipeline tier
+                "total_evaluations": 0,
+                "accuracy": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "f1_score": 0.0,
+                "avg_latency_ms": 0.0,
+            }
+
+        try:
+            from qa.config import Config
+        except ImportError:
+            logger.error("Не удалось импортировать qa.config")
+            return {
+                "tier_code": -6.0,
+                "total_evaluations": 0,
+                "accuracy": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "f1_score": 0.0,
+                "avg_latency_ms": 0.0,
+            }
+
+        try:
+            headers = Config.get_judge_headers()
+        except ValueError as e:
+            logger.error(f"Ошибка получения заголовков judge: {e}")
+            return {
+                "tier_code": -6.0,
+                "total_evaluations": 0,
+                "accuracy": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "f1_score": 0.0,
+                "avg_latency_ms": 0.0,
+                "error": str(e),
+            }
+
+        predictions = []
+        ground_truths = []
+        latencies = []
+
+        for pair in evaluation_pairs:
+            try:
+                question = pair.get("question", "")
+                answer = pair.get("answer", "")
+                context = pair.get("context", "")
+                ground_truth = pair.get("ground_truth_show", True)
+
+                if isinstance(ground_truth, str):
+                    ground_truth = (
+                        ground_truth.lower() == "yes" or ground_truth.lower() == "true"
+                    )
+
+                start_time = time.time()
+
+                prompt = Config.get_judge_prompt(
+                    dialog_history="",
+                    question_text=question,
+                    answer_text=answer,
+                    content=context,
+                    generation=False,
+                )
+
+                response = requests.post(
+                    Config.MISTRAL_API_URL, json=prompt, headers=headers
+                )
+                latency = (time.time() - start_time) * 1000
+                latencies.append(latency)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    solution = (
+                        data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", "")
+                        .strip()
+                        .lower()
+                    )
+                    predicted_show = "yes" in solution
+
+                    predictions.append(predicted_show)
+                    ground_truths.append(ground_truth)
+
+                    logger.debug(
+                        f"Q: {question[:50]}... | "
+                        f"A: {answer[:30]}... | "
+                        f"GT: {ground_truth} | "
+                        f"Pred: {predicted_show} | "
+                        f"Latency: {latency:.0f}ms"
+                    )
+                else:
+                    logger.error(
+                        f"Ошибка API: {response.status_code} - {response.text}"
+                    )
+
+            except Exception as e:
+                logger.error(f"Ошибка оценки: {e}")
+                continue
+
+        if not predictions:
+            logger.warning("Нет успешных предсказаний")
+            return {
+                "tier_code": -6.0,
+                "total_evaluations": 0,
+                "accuracy": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "f1_score": 0.0,
+                "avg_latency_ms": 0.0,
+            }
+
+        tp = sum(1 for p, g in zip(predictions, ground_truths) if p and g)
+        fp = sum(1 for p, g in zip(predictions, ground_truths) if p and not g)
+        fn = sum(1 for p, g in zip(predictions, ground_truths) if not p and g)
+        tn = sum(1 for p, g in zip(predictions, ground_truths) if not p and not g)
+
+        accuracy = (tp + tn) / len(predictions) if predictions else 0.0
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) > 0
+            else 0.0
+        )
+
+        metrics = {
+            "tier_code": -6.0,
+            "total_evaluations": float(len(predictions)),
+            "accuracy": float(accuracy),
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1_score": float(f1),
+            "avg_latency_ms": float(np.mean(latencies)) if latencies else 0.0,
+            "true_positives": float(tp),
+            "false_positives": float(fp),
+            "false_negatives": float(fn),
+            "true_negatives": float(tn),
+        }
+
+        logger.info(
+            f"Tier Judge Pipeline завершён. Accuracy: {accuracy:.2f}, "
+            f"F1: {f1:.2f}, Precision: {precision:.2f}, Recall: {recall:.2f}"
         )
 
         return metrics

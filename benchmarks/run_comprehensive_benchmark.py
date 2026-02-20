@@ -132,6 +132,47 @@ def load_dataset(dataset_path: str, limit: Optional[int] = None) -> list:
     return dataset
 
 
+def load_judge_pipeline_dataset(
+    dataset_path: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> list:
+    """Загрузить датасет для Tier Judge Pipeline.
+
+    Это специальный датасет с парами (question, answer, ground_truth_show)
+    для тестирования production judge (Mistral).
+
+    Args:
+        dataset_path: Путь к файлу датасета (по умолчанию ищет dataset_judge_pipeline_*.json)
+        limit: Ограничение количества записей
+
+    Returns:
+        Список записей с полями question, answer, context, ground_truth_show
+    """
+    if dataset_path is None:
+        candidates = sorted(glob.glob("benchmarks/data/dataset_judge_pipeline_*.json"))
+        if candidates:
+            dataset_path = candidates[-1]
+            logger.info("Используем Judge Pipeline датасет: %s", dataset_path)
+        else:
+            logger.warning("Judge Pipeline датасет не найден")
+            return []
+
+    logger.info(f"Загрузка Judge Pipeline датасета из {dataset_path}")
+
+    try:
+        with open(dataset_path, "r", encoding="utf-8") as f:
+            dataset = json.load(f)
+
+        if limit:
+            dataset = dataset[:limit]
+
+        logger.info(f"Загружено {len(dataset)} записей для Judge Pipeline")
+        return dataset
+    except FileNotFoundError:
+        logger.error(f"Датасет не найден: {dataset_path}")
+        return []
+
+
 def resolve_dataset_path(dataset_path: str) -> str:
     """Разрешить путь к датасету, учитывая versioned файлы по умолчанию."""
     if dataset_path != "benchmarks/data/golden_dataset_synthetic.json":
@@ -171,6 +212,7 @@ def run_benchmark(
     real_score_filter: int | None = 5,
     real_limit: int = 500,
     real_latest: bool = False,
+    judge_pipeline_dataset_path: Optional[str] = None,
 ):
     """Запустить бенчмарк.
 
@@ -204,6 +246,11 @@ def run_benchmark(
         results = benchmark.run_all_tiers(dataset, top_k=top_k)
         results["tier_0"] = benchmark.run_tier_0(dataset)
         results["tier_judge"] = benchmark.run_tier_judge(dataset)
+        judge_pipeline_dataset = load_judge_pipeline_dataset()
+        if judge_pipeline_dataset:
+            results["tier_judge_pipeline"] = benchmark.run_tier_judge_pipeline(
+                judge_pipeline_dataset
+            )
         results["tier_ux"] = benchmark.run_tier_ux(
             [{"questions": [item["question"] for item in dataset]}] if dataset else []
         )
@@ -218,6 +265,15 @@ def run_benchmark(
         return {"tier_0": benchmark.run_tier_0(dataset)}
     elif tier == "judge":
         return {"tier_judge": benchmark.run_tier_judge(dataset)}
+    elif tier == "judge_pipeline":
+        judge_pipeline_dataset = load_judge_pipeline_dataset(
+            judge_pipeline_dataset_path
+        )
+        return {
+            "tier_judge_pipeline": benchmark.run_tier_judge_pipeline(
+                judge_pipeline_dataset
+            )
+        }
     elif tier == "ux":
         return {
             "tier_ux": benchmark.run_tier_ux(
@@ -303,6 +359,9 @@ def save_results(
                 tier_2_metrics=normalized_results.get("tier_2"),
                 tier_3_metrics=normalized_results.get("tier_3"),
                 tier_judge_metrics=normalized_results.get("tier_judge"),
+                tier_judge_pipeline_metrics=normalized_results.get(
+                    "tier_judge_pipeline"
+                ),
                 tier_ux_metrics=normalized_results.get("tier_ux"),
                 real_user_metrics=normalized_results.get("tier_real_users"),
                 overall_status=overall_status,
@@ -352,9 +411,9 @@ def main():
     parser.add_argument(
         "--tier",
         type=str,
-        choices=["0", "1", "2", "3", "judge", "ux", "all"],
+        choices=["0", "1", "2", "3", "judge", "judge_pipeline", "ux", "all"],
         default="all",
-        help="Уровень бенчмарка (0, 1, 2, 3, judge, ux или all)",
+        help="Уровень бенчмарка (0, 1, 2, 3, judge, judge_pipeline, ux или all)",
     )
 
     parser.add_argument(
@@ -485,6 +544,7 @@ def main():
         real_score_filter=args.real_score,
         real_limit=args.real_limit,
         real_latest=args.real_latest,
+        judge_pipeline_dataset_path=args.dataset,
     )
 
     dataset_name = resolved_dataset

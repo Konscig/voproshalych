@@ -49,6 +49,13 @@ METRICS_BY_TIER = {
         "avg_latency_ms",
         "avg_faithfulness",
     ],
+    "tier_judge_pipeline": [
+        "accuracy",
+        "precision",
+        "recall",
+        "f1_score",
+        "avg_latency_ms",
+    ],
     "tier_ux": ["cache_hit_rate", "context_preservation", "multi_turn_consistency"],
     "tier_real_users": [
         "mrr",
@@ -77,6 +84,10 @@ QUALITY_BASELINES = {
     "avg_bleu": 30.0,
     "consistency_score": 0.90,
     "error_rate": 0.05,
+    "accuracy": 0.85,
+    "precision": 0.85,
+    "recall": 0.85,
+    "f1_score": 0.85,
     "cache_hit_rate": 0.40,
     "context_preservation": 0.70,
 }
@@ -95,6 +106,10 @@ QUALITY_BASELINES = {
     "avg_semantic_similarity": 0.85,
     "consistency_score": 0.90,
     "error_rate": 0.05,
+    "accuracy": 0.85,
+    "precision": 0.85,
+    "recall": 0.85,
+    "f1_score": 0.85,
     "cache_hit_rate": 0.40,
     "context_preservation": 0.70,
 }
@@ -157,6 +172,9 @@ class RAGBenchmarkDashboard:
                     "tier_2": normalize_metrics(record.tier_2_metrics),
                     "tier_3": normalize_metrics(record.tier_3_metrics),
                     "tier_judge": normalize_metrics(record.tier_judge_metrics),
+                    "tier_judge_pipeline": normalize_metrics(
+                        record.tier_judge_pipeline_metrics
+                    ),
                     "tier_ux": normalize_metrics(record.tier_ux_metrics),
                     "tier_real_users": normalize_metrics(record.real_user_metrics),
                 }

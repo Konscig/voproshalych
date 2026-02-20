@@ -143,6 +143,9 @@ class BenchmarkRun(Base):
     tier_2_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     tier_3_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     tier_judge_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    tier_judge_pipeline_metrics: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )
     tier_ux_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     real_user_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     dataset_type: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
@@ -182,6 +185,12 @@ def ensure_benchmark_runs_schema(engine: Engine) -> None:
             text(
                 "ALTER TABLE benchmark_runs "
                 "ADD COLUMN IF NOT EXISTS tier_judge_metrics JSON"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs "
+                "ADD COLUMN IF NOT EXISTS tier_judge_pipeline_metrics JSON"
             )
         )
         connection.execute(

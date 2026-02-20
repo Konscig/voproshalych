@@ -1,0 +1,142 @@
+[
+  {
+    "question": "Привет! Я учусь заочно. Если я не сдал предыдущую сессию, могу ли я получить справку-вызов на текущую?",
+    "answer": "Нет, справка-вызов на текущую сессию предоставляется только при успешной сдаче предыдущей сессии.",
+    "context": "Справка-вызов на текущую сессию студентам заочной формы обучения оформляется только при успешной сдаче предыдущей сессии",
+    "ground_truth_show": true,
+    "rationale": "Answer directly addresses the question with correct information from knowledge base"
+  },
+  {
+    "question": "Привет! Где и в какое время можно получить справку для военкомата в вашем универе?",
+    "answer": "Обращайтесь в Отдел мобилизационной подготовки по адресу ул. Перекопская, 15А, каб.408. Пн.-чт.: с 10.00 до 12.00 и с 14.00 до 16.00, пт.: с 10.00 до 12.00.",
+    "context": "По вопросу получения справки для военкомата обращаться в Отдел мобилизационной подготовки. Адрес: ул. Перекопская, 15А каб.408. Часы работы: пн.-чт.: с 10.00 до 12.00 и с 14.00 до 16.00, пт.: с 10.00 до 12.00",
+    "ground_truth_show": true,
+    "rationale": "Answer provides complete information about location and hours from knowledge base"
+  },
+  {
+    "question": "Привет! Я учусь заочно, как мне получить справку о подтверждении обучения?",
+    "answer": "Напишите на почту Единого деканата ed@utmn.ru.",
+    "context": "Студенты очной формы обучения оформляют справку о подтверждении обучения самостоятельно с помощью магнитной карты",
+    "ground_truth_show": false,
+    "rationale": "Answer is partially incorrect - the context mentions full-time students, but question is about part-time students. However, answer still provides helpful contact info."
+  },
+  {
+    "question": "Привет! Где можно оформить академическую справку и сколько ждать?",
+    "answer": "Оформить можно в Едином деканате по адресу ул. Семакова, д. 18 (3 этаж, холл) или на почту ed@utmn.ru. Готовят справку 5 рабочих дней.",
+    "context": "Для оформления академической справки необходимо подать заявку в Единый деканат по адресу ул. Семакова, д. 18 (3 этаж, холл) либо на электронную почту ed@utmn.ru. Академическая справка готовится в течение 5 рабочих дней.",
+    "ground_truth_show": true,
+    "rationale": "Answer correctly provides location, contact, and timeframe from knowledge base"
+  },
+  {
+    "question": "Привет! Где я могу получить справку о стипендии и какие часы работы у бухгалтерии?",
+    "answer": "Справку о стипендии можно получить в Сервисном центре бухгалтерии по адресу ул. Кирова, д. 25/1. Часы работы: пн.-чт. 09.00-17.00, пт. 09.00-16.00, обед 12.30-13.15.",
+    "context": "По вопросу получения справки о доходах необходимо обратиться в Сервисный центр бухгалтерии по адресу ул. Кирова, д. 25/1. Часы работы: пн.-чт. 09.00-17.00 пт. 09.00-16.00 обед 12.30-13.15",
+    "ground_truth_show": true,
+    "rationale": "Answer provides accurate information about location and hours from knowledge base"
+  },
+  {
+    "question": "Какой проходной балл на бюджет в этом году?",
+    "answer": "Извините, у меня нет информации о проходных баллах на этот год.",
+    "context": "",
+    "ground_truth_show": false,
+    "rationale": "No relevant information in knowledge base, answer correctly acknowledges limitation"
+  },
+  {
+    "question": "Когда начинается летняя сессия?",
+    "answer": "Летняя сессия начинается в июне. Точные даты можно узнать на сайте университета.",
+    "context": "",
+    "ground_truth_show": false,
+    "rationale": "Answer provides generic information not specific to the university - no knowledge base support"
+  },
+  {
+    "question": "Как оплатить обучение?",
+    "answer": "Для оплаты обучения войдите в личный кабинет на сайте университета и выберите раздел Оплата обучения.",
+    "context": "Оплата обучения производится через личный кабинет студента",
+    "ground_truth_show": true,
+    "rationale": "Answer provides relevant guidance even with minimal context"
+  },
+  {
+    "question": "Где находится библиотека?",
+    "answer": "Библиотека находится в главном корпусе университета по адресу ул. Семакова, 18.",
+    "context": "Научная библиотека ТюмГУ расположена по адресу ул. Семакова, д. 18",
+    "ground_truth_show": true,
+    "rationale": "Answer correctly identifies library location from knowledge base"
+  },
+  {
+    "question": "Можно ли пересдать экзамен?",
+    "answer": "Да, можно пересдать экзамен в установленные сроки. Обратитесь в деканат для уточнения деталей.",
+    "context": "Студенты имеют право на одну пересдачу экзамена в период пересдач",
+    "ground_truth_show": true,
+    "rationale": "Answer provides correct information about retake policy from knowledge base"
+  },
+  {
+    "question": "Как записаться на курс?",
+    "answer": "Запись на курсы осуществляется через электронную систему учебного портала.",
+    "context": "",
+    "ground_truth_show": false,
+    "rationale": "Generic answer without knowledge base support - too vague"
+  },
+  {
+    "question": "Какие документы нужны для поступления?",
+    "answer": "Для поступления нужны: паспорт, аттестат/диплом, фотографии 3х4, заявление.",
+    "context": "Перечень документов для поступления: паспорт, документ об образовании, фотографии 3х4",
+    "ground_truth_show": true,
+    "rationale": "Answer provides accurate list of required documents"
+  },
+  {
+    "question": "Когда можно получить студенческий билет?",
+    "answer": "Студенческий билет выдается в деканате после подачи всех документов и оплаты обучения.",
+    "context": "Выдача студенческих билетов осуществляется в Едином деканате",
+    "ground_truth_show": true,
+    "rationale": "Answer provides helpful information about where to get student ID"
+  },
+  {
+    "question": "Есть ли в университете общежитие?",
+    "answer": "Да, университет предоставляет общежития для иногородних студентов. Заявление нужно подавать в начале учебного года.",
+    "context": "Университет располагает 5 общежитиями для иногородних студентов",
+    "ground_truth_show": true,
+    "rationale": "Answer correctly confirms availability of dormitories"
+  },
+  {
+    "question": "Как связаться с преподавателем?",
+    "answer": "Преподаватели доступны по корпоративной почте и во время консультаций. Расписание консультаций есть на кафедре.",
+    "context": "",
+    "ground_truth_show": true,
+    "rationale": "Provides useful guidance on how to contact instructors"
+  },
+  {
+    "question": "Что делать, если я заболел во время сессии?",
+    "answer": "При болезни во время сессии необходимо предоставить медицинскую справку в деканат для переноса экзаменов.",
+    "context": "В случае болезни студент обязан предоставить медицинскую справку в течение 3 дней",
+    "ground_truth_show": true,
+    "rationale": "Answer provides correct procedure for handling illness during exams"
+  },
+  {
+    "question": "Можно ли взять академический отпуск?",
+    "answer": "Да, академический отпуск предоставляется по уважительным причинам. Нужно написать заявление в деканат.",
+    "context": "Академический отпуск предоставляется студентам по их заявлению",
+    "ground_truth_show": true,
+    "rationale": "Answer correctly explains possibility of taking academic leave"
+  },
+  {
+    "question": "Где получить справку об отсутствии задолженности?",
+    "answer": "Справку об отсутствии задолженности можно получить в Едином деканате.",
+    "context": "Справки об отсутствии академической задолженности выдаются в Едином деканате",
+    "ground_truth_show": true,
+    "rationale": "Answer correctly identifies where to get the document"
+  },
+  {
+    "question": "Как восстановиться в университете?",
+    "answer": "Для восстановления нужно подать заявление в деканат и предоставить документы об образовании.",
+    "context": "",
+    "ground_truth_show": false,
+    "rationale": "Incomplete answer - missing specific requirements and conditions for reinstatement"
+  },
+  {
+    "question": "Какие языки преподаются в университете?",
+    "answer": "В университете преподаются английский, немецкий, французский и другие иностранные языки.",
+    "context": "",
+    "ground_truth_show": false,
+    "rationale": "Generic answer without university-specific knowledge base support"
+  }
+]

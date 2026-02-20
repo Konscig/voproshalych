@@ -524,14 +524,22 @@ class RAGBenchmarkDashboard:
         def update_comparison_plot(metric: str):
             all_rows: List[Dict[str, str | float]] = []
             series_by_tier = {
-                "tier_1": "Tier 1",
-                "tier_2": "Tier 2",
-                "tier_3": "Tier 3",
+                "tier_0": "Tier 0 (Embed)",
+                "tier_1": "Tier 1 (Retrieval)",
+                "tier_2": "Tier 2 (Generation)",
+                "tier_3": "Tier 3 (E2E)",
+                "tier_judge": "Tier Judge (Qwen)",
+                "tier_judge_pipeline": "Tier Judge Pipeline",
+                "tier_ux": "Tier UX",
                 "tier_real_users": "Real Users",
             }
 
             longest_dates: List[str] = []
             for tier_name, label in series_by_tier.items():
+                if tier_name not in METRICS_BY_TIER:
+                    continue
+                if metric not in METRICS_BY_TIER[tier_name]:
+                    continue
                 dates, values = self.get_metric_history(tier_name, metric)
                 if not dates:
                     continue

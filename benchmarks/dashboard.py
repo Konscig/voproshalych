@@ -608,30 +608,30 @@ class RAGBenchmarkDashboard:
                 tier_2 = run.get("tier_2", {})
                 tier_3 = run.get("tier_3", {})
                 rows.append(
-                    {
-                        "Timestamp": str(run["timestamp_readable"]),
-                        "Branch / Commit": (
-                            f"{run['git_branch']} / {run['git_commit_hash']}"
-                        ),
-                        "T1: HitRate@5": round(
-                            _safe_float(tier_1.get("hit_rate@5")), 4
-                        ),
-                        "T1: MRR": round(_safe_float(tier_1.get("mrr")), 4),
-                        "T2: Faithfulness": round(
-                            _safe_float(tier_2.get("avg_faithfulness")), 4
-                        ),
-                        "T2: Relevance": round(
-                            _safe_float(tier_2.get("avg_answer_relevance")), 4
-                        ),
-                        "T3: E2E Score": round(
-                            _safe_float(tier_3.get("avg_e2e_score")), 4
-                        ),
-                    }
+                    [
+                        str(run["timestamp_readable"]),
+                        f"{run['git_branch']} / {run['git_commit_hash']}",
+                        round(_safe_float(tier_1.get("hit_rate@5")), 4),
+                        round(_safe_float(tier_1.get("mrr")), 4),
+                        round(_safe_float(tier_2.get("avg_faithfulness")), 4),
+                        round(_safe_float(tier_2.get("avg_answer_relevance")), 4),
+                        round(_safe_float(tier_3.get("avg_e2e_score")), 4),
+                    ]
                 )
             return rows
 
+        headers = [
+            "Timestamp",
+            "Branch / Commit",
+            "T1: HitRate@5",
+            "T1: MRR",
+            "T2: Faithfulness",
+            "T2: Relevance",
+            "T3: E2E Score",
+        ]
+
         mode_filter.change(
-            fn=build_registry_rows, inputs=[mode_filter], outputs=[table]
+            fn=lambda f: build_registry_rows(f), inputs=[mode_filter], outputs=[table]
         )
         table.value = build_registry_rows("all")
 

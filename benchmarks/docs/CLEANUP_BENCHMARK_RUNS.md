@@ -27,7 +27,10 @@ benchmarks/data/manual_dataset_*.json
 
 ### 3. База данных (таблица benchmark_runs)
 
+**Важно:** База данных называется `virtassist`, не `postgres`!
+
 ```sql
+\c virtassist
 SELECT * FROM benchmark_runs ORDER BY timestamp DESC;
 ```
 
@@ -49,7 +52,7 @@ rm -f benchmarks/data/dataset_*.json
 rm -f benchmarks/data/manual_dataset_*.json
 
 # 3. Очистить таблицу benchmark_runs в БД
-docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d postgres -c "DELETE FROM benchmark_runs;"
+docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d virtassist -c "DELETE FROM benchmark_runs;"
 
 # 4. Удалить Docker volumes (опционально)
 docker compose -f docker-compose.benchmarks.yml down -v
@@ -61,7 +64,7 @@ docker compose -f docker-compose.benchmarks.yml down -v
 
 ```bash
 # Оставить только последние 5 запусков
-docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d postgres -c "
+docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d virtassist -c "
 DELETE FROM benchmark_runs 
 WHERE id NOT IN (
     SELECT id FROM benchmark_runs 
@@ -85,10 +88,10 @@ docker run --rm -v benchmarks-reports:/data alpine rm -f /data/rag_benchmark_*.j
 
 ```bash
 # Найти ID запуска
-docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d postgres -c "SELECT id, timestamp, git_branch FROM benchmark_runs ORDER BY timestamp DESC LIMIT 10;"
+docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d virtassist -c "SELECT id, timestamp, git_branch FROM benchmark_runs ORDER BY timestamp DESC LIMIT 10;"
 
 # Удалить по ID
-docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d postgres -c "DELETE FROM benchmark_runs WHERE id = <ID>;"
+docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d virtassist -c "DELETE FROM benchmark_runs WHERE id = <ID>;"
 ```
 
 ---
@@ -104,7 +107,7 @@ cd Submodules/voproshalych
 rm -f benchmarks/reports/rag_benchmark_*.json benchmarks/reports/rag_benchmark_*.md
 
 # Очистить БД от старых запусков
-docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d postgres -c "DELETE FROM benchmark_runs;"
+docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d virtassist -c "DELETE FROM benchmark_runs;"
 
 # Запустить бенчмарк заново
 make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
@@ -119,7 +122,7 @@ make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
 ls benchmarks/reports/
 
 # Проверить что таблица пуста
-docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d postgres -c "SELECT COUNT(*) FROM benchmark_runs;"
+docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d virtassist -c "SELECT COUNT(*) FROM benchmark_runs;"
 
 # Должно быть: 0
 ```
@@ -138,7 +141,7 @@ docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d p
 
 ```bash
 # Экспорт конкретного запуска в файл
-docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d postgres -c "\COPY (SELECT * FROM benchmark_runs WHERE id = <ID>) TO '/tmp/run_<ID>.csv' WITH CSV HEADER"
+docker compose -f docker-compose.benchmarks.yml exec -T db psql -U postgres -d virtassist -c "\COPY (SELECT * FROM benchmark_runs WHERE id = <ID>) TO '/tmp/run_<ID>.csv' WITH CSV HEADER"
 
 # Копировать из контейнера
 docker compose -f docker-compose.benchmarks.yml cp db:/tmp/run_<ID>.csv ./benchmark_run_<ID>.csv

@@ -117,6 +117,7 @@ class LLMJudge:
                 candidate_base,
                 request_timeout,
             )
+            time.sleep(1.0)
             try:
                 self._check_connection()
                 return

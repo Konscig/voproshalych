@@ -139,12 +139,16 @@ services:
             - BENCHMARK_GIT_BRANCH=${BENCHMARK_GIT_BRANCH:-main}
             - BENCHMARK_GIT_COMMIT_HASH=${BENCHMARK_GIT_COMMIT_HASH:-unknown}
             - BENCHMARK_RUN_AUTHOR=${BENCHMARK_RUN_AUTHOR:-unknown}
+            - UV_CACHE_DIR=/root/.cache/uv
         volumes:
             - ./:/usr/src/app
             # Общий volume для кэша моделей HuggingFace (shared with qa)
             - model-cache:/root/.cache/huggingface
+            # UV cache
+            - virtassist-uv-cache:/root/.cache/uv
             - benchmarks-reports:/usr/src/app/benchmarks/reports
-            - benchmarks-data:/usr/src/app/benchmarks/data
+            # Bind mount для данных (локально + дашборд)
+            - ./benchmarks/data:/usr/src/app/benchmarks/data
             - /var/run/docker.sock:/var/run/docker.sock
         depends_on:
             db:
@@ -159,7 +163,8 @@ volumes:
     # Общий volume для кэша моделей HuggingFace
     model-cache:
     benchmarks-reports:
-    benchmarks-data:
+    # UV cache
+    virtassist-uv-cache:
 
 networks:
     chatbot-conn:

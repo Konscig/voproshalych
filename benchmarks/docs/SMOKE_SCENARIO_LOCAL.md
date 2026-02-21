@@ -141,7 +141,7 @@ uv run python benchmarks/generate_dataset.py \
   --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
 
 # 2. Отредактируйте файл вручную - добавьте метки качества
-# Поля для заполнения: is_question_ok, is_answer_ok, is_pair_ok, quality_category, notes
+# Поля для заполнения: is_question_ok, is_answer_ok, is_chunk_ok, notes
 
 # 3. Запуск бенчмарка на аннотированном датасете
 uv run python benchmarks/run_comprehensive_benchmark.py \

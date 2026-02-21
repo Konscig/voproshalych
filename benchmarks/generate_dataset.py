@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -53,6 +54,7 @@ def _create_dataset_item(
     relevant_chunk_ids: Optional[List[int]] = None,
     user_score: Optional[int] = None,
     question_answer_id: Optional[int] = None,
+    is_relevant_chunk_matched: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Создать标准化ную запись датасета с метаданными."""
     item = {
@@ -75,6 +77,8 @@ def _create_dataset_item(
         item["user_score"] = user_score
     if question_answer_id is not None:
         item["question_answer_id"] = question_answer_id
+    if is_relevant_chunk_matched is not None:
+        item["is_relevant_chunk_matched"] = is_relevant_chunk_matched
 
     return item
 
@@ -219,21 +223,21 @@ def generate_synthetic_dataset(
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(dataset, f, ensure_ascii=False, indent=2)
 
-    error_report_path = f"benchmarks/data/dataset_errors_{timestamp}.json"
-    with open(error_report_path, "w", encoding="utf-8") as f:
-        json.dump(generation_errors, f, ensure_ascii=False, indent=2)
-
     logger.info(f"✅ Датасет сохранён: {output_path}")
     logger.info(f"📊 Сгенерировано {len(dataset)} пар вопрос-ответ")
-    logger.info("📛 Ошибок генерации: %s", len(generation_errors))
-    logger.info("🧾 Отчёт об ошибках: %s", error_report_path)
+    if generation_errors:
+        logger.warning("📛 Ошибок генерации: %s", len(generation_errors))
+        for err in generation_errors[:5]:
+            logger.warning(f"  - {err}")
+        if len(generation_errors) > 5:
+            logger.warning(f"  ... и ещё {len(generation_errors) - 5} ошибок")
 
     print("\n=== Итог генерации датасета ===")
     print(f"Всего чанков с эмбеддингом: {available_chunks_total}")
     print(f"Успешно сгенерировано пар: {len(dataset)}")
-    print(f"Ошибок генерации: {len(generation_errors)}")
+    if generation_errors:
+        print(f"Ошибок генерации: {len(generation_errors)}")
     print(f"Файл датасета: {output_path}")
-    print(f"Файл ошибок: {error_report_path}")
 
 
 def generate_from_real_questions(
@@ -318,6 +322,19 @@ def generate_from_real_questions(
                     retrieved_chunks[0].confluence_url if retrieved_chunks else None
                 )
 
+                is_relevant_chunk_matched = None
+                if qa.confluence_url:
+                    ground_truth_chunk = session.scalars(
+                        select(Chunk).where(Chunk.confluence_url == qa.confluence_url)
+                    ).first()
+                    if (
+                        ground_truth_chunk
+                        and ground_truth_chunk.id in relevant_chunk_ids
+                    ):
+                        is_relevant_chunk_matched = 1
+                    else:
+                        is_relevant_chunk_matched = 0
+
                 ground_truth = qa.answer or ""
                 if not ground_truth:
                     generation_errors.append(
@@ -339,6 +356,7 @@ def generate_from_real_questions(
                     relevant_chunk_ids=relevant_chunk_ids,
                     user_score=qa.score,
                     question_answer_id=qa.id,
+                    is_relevant_chunk_matched=is_relevant_chunk_matched,
                 )
 
                 dataset.append(dataset_item)
@@ -363,19 +381,20 @@ def generate_from_real_questions(
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(dataset, f, ensure_ascii=False, indent=2)
 
-    mode_suffix = f"_score{score_filter}" if score_filter else ""
-    error_report_path = f"benchmarks/data/dataset_errors_{timestamp}{mode_suffix}.json"
-    with open(error_report_path, "w", encoding="utf-8") as f:
-        json.dump(generation_errors, f, ensure_ascii=False, indent=2)
-
     logger.info(f"✅ Датасет сохранён: {output_path}")
     logger.info(f"📊 Собрано вопросов: {len(dataset)}")
-    logger.info("📛 Ошибок: %s", len(generation_errors))
+    if generation_errors:
+        logger.warning("📛 Ошибок: %s", len(generation_errors))
+        for err in generation_errors[:5]:
+            logger.warning(f"  - {err}")
+        if len(generation_errors) > 5:
+            logger.warning(f"  ... и ещё {len(generation_errors) - 5} ошибок")
 
     print(f"\n=== Итог генерации из реальных вопросов ===")
     print(f"Режим: {'score=' + str(score_filter) if score_filter else 'all'}")
     print(f"Успешно собрано вопросов: {len(dataset)}")
-    print(f"Ошибок: {len(generation_errors)}")
+    if generation_errors:
+        print(f"Ошибок: {len(generation_errors)}")
     print(f"Файл датасета: {output_path}")
 
 
@@ -406,14 +425,18 @@ def export_for_annotation(
             "ground_truth_answer": item.get("ground_truth_answer", ""),
             "source": item.get("source", "unknown"),
             "question_source": item.get("question_source", "unknown"),
+            "question_answer_id": item.get("question_answer_id"),
+            "chunk_id": item.get("chunk_id"),
+            "chunk_text": item.get("chunk_text", ""),
+            "confluence_url": item.get("confluence_url"),
             "relevant_chunk_ids": item.get("relevant_chunk_ids", []),
             "relevant_urls": item.get("relevant_urls", []),
             "user_score": item.get("user_score"),
-            "notes": "",
+            "is_relevant_chunk_matched": item.get("is_relevant_chunk_matched"),
             "is_question_ok": 1,
             "is_answer_ok": 1,
-            "is_pair_ok": 1,
-            "quality_category": "good",
+            "is_chunk_ok": 1,
+            "notes": "",
         }
         export_data.append(export_item)
 

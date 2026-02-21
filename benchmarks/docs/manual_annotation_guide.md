@@ -79,9 +79,8 @@ uv run python benchmarks/generate_dataset.py \
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `is_question_ok` | 0/1 | Корректность вопроса |
-| `is_answer_ok` | 0/1 | Корректность ответа |
-| `is_pair_ok` | 0/1 | Корректность пары вопрос-ответ |
-| `quality_category` | good/medium/poor/bad | Категория качества |
+| `is_answer_ok` | 0/1 | Корректность ответа (ground_truth_answer) |
+| `is_chunk_ok` | 0/1 | Корректность источника (chunk) |
 | `notes` | строка | Комментарии аннотатора |
 
 ### Использование в бенчмарках
@@ -147,8 +146,7 @@ WHERE dataset_file = 'dataset_20260220_123456.json';
 Поля таблицы:
 - `dataset_file` — имя файла датасета
 - `item_id` — id записи из датасета
-- `is_question_ok`, `is_answer_ok`, `is_pair_ok` — бинарные метки
-- `quality_category` — категория качества
+- `is_question_ok`, `is_answer_ok`, `is_chunk_ok` — бинарные метки
 - `notes` — текстовые заметки
 - `annotator` — имя аннотатора
 - `created_at`, `updated_at` — временные метки

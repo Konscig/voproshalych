@@ -93,9 +93,15 @@ make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
 
 ### Tier Judge: LLM-as-a-Judge Quality
 
-Оценка качества и стабильности LLM-судьи.
+Оценка качества и стабильности LLM-судьи (Qwen).
 
 **Метрики:** `consistency_score`, `error_rate`, `avg_latency_ms`
+
+### Tier Judge Pipeline: Production Judge Quality
+
+Оценка качества production judge (Mistral) в реальном RAG-пайплайне.
+
+**Метрики:** `accuracy`, `precision`, `recall`, `f1_score`, `avg_latency_ms`
 
 ### Tier UX: User Experience Quality
 
@@ -122,24 +128,32 @@ benchmarks/
 │   ├── ARCHITECTURE.md
 │   ├── RUN_MODES_LOCAL_VS_DOCKER.md
 │   ├── SMOKE_SCENARIO_LOCAL.md
-│   └── SMOKE_SCENARIO_DOCKER.md
+│   ├── SMOKE_SCENARIO_DOCKER.md
+│   └── manual_annotation_guide.md
 ├── models/
 │   ├── rag_benchmark.py
-│   └── real_queries_benchmark.py
+│   ├── real_queries_benchmark.py
+│   └── retrieval_benchmark.py
 ├── reports/
 │   ├── rag_benchmark_*.json
 │   └── rag_benchmark_*.md
 ├── utils/
 │   ├── llm_judge.py
 │   ├── evaluator.py
-│   └── embedding_generator.py
+│   ├── text_metrics.py
+│   ├── embedding_generator.py
+│   ├── database_dump_loader.py
+│   └── report_generator.py
+├── tests/
 ├── Makefile
 ├── Dockerfile
 ├── generate_embeddings.py
 ├── generate_dataset.py
 ├── load_database_dump.py
 ├── run_comprehensive_benchmark.py
-└── run_dashboard.py
+├── run_dashboard.py
+├── dashboard.py
+└── save_models.py
 ```
 
 ---

@@ -108,7 +108,7 @@ help:
 	@echo "  generate-dataset-local     - Сгенерировать synthetic датасет (20 вопросов)"
 	@echo "  generate-dataset-real-local - Сгенерировать датасет из реальных вопросов (20 вопросов)"
 	@echo "  generate-dataset-score5-local - Сгенерировать датасет из вопросов с оценкой 5"
-	@echo "  run-benchmarks-local       - Запустить бенчмарки (synthetic mode, 10 вопросов)"
+	@echo "  run-benchmarks-local       - Запустить бенчмарки (synthetic mode, все вопросы из датасета)"
 	@echo "  run-dashboard-local        - Запустить дашборд локально"
 	@echo ""
 	@echo "Docker режим (используется COMPOSE_FILE):"

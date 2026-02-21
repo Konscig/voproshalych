@@ -29,6 +29,8 @@
 | `--dump` | str | None | Путь к файлу дампа `.dump` |
 | `--dump-dir` | str | None | Директория с дампами для поиска последнего |
 | `--drop-tables-only` | flag | False | Только удалить таблицы без загрузки дампа |
+| `--verbose` | flag | False | Подробный вывод (debug) |
+| `--quiet` | flag | False | Тихий режим (только ошибки) |
 
 ### Примеры
 
@@ -254,7 +256,7 @@ uv run python benchmarks/run_dashboard.py --port 8080
 | `make drop-tables-local` | Удалить таблицы БД |
 | `make generate-embeddings-local` | Сгенерировать эмбеддинги |
 | `make generate-dataset-local` | Сгенерировать датасет (20 вопросов) |
-| `make run-benchmarks-local` | Запустить бенчмарки (synthetic, 10 вопросов) |
+| `make run-benchmarks-local` | Запустить бенчмарки (synthetic, все вопросы из датасета) |
 | `make run-dashboard-local` | Запустить дашборд локально |
 
 ### Docker режим

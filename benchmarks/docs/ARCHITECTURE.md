@@ -367,6 +367,8 @@ sequenceDiagram
 | run_author | text | Автор запуска |
 | dataset_file | text | Имя файла датасета |
 | dataset_type | text | synthetic/manual/real-users |
+| judge_model | text | Модель для судейства (Qwen) |
+| generation_model | text | Модель для генерации (Mistral) |
 | tier_0_metrics | json | Метрики Tier 0 (Embedding Quality) |
 | tier_1_metrics | json | Метрики Tier 1 (Retrieval) |
 | tier_2_metrics | json | Метрики Tier 2 (Generation) |

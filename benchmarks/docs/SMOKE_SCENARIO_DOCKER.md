@@ -133,7 +133,7 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
 ```
 
-**Примечание:** Эмбеддинги будут кэшироваться в volume `benchmarks-cache`.
+**Примечание:** Эмбеддинги будут кэшироваться в volume `model-cache`.
 
 ## 4) Synthetic dataset + benchmark
 
@@ -243,7 +243,7 @@ docker compose -f docker-compose.benchmarks.yml logs -f
 Проверьте что данные сохраняются в volumes:
 
 ```bash
-docker volume inspect benchmarks-cache benchmarks-reports benchmarks-data
+docker volume inspect model-cache benchmarks-reports benchmarks-data
 ```
 
 ## 10) Остановка контейнеров
@@ -362,12 +362,12 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks env | grep POSTG
 
 ### Проблема: "Модели не кэшируются"
 
-Проверьте volume `benchmarks-cache`:
+Проверьте volume `model-cache`:
 ```bash
-docker volume ls | grep benchmarks
+docker volume ls | grep model-cache
 ```
 
-Кэш хранится в `benchmarks-cache:/root/.cache`.
+Кэш хранится в `model-cache:/root/.cache/huggingface`.
 
 ### Проблема: "Нет отчётов"
 

@@ -110,18 +110,44 @@ if get_answer_func is None:
 
 Код уже использует импорт из `qa.main`. Это правильный подход.
 
+**Используется в:**
+- Tier 2 (Generation) — тестирует production Mistral
+- Tier 3 (End-to-End) — тестирует production Mistral
+
 ---
 
 ## 3. LLM Judge
 
-### Дублирование
+### Два типа судьев
 
-**qa/main.py:87-134** — функция `assess_answer(dialog_history, question, answer, content, generation)`
+В системе используются **два разных судьи**:
 
-**benchmarks/utils/llm_judge.py** — класс `LLMJudge` с методами:
-- `evaluate_faithfulness()`
-- `evaluate_answer_relevance()`
-- `evaluate_e2e_quality()`
+#### Production Judge (Mistral)
+
+**qa/main.py** — функция `assess_answer()` и `qa/config.py`:
+- `Config.get_judge_headers()` — API заголовки для judge
+- `Config.get_judge_prompt()` — промт для judge
+- Использует `JUDGE_API` и `JUDGE_MODEL` из конфигурации
+- Результат: bool (показывать/не показывать ответ)
+
+**benchmarks/models/rag_benchmark.py** — `run_tier_judge_pipeline()`:
+```python
+from qa.config import Config
+headers = Config.get_judge_headers()
+prompt = Config.get_judge_prompt(...)
+```
+
+#### Benchmark Judge (Qwen/DeepSeek)
+
+**benchmarks/utils/llm_judge.py** — класс `LLMJudge`:
+- Методы: `evaluate_faithfulness()`, `evaluate_answer_relevance()`, `evaluate_e2e_quality()`
+- Использует `BENCHMARKS_JUDGE_API_KEY` и `BENCHMARKS_JUDGE_MODEL`
+- Результат: float (оценка 1-5)
+
+**benchmarks/models/rag_benchmark.py** — `run_tier_judge()`:
+```python
+judge = LLMJudge()  # Свой код, НЕ импортируется из qa
+```
 
 ### Различия
 
@@ -133,19 +159,17 @@ if get_answer_func is None:
 | Результат | bool | float |
 | Использование | Production RAG pipeline | Tier Judge benchmark |
 
-### Рекомендация
-
-Не объединять. Это разные сценарии:
-- `assess_answer` — production judge (Mistral) для фильтрации ответов в реальном пайплайне
-- `LLMJudge` — benchmark judge (Qwen) для метрик качества в Tier Judge
-- `run_tier_judge_pipeline` — тестирование production judge через сравнение с ground truth
-
 ### Два типа judge в бенчмарках
 
-| Tier | Переменные окружения | Модель | Назначение |
-|------|---------------------|--------|------------|
-| Tier Judge | BENCHMARKS_JUDGE_API_KEY, BENCHMARKS_JUDGE_MODEL | Qwen/DeepSeek | Тестирование согласованности judge |
-| Tier Judge Pipeline | JUDGE_API, JUDGE_MODEL | Mistral | Тестирование production pipeline judge |
+| Tier | Переменные окружения | Модель | Назначение | Импорт из qa? |
+|------|---------------------|--------|------------|---------------|
+| Tier Judge | BENCHMARKS_JUDGE_API_KEY, BENCHMARKS_JUDGE_MODEL | Qwen/DeepSeek | Тестирование согласованности judge | ❌ Нет (свой код) |
+| Tier Judge Pipeline | JUDGE_API, JUDGE_MODEL | Mistral | Тестирование production pipeline judge | ✅ Да (Config) |
+
+### Статус: ✅ Правильно
+
+- Production judge тестируется через импорт из `qa.config`
+- Benchmark judge использует свой код — это правильно, это РАЗНЫЕ модели
 
 ---
 

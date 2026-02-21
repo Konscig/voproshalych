@@ -184,13 +184,13 @@ sequenceDiagram
 
 **Шаг 29-33:** Для каждого вопроса:
 - Определяется контекст из датасета (`chunk_text`, `relevant_chunk_ids`, или `chunk_id`)
-- Вызывается `qa.main.get_answer()` для генерации ответа
+- Вызывается `qa.main.get_answer()` для генерации ответа (импорт из qa!)
 - `LLMJudge` оценивает faithfulness (фактичность) и answer_relevance (релевантность)
 - Вычисляются алгоритмические метрики: ROUGE-1, ROUGE-L, BLEU
 
 **Шаг 34-35:** Результаты сохраняются.
 
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_2()`.
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_2()`, использует импорт `get_answer` из `qa.main`.
 
 ---
 
@@ -251,14 +251,15 @@ sequenceDiagram
 **Шаг 61:** Пользователь запускает `run_comprehensive_benchmark.py --tier judge`. Создаётся `RAGBenchmark`.
 
 **Шаг 62-64:** Для оценки качества LLM-судьи:
-- Вызывается `LLMJudge.evaluate_faithfulness()` первый раз
+- Используется `LLMJudge` из `benchmarks.utils.llm_judge` (свой код, НЕ из qa!)
+- Вызывается `judge.evaluate_faithfulness()` первый раз
 - При включенной проверке консистентности — повторный вызов
 - Сравниваются оценки для вычисления consistency score
 - Замеряется latency каждого вызова
 
 **Шаг 65:** Результаты сохраняются.
 
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge()`.
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge()`, использует `benchmarks.utils.llm_judge.LLMJudge`.
 
 ---
 
@@ -268,7 +269,7 @@ sequenceDiagram
 
 **Шаг 63-65:** Для оценки production judge (Mistral):
 - Загружается датасет `dataset_judge_pipeline_*.json` с парами (question, answer, ground_truth_show)
-- Для каждой пары вызывается production judge через `qa/config.py:get_judge_prompt()`
+- Для каждой пары вызывается production judge через `qa.config.Config.get_judge_prompt()` и `Config.get_judge_headers()` (импорт из qa!)
 - Сравнивается решение judge ("Yes"/"No") с ground truth
 - Вычисляются метрики: accuracy, precision, recall, F1
 
@@ -277,8 +278,8 @@ sequenceDiagram
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge_pipeline()`.
 
 **Отличия от Tier Judge:**
-- **Tier Judge** тестирует `BENCHMARKS_JUDGE_*` (Qwen) — согласованность оценок при повторном запуске
-- **Tier Judge Pipeline** тестирует `JUDGE_*` (Mistral) — решение "показывать ответ или нет" в реальном RAG-пайплайне
+- **Tier Judge** тестирует `BENCHMARKS_JUDGE_*` (Qwen) — свой код в benchmarks, НЕ импортируется из qa
+- **Tier Judge Pipeline** тестирует `JUDGE_*` (Mistral) — импорт из `qa.config.Config` — тестируется production judge
 
 ---
 

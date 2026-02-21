@@ -32,6 +32,7 @@ Enterprise-grade система бенчмарков для оценки Retriev
 | [SMOKE_SCENARIO_LOCAL.md](docs/SMOKE_SCENARIO_LOCAL.md) | Инструкции для локального режима |
 | [SMOKE_SCENARIO_DOCKER.md](docs/SMOKE_SCENARIO_DOCKER.md) | Инструкции для Docker режима |
 | [manual_annotation_guide.md](docs/manual_annotation_guide.md) | Руководство по ручной разметке |
+| [CLEANUP_BENCHMARK_RUNS.md](docs/CLEANUP_BENCHMARK_RUNS.md) | Очистка прогонов бенчмарков |
 
 ---
 

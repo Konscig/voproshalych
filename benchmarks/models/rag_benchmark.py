@@ -16,6 +16,7 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from qa.database import Chunk
+from qa.confluence_retrieving import get_chunk
 from benchmarks.utils.llm_judge import LLMJudge
 from benchmarks.utils.evaluator import compute_retrieval_metrics
 
@@ -387,14 +388,7 @@ class RAGBenchmark:
                 question = item["question"]
                 ground_truth = item["ground_truth_answer"]
 
-                question_embedding = self.encoder.encode(question)
-
-                with Session(self.engine) as session:
-                    retrieved_chunk = session.scalars(
-                        select(Chunk)
-                        .order_by(Chunk.embedding.cosine_distance(question_embedding))
-                        .limit(1)
-                    ).first()
+                retrieved_chunk = get_chunk(self.engine, self.encoder, question)
 
                 if not retrieved_chunk:
                     logger.warning(f"Чанк не найден для вопроса: {question[:50]}...")

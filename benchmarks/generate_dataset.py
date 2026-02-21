@@ -330,19 +330,25 @@ def generate_from_real_questions(
                         r"https://confluence\.utmn\.ru[^\s\)]+", qa.answer
                     )
                     if answer_urls:
-                        answer_confluence_url = answer_urls[0]
-                        ground_truth_chunk = session.scalars(
-                            select(Chunk).where(
-                                Chunk.confluence_url == answer_confluence_url
+                        answer_url = answer_urls[0]
+                        answer_page_id = re.search(r"pageId=(\d+)", answer_url)
+                        if answer_page_id:
+                            answer_page_id = answer_page_id.group(1)
+                            first_chunk_url = (
+                                retrieved_chunks[0].confluence_url
+                                if retrieved_chunks
+                                else None
                             )
-                        ).first()
-                        if (
-                            ground_truth_chunk
-                            and ground_truth_chunk.id in relevant_chunk_ids
-                        ):
-                            is_relevant_chunk_matched = 1
-                        else:
-                            is_relevant_chunk_matched = 0
+                            first_chunk_page_id = (
+                                re.search(r"pageId=(\d+)", first_chunk_url).group(1)
+                                if first_chunk_url
+                                and re.search(r"pageId=(\d+)", first_chunk_url)
+                                else None
+                            )
+                            if answer_page_id == first_chunk_page_id:
+                                is_relevant_chunk_matched = 1
+                            else:
+                                is_relevant_chunk_matched = 0
 
                 ground_truth = qa.answer or ""
                 if not ground_truth:

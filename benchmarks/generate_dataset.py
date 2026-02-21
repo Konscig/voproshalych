@@ -79,6 +79,10 @@ def _create_dataset_item(
         item["question_answer_id"] = question_answer_id
     if is_relevant_chunk_matched is not None:
         item["is_relevant_chunk_matched"] = is_relevant_chunk_matched
+    elif confluence_url:
+        item["is_relevant_chunk_matched"] = (
+            is_relevant_chunk_matched if is_relevant_chunk_matched is not None else 0
+        )
 
     return item
 

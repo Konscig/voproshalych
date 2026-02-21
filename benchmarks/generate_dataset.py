@@ -329,6 +329,7 @@ def generate_from_real_questions(
                     answer_urls = re.findall(
                         r"https://confluence\.utmn\.ru[^\s\)]+", qa.answer
                     )
+                    is_relevant_chunk_matched = -1
                     if answer_urls:
                         answer_url = answer_urls[0]
                         answer_page_id = re.search(r"pageId=(\d+)", answer_url)

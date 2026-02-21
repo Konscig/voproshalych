@@ -199,8 +199,7 @@ sequenceDiagram
 **Шаг 36-38:** Пользователь запускает `run_comprehensive_benchmark.py --tier 3`.
 
 **Шаг 39-44:** Для каждого вопроса:
-- Генерируется эмбеддинг вопроса
-- Выполняется retrieval top-1
+- Выполняется retrieval через `qa.confluence_retrieving.get_chunk()` (импорт из production!)
 - Генерируется ответ через `qa.main.get_answer()`
 - `LLMJudge` оценивает E2E качество
 - Вычисляется cosine similarity между системным и эталонным ответом
@@ -208,7 +207,9 @@ sequenceDiagram
 
 **Шаг 45-46:** Результаты сохраняются.
 
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_3()`.
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_3()`, использует импорт `get_chunk` из `qa.confluence_retrieving`.
+
+**Важно:** Tier 3 точно воспроизводит текущую production реализацию (1 чанк, top-1).
 
 ---
 

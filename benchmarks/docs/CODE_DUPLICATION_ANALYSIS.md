@@ -19,7 +19,7 @@ def get_chunk(engine, encoder_model, question) -> Chunk | None:
         ).first()
 ```
 
-**benchmarks/models/rag_benchmark.py:180-186** (Tier 1)
+**benchmarks/models/rag_benchmark.py:180-186** (Tier 1) — свой код с top-k
 ```python
 top_chunks = session.scalars(
     select(Chunk)
@@ -29,16 +29,16 @@ top_chunks = session.scalars(
 ).all()
 ```
 
-**benchmarks/models/rag_benchmark.py:350-355** (Tier 3)
+**benchmarks/models/rag_benchmark.py** (Tier 3) — ✅ ИМПОРТИРОВАН
 ```python
-retrieved_chunk = session.scalars(
-    select(Chunk)
-    .order_by(Chunk.embedding.cosine_distance(question_embedding))
-    .limit(1)
-).first()
+# Импортировано из qa.confluence_retrieving:
+from qa.confluence_retrieving import get_chunk
+
+# Использование:
+retrieved_chunk = get_chunk(self.engine, self.encoder, question)
 ```
 
-**benchmarks/models/real_queries_benchmark.py:75-80**
+**benchmarks/models/real_queries_benchmark.py:75-80** — свой код с top-k
 ```python
 chunks = session.scalars(
     select(Chunk)
@@ -49,6 +49,14 @@ chunks = session.scalars(
 ```
 
 ### Рекомендация
+
+**Текущий статус (после рефакторинга):**
+- ✅ Tier 3 — импортирует `get_chunk` из `qa/confluence_retrieving.py`
+- ⚠️ Tier 1 — свой код с top-k
+- ⚠️ Real Users — свой код с top-k
+- ⚠️ Production — `get_chunk` (1 чанк)
+
+**План на будущее (когда production будет поддерживать top-k):**
 
 Создать общий модуль `qa/retrieval.py`:
 
@@ -75,6 +83,10 @@ def retrieve_top_k_chunks(
 - `benchmarks/models/rag_benchmark.py:run_tier_1()` → `retrieve_top_k_chunks()`
 - `benchmarks/models/rag_benchmark.py:run_tier_3()` → `retrieve_top_k_chunks(..., top_k=1)`
 - `benchmarks/models/real_queries_benchmark.py:run()` → `retrieve_top_k_chunks()`
+
+**Примечание:** Пока production использует только 1 чанк (`get_chunk` с `limit(1)`), бенчмарки:
+- Tier 3 точно воспроизводит production через импорт
+- Tier 1 и Real Users позволяют тестировать top-k метрики отдельно
 
 ---
 

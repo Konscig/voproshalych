@@ -367,6 +367,7 @@ sequenceDiagram
 | git_branch | text | Ветка git |
 | git_commit_hash | text | Hash коммита |
 | run_author | text | Автор запуска |
+| schema_version | text | Версия схемы метрик (для совместимости) |
 | dataset_file | text | Имя файла датасета |
 | dataset_type | text | synthetic/manual/real-users |
 | judge_model | text | Модель для судейства (Qwen) |
@@ -380,6 +381,8 @@ sequenceDiagram
 | tier_ux_metrics | json | Метрики Tier UX (User Experience) |
 | real_user_metrics | json | Метрики real-users |
 | overall_status | text | Итоговый статус |
+
+**schema_version:** Поле для обеспечения совместимости при изменении архитектуры. Текущая версия: `1.0`. При изменении структуры метрик — увеличивать версию.
 
 ---
 

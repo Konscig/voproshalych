@@ -120,6 +120,7 @@ class BenchmarkRun(Base):
         git_branch (str | None): ветка git, на которой запущен бенчмарк
         git_commit_hash (str | None): short hash коммита
         run_author (str | None): автор запуска
+        schema_version (str): версия схемы метрик (для совместимости при изменении архитектуры)
         tier_1_metrics (dict | None): метрики уровня Retrieval
         tier_2_metrics (dict | None): метрики уровня Generation
         tier_3_metrics (dict | None): метрики end-to-end уровня
@@ -132,11 +133,16 @@ class BenchmarkRun(Base):
 
     __tablename__ = "benchmark_runs"
 
+    CURRENT_SCHEMA_VERSION = "1.0"
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     timestamp = Column(DateTime(timezone=True), nullable=False)
     git_branch: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     git_commit_hash: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     run_author: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
+    schema_version: Mapped[str] = mapped_column(
+        Text(), nullable=False, default=CURRENT_SCHEMA_VERSION
+    )
     dataset_file: Mapped[Optional[str]] = mapped_column(Text(), nullable=True)
     tier_0_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     tier_1_metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
@@ -207,6 +213,12 @@ def ensure_benchmark_runs_schema(engine: Engine) -> None:
         connection.execute(
             text(
                 "ALTER TABLE benchmark_runs ADD COLUMN IF NOT EXISTS generation_model TEXT"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE benchmark_runs ADD COLUMN IF NOT EXISTS "
+                "schema_version TEXT NOT NULL DEFAULT '1.0'"
             )
         )
 

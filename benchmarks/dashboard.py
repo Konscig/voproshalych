@@ -461,6 +461,52 @@ class RAGBenchmarkDashboard:
             outputs=[run_info, metrics_table],
         )
 
+        def load_markdown_report(selected: str) -> str:
+            run = next(
+                (r for r in ordered_runs if format_run_choice(r) == selected),
+                None,
+            )
+            if not run:
+                return "Запуск не найден"
+
+            dataset_file = run.get("dataset_file", "")
+            if not dataset_file:
+                return "Имя файла датасета не найдено в запуске"
+
+            base_name = dataset_file.replace(".json", "")
+            possible_paths = [
+                os.path.join("benchmarks/reports", f"{base_name}.md"),
+                os.path.join(
+                    "benchmarks/reports", f"rag_benchmark_{base_name.split('_')[-1]}.md"
+                ),
+            ]
+
+            for path in possible_paths:
+                if os.path.exists(path):
+                    try:
+                        with open(path, "r", encoding="utf-8") as f:
+                            return f.read()
+                    except Exception as e:
+                        return f"Ошибка чтения файла: {e}"
+
+            return f"Markdown отчёт не найден. Искали: {possible_paths}"
+
+        gr.Markdown("---")
+        gr.Markdown("### 📄 Markdown Report")
+
+        initial_markdown = load_markdown_report(run_choices[0])
+
+        markdown_display = gr.Markdown(value=initial_markdown)
+
+        def update_markdown(selected: str):
+            return load_markdown_report(selected)
+
+        run_selector.change(
+            fn=update_markdown,
+            inputs=[run_selector],
+            outputs=[markdown_display],
+        )
+
     def _create_history_tab(self):
         gr.Markdown("### Historical trend for selected metric")
 

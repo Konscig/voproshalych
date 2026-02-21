@@ -354,6 +354,7 @@ def save_results(
                 git_branch=run_metadata["git_branch"],
                 git_commit_hash=run_metadata["git_commit_hash"],
                 run_author=run_metadata["run_author"],
+                schema_version=BenchmarkRun.CURRENT_SCHEMA_VERSION,
                 dataset_file=os.path.basename(dataset_name),
                 dataset_type=mode,
                 judge_model=os.getenv("BENCHMARKS_JUDGE_MODEL")

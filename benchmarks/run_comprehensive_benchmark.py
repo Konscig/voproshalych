@@ -22,10 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from qa.config import Config
 from qa.database import (
-    BenchmarkRun,
     Chunk,
     create_engine,
-    ensure_benchmark_runs_schema,
 )
 from qa.database import QuestionAnswer
 from benchmarks.models.real_queries_benchmark import RealQueriesBenchmark
@@ -343,43 +341,46 @@ def save_results(
     with open(markdown_path, "w", encoding="utf-8") as f:
         f.write(markdown_report)
 
-    ensure_benchmark_runs_schema(engine)
+    benchmark_runs_path = os.path.join(output_dir, "benchmark_runs.json")
+    run_entry = {
+        "id": timestamp,
+        "timestamp": datetime.now().isoformat(),
+        "git_branch": run_metadata["git_branch"],
+        "git_commit_hash": run_metadata["git_commit_hash"],
+        "run_author": run_metadata["run_author"],
+        "schema_version": "1.0",
+        "dataset_file": os.path.basename(dataset_name),
+        "dataset_type": mode,
+        "judge_model": os.getenv("BENCHMARKS_JUDGE_MODEL")
+        or os.getenv("JUDGE_MODEL")
+        or Config.JUDGE_MODEL,
+        "generation_model": os.getenv("GENERATION_MODEL") or Config.MISTRAL_MODEL,
+        "tier_0_metrics": normalized_results.get("tier_0"),
+        "tier_1_metrics": normalized_results.get("tier_1"),
+        "tier_2_metrics": normalized_results.get("tier_2"),
+        "tier_3_metrics": normalized_results.get("tier_3"),
+        "tier_judge_metrics": normalized_results.get("tier_judge"),
+        "tier_judge_pipeline_metrics": normalized_results.get("tier_judge_pipeline"),
+        "tier_ux_metrics": normalized_results.get("tier_ux"),
+        "real_user_metrics": normalized_results.get("tier_real_users"),
+        "overall_status": overall_status,
+    }
 
-    from sqlalchemy.orm import Session
+    if os.path.exists(benchmark_runs_path):
+        with open(benchmark_runs_path, "r", encoding="utf-8") as f:
+            runs = json.load(f)
+    else:
+        runs = []
 
-    with Session(engine) as session:
-        session.add(
-            BenchmarkRun(
-                timestamp=datetime.now(),
-                git_branch=run_metadata["git_branch"],
-                git_commit_hash=run_metadata["git_commit_hash"],
-                run_author=run_metadata["run_author"],
-                schema_version=BenchmarkRun.CURRENT_SCHEMA_VERSION,
-                dataset_file=os.path.basename(dataset_name),
-                dataset_type=mode,
-                judge_model=os.getenv("BENCHMARKS_JUDGE_MODEL")
-                or os.getenv("JUDGE_MODEL")
-                or Config.JUDGE_MODEL,
-                generation_model=os.getenv("GENERATION_MODEL") or Config.MISTRAL_MODEL,
-                tier_0_metrics=normalized_results.get("tier_0"),
-                tier_1_metrics=normalized_results.get("tier_1"),
-                tier_2_metrics=normalized_results.get("tier_2"),
-                tier_3_metrics=normalized_results.get("tier_3"),
-                tier_judge_metrics=normalized_results.get("tier_judge"),
-                tier_judge_pipeline_metrics=normalized_results.get(
-                    "tier_judge_pipeline"
-                ),
-                tier_ux_metrics=normalized_results.get("tier_ux"),
-                real_user_metrics=normalized_results.get("tier_real_users"),
-                overall_status=overall_status,
-            )
-        )
-        session.commit()
+    runs.append(run_entry)
+
+    with open(benchmark_runs_path, "w", encoding="utf-8") as f:
+        json.dump(runs, f, ensure_ascii=False, indent=2)
 
     logger.info(f"✅ Результаты сохранены:")
     logger.info(f"   JSON: {json_path}")
     logger.info(f"   Markdown: {markdown_path}")
-    logger.info("   DB table: benchmark_runs")
+    logger.info(f"   Runs index: {benchmark_runs_path}")
 
 
 def print_results(results: dict):

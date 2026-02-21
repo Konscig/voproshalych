@@ -56,8 +56,8 @@ sequenceDiagram
         DB-->>RAGBenchmark: top_k chunks
         RAGBenchmark->>RAGBenchmark: compute hit_rate, mrr, ndcg
     end
-    RAGBenchmark-->>CLI: tier_1_metrics
-    CLI->>DB: INSERT INTO benchmark_runs
+        RAGBenchmark-->>CLI: tier_1_metrics
+    CLI->>FS: save to benchmark_runs.json
 
     Note over User,Dashboard: Фаза 4: Запуск бенчмарков (Tier 2)
 
@@ -73,7 +73,7 @@ sequenceDiagram
         Judge-->>RAGBenchmark: relevance_score
     end
     RAGBenchmark-->>CLI: tier_2_metrics
-    CLI->>DB: INSERT INTO benchmark_runs
+    CLI->>FS: save to benchmark_runs.json
 
     Note over User,Dashboard: Фаза 5: Запуск бенчмарков (Tier 3)
 
@@ -90,7 +90,7 @@ sequenceDiagram
         RAGBenchmark->>RAGBenchmark: cosine_similarity(system_answer, ground_truth)
     end
     RAGBenchmark-->>CLI: tier_3_metrics
-    CLI->>DB: INSERT INTO benchmark_runs
+    CLI->>FS: save to benchmark_runs.json
 
     Note over User,Dashboard: Фаза 6: Real-users benchmark
 
@@ -106,14 +106,14 @@ sequenceDiagram
         RealBenchmark->>RealBenchmark: compute recall, precision, mrr, ndcg
     end
     RealBenchmark-->>CLI: real_user_metrics
-    CLI->>DB: INSERT INTO benchmark_runs
+    CLI->>FS: save to benchmark_runs.json
 
     Note over User,Dashboard: Фаза 7: Просмотр результатов
 
     User->>CLI: run_dashboard.py
     CLI->>Dashboard: main
-    Dashboard->>DB: SELECT benchmark_runs ORDER BY timestamp
-    DB-->>Dashboard: all_runs
+    Dashboard->>FS: read benchmark_runs.json
+    FS-->>Dashboard: all_runs
     Dashboard->>Dashboard: create_interface
     Dashboard-->>User: Gradio UI на http://localhost:7860
 ```
@@ -172,7 +172,7 @@ sequenceDiagram
 - Выполняется векторный поиск через `Chunk.embedding.cosine_distance()`
 - Вычисляются метрики: HitRate@K, MRR, NDCG@K
 
-**Шаг 24-25:** Результаты сохраняются в `benchmark_runs` таблицу.
+**Шаг 24-25:** Результаты сохраняются в `benchmark_runs.json` файл.
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_1()`.
 
@@ -301,7 +301,7 @@ sequenceDiagram
 
 ### Фаза 7: Просмотр результатов
 
-**Шаг 57-60:** Пользователь запускает `run_dashboard.py`. Dashboard загружает все запуски из `benchmark_runs` и создаёт Gradio интерфейс.
+**Шаг 57-60:** Пользователь запускает `run_dashboard.py`. Dashboard загружает все запуски из `benchmark_runs.json` и создаёт Gradio интерфейс.
 
 **Реализация:** `benchmarks/dashboard.py`, класс `RAGBenchmarkDashboard`.
 
@@ -358,11 +358,15 @@ sequenceDiagram
 | embedding | vector(1024) | Вектор вопроса |
 | user_id | int | FK -> user.id |
 
-### benchmark_runs
+### benchmark_runs.json
+
+Файл: `benchmarks/reports/benchmark_runs.json`
+
+Структура (JSON array):
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| id | int | PK |
+| id | string | ID запуска (timestamp) |
 | timestamp | datetime | Время запуска |
 | git_branch | text | Ветка git |
 | git_commit_hash | text | Hash коммита |

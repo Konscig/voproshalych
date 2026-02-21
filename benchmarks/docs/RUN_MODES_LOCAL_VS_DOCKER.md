@@ -28,28 +28,25 @@
 
 | Тип данных | Где хранится |
 |------------|--------------|
-| Чанки и эмбеддинги | PostgreSQL (таблица `chunk`) |
-| Вопросы пользователей | PostgreSQL (таблица `question_answer`) |
-| История бенчмарков | PostgreSQL (таблица `benchmark_runs`) |
+| Чанки и эмбеддинги | PostgreSQL (pgvector) |
+| Вопросы пользователей | PostgreSQL |
+| История бенчмарков | Файл `benchmarks/reports/benchmark_runs.json` |
 | Датасеты | Файлы `benchmarks/data/dataset_*.json` |
-| Отчёты | Файлы `benchmarks/reports/*.json` и `*.md` |
+| Отчёты | Файлы `benchmarks/reports/rag_benchmark_*.json` и `*.md` |
 
 ### История запусков
 
-История хранится в PostgreSQL:
+История хранится в JSON файле:
 
-```sql
-SELECT * FROM benchmark_runs ORDER BY timestamp DESC;
+```bash
+cat benchmarks/reports/benchmark_runs.json
 ```
 
 Для переноса истории на другую машину:
 
 ```bash
-# Экспорт дампа БД
-pg_dump -h localhost -U postgres postgres > benchmark_history.dump
-
-# Импорт на другой машине
-psql -h localhost -U postgres postgres < benchmark_history.dump
+# Копирование файлов
+cp benchmarks/reports/benchmark_runs.json /path/to/backup/
 ```
 
 ### Быстрый старт

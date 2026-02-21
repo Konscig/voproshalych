@@ -146,9 +146,9 @@ services:
             - model-cache:/root/.cache/huggingface
             # UV cache
             - virtassist-uv-cache:/root/.cache/uv
-            - benchmarks-reports:/usr/src/app/benchmarks/reports
-            # Bind mount для данных (локально + дашборд)
+            # Bind mount для данных и отчётов (локально)
             - ./benchmarks/data:/usr/src/app/benchmarks/data
+            - ./benchmarks/reports:/usr/src/app/benchmarks/reports
             - /var/run/docker.sock:/var/run/docker.sock
         depends_on:
             db:
@@ -162,7 +162,6 @@ volumes:
     db-data:
     # Общий volume для кэша моделей HuggingFace
     model-cache:
-    benchmarks-reports:
     # UV cache
     virtassist-uv-cache:
 

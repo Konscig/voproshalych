@@ -21,7 +21,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from qa.config import Config
-from qa.database import BenchmarkRun, create_engine, ensure_benchmark_runs_schema
 
 logger = logging.getLogger(__name__)
 
@@ -114,62 +113,49 @@ class RAGBenchmarkDashboard:
     """Дашборд для просмотра качества Retrieval и Generation."""
 
     def __init__(self):
-        self.engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
-        ensure_benchmark_runs_schema(self.engine)
+        self.reports_dir = Path("benchmarks/reports")
         self.runs = self._load_runs()
 
     def _load_runs(self) -> List[Dict]:
-        """Загрузить запуски бенчмарков из таблицы benchmark_runs."""
+        """Загрузить запуски бенчмарков из JSON файла."""
+        benchmark_runs_path = self.reports_dir / "benchmark_runs.json"
 
-        def normalize_metrics(raw_metrics):
-            if isinstance(raw_metrics, dict):
-                return raw_metrics
-            if isinstance(raw_metrics, str):
-                try:
-                    parsed = json.loads(raw_metrics)
-                    if isinstance(parsed, dict):
-                        return parsed
-                except json.JSONDecodeError:
-                    return {}
-            return {}
+        if not benchmark_runs_path.exists():
+            logger.info("Файл benchmark_runs.json не найден, загрузка 0 запусков")
+            return []
 
-        with Session(self.engine) as session:
-            records = session.scalars(
-                select(BenchmarkRun).order_by(BenchmarkRun.timestamp.asc())
-            ).all()
+        with open(benchmark_runs_path, "r", encoding="utf-8") as f:
+            records = json.load(f)
 
         runs = []
         for record in records:
-            timestamp_str = record.timestamp.strftime("%Y%m%d_%H%M%S")
+            timestamp_str = record.get("timestamp", "")[:15]
             runs.append(
                 {
-                    "id": record.id,
+                    "id": record.get("id"),
                     "timestamp": timestamp_str,
-                    "timestamp_readable": record.timestamp.strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
-                    "git_branch": record.git_branch or "unknown",
-                    "git_commit_hash": record.git_commit_hash or "unknown",
-                    "run_author": record.run_author or "unknown",
-                    "dataset_file": record.dataset_file or "unknown",
-                    "dataset_type": record.dataset_type or "synthetic",
-                    "judge_model": record.judge_model or "unknown",
-                    "generation_model": record.generation_model or "unknown",
-                    "overall_status": record.overall_status,
-                    "tier_0": normalize_metrics(record.tier_0_metrics),
-                    "tier_1": normalize_metrics(record.tier_1_metrics),
-                    "tier_2": normalize_metrics(record.tier_2_metrics),
-                    "tier_3": normalize_metrics(record.tier_3_metrics),
-                    "tier_judge": normalize_metrics(record.tier_judge_metrics),
-                    "tier_judge_pipeline": normalize_metrics(
-                        record.tier_judge_pipeline_metrics
-                    ),
-                    "tier_ux": normalize_metrics(record.tier_ux_metrics),
-                    "tier_real_users": normalize_metrics(record.real_user_metrics),
+                    "timestamp_readable": timestamp_str.replace("T", " ")[:19],
+                    "git_branch": record.get("git_branch") or "unknown",
+                    "git_commit_hash": record.get("git_commit_hash") or "unknown",
+                    "run_author": record.get("run_author") or "unknown",
+                    "dataset_file": record.get("dataset_file") or "unknown",
+                    "dataset_type": record.get("dataset_type") or "synthetic",
+                    "judge_model": record.get("judge_model") or "unknown",
+                    "generation_model": record.get("generation_model") or "unknown",
+                    "overall_status": record.get("overall_status"),
+                    "tier_0": record.get("tier_0_metrics") or {},
+                    "tier_1": record.get("tier_1_metrics") or {},
+                    "tier_2": record.get("tier_2_metrics") or {},
+                    "tier_3": record.get("tier_3_metrics") or {},
+                    "tier_judge": record.get("tier_judge_metrics") or {},
+                    "tier_judge_pipeline": record.get("tier_judge_pipeline_metrics")
+                    or {},
+                    "tier_ux": record.get("tier_ux_metrics") or {},
+                    "tier_real_users": record.get("real_user_metrics") or {},
                 }
             )
 
-        logger.info("Загружено %s запусков из benchmark_runs", len(runs))
+        logger.info("Загружено %s запусков из benchmark_runs.json", len(runs))
         return runs
 
     def get_latest_run(self) -> Optional[Dict]:
@@ -283,7 +269,9 @@ class RAGBenchmarkDashboard:
 
     def _create_run_details_tab(self):
         if not self.runs:
-            gr.Markdown("Нет данных о запусках бенчмарков в таблице benchmark_runs.")
+            gr.Markdown(
+                "Нет данных о запусках бенчмарков. Запустите бенчмарк для создания записей."
+            )
             return
 
         ordered_runs = list(reversed(self.runs))

@@ -349,8 +349,8 @@ docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks
 Дашборд доступен по адресу: `http://localhost:7860`
 
 Ожидаемо:
-- в volume `benchmarks-reports` появляются свежие `rag_benchmark_*.json/.md`;
-- в PostgreSQL таблице `benchmark_runs` появляются новые записи с `dataset_type`;
+- в `benchmarks/reports/` появляются свежие `rag_benchmark_*.json/.md`;
+- в `benchmarks/reports/benchmark_runs.json` появляются новые записи;
 - в дашборде видны метрики и графики по новым запускам.
 
 ## 8) Просмотр логов

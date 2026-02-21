@@ -14,11 +14,11 @@ Enterprise-grade система бенчмарков для оценки Retriev
 
 ### Ключевые особенности
 
-- ✅ **Single Source of Truth**: работа с реальной PostgreSQL базой
+- ✅ **Single Source of Truth**: работа с PostgreSQL базой для векторного поиска
 - ✅ **LLM-as-a-Judge**: оценка quality-метрик через judge-model
 - ✅ **Семь tier-уровней**: Tier 0 (Embedding), Tier 1 (Retrieval), Tier 2 (Generation), Tier 3 (End-to-End), Tier Judge (Qwen), Tier Judge Pipeline (Mistral), Tier UX
 - ✅ **Manual + Real Users режимы**: отдельные пайплайны для академичной оценки
-- ✅ **Версионированные артефакты**: JSON/Markdown отчёты + `benchmark_runs`
+- ✅ **Локальное хранение**: Датасеты → JSON, Отчёты → Markdown + JSON
 
 ---
 

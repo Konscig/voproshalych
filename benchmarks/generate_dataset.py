@@ -79,10 +79,6 @@ def _create_dataset_item(
         item["question_answer_id"] = question_answer_id
     if is_relevant_chunk_matched is not None:
         item["is_relevant_chunk_matched"] = is_relevant_chunk_matched
-    elif confluence_url:
-        item["is_relevant_chunk_matched"] = (
-            is_relevant_chunk_matched if is_relevant_chunk_matched is not None else 0
-        )
 
     return item
 
@@ -327,17 +323,26 @@ def generate_from_real_questions(
                 )
 
                 is_relevant_chunk_matched = None
-                if qa.confluence_url:
-                    ground_truth_chunk = session.scalars(
-                        select(Chunk).where(Chunk.confluence_url == qa.confluence_url)
-                    ).first()
-                    if (
-                        ground_truth_chunk
-                        and ground_truth_chunk.id in relevant_chunk_ids
-                    ):
-                        is_relevant_chunk_matched = 1
-                    else:
-                        is_relevant_chunk_matched = 0
+                if qa.answer:
+                    import re
+
+                    answer_urls = re.findall(
+                        r"https://confluence\.utmn\.ru[^\s\)]+", qa.answer
+                    )
+                    if answer_urls:
+                        answer_confluence_url = answer_urls[0]
+                        ground_truth_chunk = session.scalars(
+                            select(Chunk).where(
+                                Chunk.confluence_url == answer_confluence_url
+                            )
+                        ).first()
+                        if (
+                            ground_truth_chunk
+                            and ground_truth_chunk.id in relevant_chunk_ids
+                        ):
+                            is_relevant_chunk_matched = 1
+                        else:
+                            is_relevant_chunk_matched = 0
 
                 ground_truth = qa.answer or ""
                 if not ground_truth:

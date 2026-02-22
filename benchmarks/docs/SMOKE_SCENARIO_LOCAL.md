@@ -38,16 +38,23 @@ cd Submodules/voproshalych
 uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
 ```
 
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make load-dump-local
+```
+
 ## 3) Генерация эмбеддингов
 
 ```bash
 cd Submodules/voproshalych
-
-# Эмбеддинги для чанков (документов) — используется для RAG
 uv run python benchmarks/generate_embeddings.py --chunks
+```
 
-# Проверить покрытие
-uv run python benchmarks/generate_embeddings.py --check-coverage
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make generate-embeddings-local
 ```
 
 ## 4) Synthetic dataset + benchmark
@@ -65,28 +72,12 @@ uv run python benchmarks/generate_dataset.py \
 # Полный режим (все чанки)
 uv run python benchmarks/generate_dataset.py \
   --mode synthetic --max-questions 10000
+```
 
-# Из реальных вопросов
-# Тестовый режим (5 вопросов)
-uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions --max-questions 5
-
-# Полный режим (все вопросы)
-uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions --max-questions 10000
-
-# Только вопросы с оценкой 5
-# Тестовый режим (5 вопросов)
-uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions-score-5 --max-questions 5
-
-# Полный режим (все вопросы с оценкой 5)
-uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions-score-5 --max-questions 10000
-
-# Экспорт для ручной аннотации
-uv run python benchmarks/generate_dataset.py \
-  --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make generate-dataset-local
 ```
 
 ### Запуск benchmark
@@ -101,6 +92,12 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
 # Полный режим (все вопросы)
 uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode synthetic
+```
+
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make run-benchmarks-local
 ```
 
 ## 5) Manual dataset + benchmark
@@ -138,6 +135,12 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
 ```bash
 cd Submodules/voproshalych
 uv run python benchmarks/run_dashboard.py
+```
+
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make run-dashboard-local
 ```
 
 Дашборд доступен по адресу: `http://localhost:7860`

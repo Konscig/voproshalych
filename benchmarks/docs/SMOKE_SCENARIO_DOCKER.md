@@ -41,16 +41,23 @@ docker compose -f docker-compose.benchmarks.yml exec -T benchmarks uv run python
 
 **Важно:** При загрузке дампа таблицы автоматически очищаются перед загрузкой.
 
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml load-dump
+```
+
 ## 3) Генерация эмбеддингов
 
 ```bash
 cd Submodules/voproshalych
-
-# Эмбеддинги для чанков (документов) — используется для RAG
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --chunks
+```
 
-# Проверить покрытие
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_embeddings.py --check-coverage
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-embeddings
 ```
 
 ## 4) Synthetic dataset + benchmark
@@ -68,28 +75,12 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 # Полный режим (все чанки с эмбеддингами)
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
   --mode synthetic --max-questions 10000
+```
 
-# Из реальных вопросов пользователей
-# Тестовый режим (5 вопросов)
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions --max-questions 5
-
-# Полный режим (все вопросы)
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions --max-questions 10000
-
-# Только вопросы с оценкой 5
-# Тестовый режим (5 вопросов)
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions-score-5 --max-questions 5
-
-# Полный режим (все вопросы с оценкой 5)
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions-score-5 --max-questions 10000
-
-# Экспорт для ручной аннотации
-docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/generate_dataset.py \
-  --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-dataset
 ```
 
 ### Запуск benchmark
@@ -104,6 +95,12 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 # Полный режим (все вопросы)
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode synthetic
+```
+
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
 ```
 
 ## 5) Manual dataset + benchmark
@@ -143,6 +140,12 @@ cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks uv run python benchmarks/run_dashboard.py
 ```
 
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
+```
+
 Дашборд доступен по адресу: `http://localhost:7860`
 
 ## 8) Остановка
@@ -150,6 +153,12 @@ docker compose -f docker-compose.benchmarks.yml run --rm -p 7860:7860 benchmarks
 ```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml down
+```
+
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml down
 ```
 
 ## Пересборка

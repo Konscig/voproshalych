@@ -24,6 +24,9 @@ requires-python = ">=3.12"
     "rouge-score",
     "sacrebleu",
     "scikit-learn",
+    "pandas",
+    "plotly",
+    "umap-learn",
 ]
 
 [tool.black]

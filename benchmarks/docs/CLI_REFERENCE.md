@@ -10,7 +10,10 @@
 2. [generate_embeddings.py](#generate_embeddingspy)
 3. [generate_dataset.py](#generate_datasetpy)
 4. [run_comprehensive_benchmark.py](#run_comprehensive_benchmarkpy)
-5. [run_dashboard.py](#run_dashboardpy)
+5. [visualize_vector_space.py](#visualize_vector_spacepy)
+6. [analyze_chunk_utilization.py](#analyze_chunk_utilizationpy)
+7. [analyze_topic_coverage.py](#analyze_topic_coveragepy)
+8. [run_dashboard.py](#run_dashboardpy)
 
 ---
 
@@ -165,6 +168,14 @@ uv run python benchmarks/generate_dataset.py --mode export-annotation --output b
 | `--real-score` | int | 5 | Фильтр score для real-users режима |
 | `--real-limit` | int | 500 | Лимит вопросов для real-users режима |
 | `--real-latest` | flag | False | Брать последние вопросы по created_at |
+| `--analyze-utilization` | flag | False | Выполнить анализ использования чанков |
+| `--utilization-questions-source` | str | synthetic | Источник вопросов: synthetic или real |
+| `--utilization-question-limit` | int | 500 | Лимит вопросов для utilization |
+| `--utilization-top-k` | int | 10 | top-k для utilization |
+| `--analyze-topics` | flag | False | Выполнить анализ покрытия тем |
+| `--topics-question-limit` | int | 2000 | Лимит вопросов для topic coverage |
+| `--topics-count` | int | 20 | Количество тематических кластеров |
+| `--topics-top-k` | int | 5 | top-k для анализа тем |
 
 ### Режимы
 
@@ -202,7 +213,7 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
 
 | Tier | Что проверяет | Метрики |
 |------|---------------|---------|
-| 0 | Intrinsic Embedding Quality | avg_intra_cluster_sim, avg_inter_cluster_dist, silhouette_score |
+| 0 | Intrinsic Embedding Quality | avg_nn_distance, density_score, avg_spread, avg_pairwise_distance |
 | 1 | Retrieval Accuracy | HitRate@K, MRR, NDCG@K, Recall@K, Precision@K |
 | 2 | Generation Quality | avg_faithfulness, avg_answer_relevance, avg_rouge1_f, avg_rougeL_f, avg_bleu |
 | 3 | End-to-End | avg_e2e_score, avg_semantic_similarity, avg_rouge1_f, avg_bleu |
@@ -210,6 +221,78 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
 | judge_pipeline | Production Judge Quality (Mistral) | accuracy, precision, recall, f1_score, avg_latency_ms |
 | ux | User Experience Quality | cache_hit_rate, context_preservation, multi_turn_consistency |
 | all | Все уровни | Все метрики |
+
+### Дополнительные аналитические флаги
+
+```bash
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode synthetic --limit 200 \
+  --analyze-utilization --utilization-questions-source real \
+  --analyze-topics --topics-count 20
+```
+
+---
+
+## visualize_vector_space.py
+
+UMAP-визуализация пространства эмбеддингов чанков.
+
+**Файл:** `benchmarks/visualize_vector_space.py`
+
+| Флаг | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `--limit` | int | 5000 | Количество чанков для визуализации |
+| `--output` | str | benchmarks/reports/vector_space.html | HTML-файл результата |
+| `--3d` | flag | False | Построить 3D UMAP |
+| `--color-by` | str | section | Поле раскраски: cluster/chunk_id/section |
+
+Пример:
+
+```bash
+uv run python benchmarks/visualize_vector_space.py --limit 5000 --color-by section
+```
+
+---
+
+## analyze_chunk_utilization.py
+
+Оценка доли чанков, реально используемых retrieval-модулем.
+
+**Файл:** `benchmarks/analyze_chunk_utilization.py`
+
+| Флаг | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `--questions-source` | str | synthetic | Источник вопросов: synthetic/real |
+| `--question-limit` | int | 500 | Лимит вопросов |
+| `--top-k` | int | 10 | top-k retrieval |
+| `--output` | str | benchmarks/reports/utilization.json | JSON-отчёт |
+
+Пример:
+
+```bash
+uv run python benchmarks/analyze_chunk_utilization.py --questions-source real --question-limit 500
+```
+
+---
+
+## analyze_topic_coverage.py
+
+Анализ покрытия тематических кластеров (KMeans + retrieval).
+
+**Файл:** `benchmarks/analyze_topic_coverage.py`
+
+| Флаг | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `--question-limit` | int | 2000 | Лимит вопросов для кластеризации |
+| `--n-topics` | int | 20 | Количество тематических кластеров |
+| `--top-k` | int | 5 | top-k retrieval на вопрос |
+| `--output` | str | benchmarks/reports/topic_coverage.json | JSON-отчёт |
+
+Пример:
+
+```bash
+uv run python benchmarks/analyze_topic_coverage.py --n-topics 20 --question-limit 2000
+```
 
 ---
 

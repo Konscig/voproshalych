@@ -89,9 +89,8 @@ sequenceDiagram
     CLI->>RAGBenchmark: run_tier_0(dataset)
     loop Для каждого текста в датасете
         RAGBenchmark->>RAGBenchmark: encoder.encode(text)
-        RAGBenchmark->>RAGBenchmark: compute silhouette_score
-        RAGBenchmark->>RAGBenchmark: compute intra_cluster_sim
-        RAGBenchmark->>RAGBenchmark: compute inter_cluster_dist
+        RAGBenchmark->>RAGBenchmark: compute NN/pairwise/spread metrics
+        RAGBenchmark->>RAGBenchmark: compute effective_dimensionality
     end
     RAGBenchmark-->>CLI: tier_0_metrics
     CLI->>FS: save to benchmark_runs.json
@@ -324,11 +323,12 @@ sequenceDiagram
 **Команда:** `--tier 0`
 
 **Процесс:**
-1. Извлекаются тексты и метки кластеров из датасета
+1. Извлекаются тексты из датасета (без требований к cluster_id/label)
 2. Вычисляются эмбеддинги для каждого текста
-3. Рассчитываются: silhouette_score, intra_cluster_sim, inter_cluster_dist
+3. Рассчитываются intrinsic-метрики: NN distance, spread, pairwise distance
 
-**Метрики:** silhouette_score, avg_intra_cluster_sim, avg_inter_cluster_dist
+**Метрики:** avg_nn_distance, density_score, avg_spread,
+effective_dimensionality, avg_pairwise_distance и др.
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_0()`.
 
@@ -492,6 +492,9 @@ sequenceDiagram
 | `run_comprehensive_benchmark.py` | CLI для запуска бенчмарков |
 | `generate_dataset.py` | Генерация synthetic датасета |
 | `generate_embeddings.py` | Генерация эмбеддингов |
+| `visualize_vector_space.py` | UMAP-визуализация векторного пространства |
+| `analyze_chunk_utilization.py` | Анализ доли используемых чанков |
+| `analyze_topic_coverage.py` | Анализ покрытия тематических кластеров |
 | `run_dashboard.py` | Запуск дашборда |
 | `dashboard.py` | Gradio дашборд |
 | `models/rag_benchmark.py` | Tier 0/1/2/3/Judge/UX бенчмарки |
@@ -544,6 +547,7 @@ sequenceDiagram
 | dataset_type | text | synthetic/manual/real-users |
 | judge_model | text | Модель для судейства (Qwen) |
 | generation_model | text | Модель для генерации (Mistral) |
+| embedding_model | text | Модель эмбеддингов |
 | tier_0_metrics | json | Метрики Tier 0 (Embedding Quality) |
 | tier_1_metrics | json | Метрики Tier 1 (Retrieval) |
 | tier_2_metrics | json | Метрики Tier 2 (Generation) |
@@ -552,9 +556,11 @@ sequenceDiagram
 | tier_judge_pipeline_metrics | json | Метрики Tier Judge Pipeline (Production Judge, Mistral) |
 | tier_ux_metrics | json | Метрики Tier UX (User Experience) |
 | real_user_metrics | json | Метрики real-users |
+| utilization_metrics | json | Метрики использования чанков |
+| topic_coverage_metrics | json | Метрики покрытия тем |
 | overall_status | text | Итоговый статус |
 
-**schema_version:** Поле для обеспечения совместимости при изменении архитектуры. Текущая версия: `1.0`. При изменении структуры метрик — увеличивать версию.
+**schema_version:** Поле для обеспечения совместимости при изменении архитектуры. Текущая версия: `2.0`. При изменении структуры метрик — увеличивать версию.
 
 ---
 

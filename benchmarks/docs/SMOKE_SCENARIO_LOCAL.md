@@ -211,6 +211,26 @@ make run-dashboard-local
 
 Дашборд доступен по адресу: `http://localhost:7860`
 
+## 8) Дополнительная аналитика
+
+```bash
+cd Submodules/voproshalych
+
+# Визуализация векторного пространства (2D)
+uv run python benchmarks/visualize_vector_space.py --limit 5000
+
+# Визуализация (3D)
+uv run python benchmarks/visualize_vector_space.py --limit 3000 --3d \
+  --output benchmarks/reports/vector_space_3d.html
+
+# Анализ использования чанков
+uv run python benchmarks/analyze_chunk_utilization.py \
+  --questions-source real --question-limit 500
+
+# Анализ покрытия тем
+uv run python benchmarks/analyze_topic_coverage.py --n-topics 20
+```
+
 ## Остановка
 
 ```bash

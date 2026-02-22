@@ -23,6 +23,86 @@ from benchmarks.utils.evaluator import compute_retrieval_metrics
 logger = logging.getLogger(__name__)
 
 
+def _empty_intrinsic_metrics() -> Dict[str, float | int]:
+    """Вернуть пустой набор intrinsic-метрик Tier 0."""
+    return {
+        "avg_nn_distance": 0.0,
+        "std_nn_distance": 0.0,
+        "density_score": 0.0,
+        "avg_spread": 0.0,
+        "max_spread": 0.0,
+        "spread_std": 0.0,
+        "effective_dimensionality": 0,
+        "avg_pairwise_distance": 0.0,
+        "std_pairwise_distance": 0.0,
+        "min_pairwise_distance": 0.0,
+        "max_pairwise_distance": 0.0,
+    }
+
+
+def compute_intrinsic_metrics(
+    embeddings: np.ndarray, k: int = 5
+) -> Dict[str, float | int]:
+    """Вычислить intrinsic-метрики качества эмбеддингов.
+
+    Args:
+        embeddings: Матрица эмбеддингов формы (n_samples, n_features)
+        k: Количество ближайших соседей для локальных метрик
+
+    Returns:
+        Словарь с intrinsic-метриками качества векторного пространства
+    """
+    from sklearn.metrics import pairwise_distances
+    from sklearn.neighbors import NearestNeighbors
+
+    if embeddings.ndim != 2 or len(embeddings) < 2:
+        return _empty_intrinsic_metrics()
+
+    n_samples = len(embeddings)
+    n_neighbors = min(max(k, 1), n_samples - 1)
+
+    neighbors = NearestNeighbors(n_neighbors=n_neighbors + 1, metric="cosine")
+    neighbors.fit(embeddings)
+    distances, _ = neighbors.kneighbors(embeddings)
+    nn_distances = distances[:, 1:]
+
+    centroid = embeddings.mean(axis=0)
+    distances_from_center = np.linalg.norm(embeddings - centroid, axis=1)
+
+    covariance_matrix = np.atleast_2d(np.cov(embeddings, rowvar=False))
+    eigenvalues = np.linalg.eigvalsh(covariance_matrix)
+    eigenvalues = np.clip(np.sort(eigenvalues)[::-1], a_min=0.0, a_max=None)
+    total_variance = float(eigenvalues.sum())
+
+    if total_variance > 0.0:
+        explained = np.cumsum(eigenvalues) / total_variance
+        effective_dimensionality = int(np.searchsorted(explained, 0.95) + 1)
+    else:
+        effective_dimensionality = 1
+
+    pairwise = pairwise_distances(embeddings, metric="cosine")
+    upper_triangle = pairwise[np.triu_indices(n_samples, k=1)]
+
+    if upper_triangle.size == 0:
+        upper_triangle = np.array([0.0])
+
+    avg_nn_distance = float(nn_distances.mean()) if nn_distances.size else 0.0
+
+    return {
+        "avg_nn_distance": avg_nn_distance,
+        "std_nn_distance": float(nn_distances.std()) if nn_distances.size else 0.0,
+        "density_score": float(1.0 / (avg_nn_distance + 1e-6)),
+        "avg_spread": float(distances_from_center.mean()),
+        "max_spread": float(distances_from_center.max()),
+        "spread_std": float(distances_from_center.std()),
+        "effective_dimensionality": effective_dimensionality,
+        "avg_pairwise_distance": float(upper_triangle.mean()),
+        "std_pairwise_distance": float(upper_triangle.std()),
+        "min_pairwise_distance": float(upper_triangle.min()),
+        "max_pairwise_distance": float(upper_triangle.max()),
+    }
+
+
 class RAGBenchmark:
     """Комплексный бенчмарк для RAG-системы.
 
@@ -517,8 +597,8 @@ class RAGBenchmark:
     ) -> Dict[str, float]:
         """Выполнить бенчмарк Tier 0 (Intrinsic Embedding Quality).
 
-        Оценивает внутреннее качество эмбеддингов через кластерный анализ
-        и метрики на golden similarity dataset.
+        Оценивает внутреннее качество эмбеддингов через intrinsic-метрики,
+        не требующие cluster_id/label в датасете.
 
         Args:
             test_pairs: Список пар (question1, question2, ground_truth_similarity)
@@ -528,99 +608,54 @@ class RAGBenchmark:
             Словарь с метриками качества эмбеддингов
         """
         logger.info(
-            f"Запуск Tier 0 (Intrinsic Embedding Quality) с {len(test_pairs)} парами"
+            "Запуск Tier 0 (Intrinsic Embedding Quality) с %s записями",
+            len(test_pairs),
         )
 
         if not test_pairs:
             logger.warning("Нет тестовых пар для Tier 0")
-            return {
-                "tier": 0,
-                "total_pairs": 0,
-                "avg_intra_cluster_sim": 0.0,
-                "avg_inter_cluster_dist": 0.0,
-                "silhouette_score": 0.0,
-            }
+            return {"tier": 0, "total_samples": 0, **_empty_intrinsic_metrics()}
+
+        has_cluster_labels = any(
+            pair.get("cluster_id") is not None or pair.get("label") is not None
+            for pair in test_pairs
+        )
+        if not has_cluster_labels:
+            logger.warning(
+                "Метрики кластеризации требуют cluster_id, используем intrinsic"
+            )
 
         embeddings = []
-        labels = []
 
         for pair in test_pairs:
             text = pair.get("text") or pair.get("question", "")
-            label = pair.get("cluster_id") or pair.get("label", 0)
 
             if text:
                 emb = self.encoder.encode(text)
                 embeddings.append(emb)
-                labels.append(label)
 
         if len(embeddings) < 2:
-            logger.warning("Недостаточно данных для кластерного анализа")
+            logger.warning("Недостаточно данных для intrinsic анализа")
             return {
                 "tier": 0,
-                "total_pairs": len(test_pairs),
-                "avg_intra_cluster_sim": 0.0,
-                "avg_inter_cluster_dist": 0.0,
-                "silhouette_score": 0.0,
+                "total_samples": len(embeddings),
+                **_empty_intrinsic_metrics(),
             }
 
         embeddings_array = np.array(embeddings)
-        labels_array = np.array(labels)
-
-        unique_labels = np.unique(labels_array)
-        n_clusters = len(unique_labels)
-
-        intra_cluster_sims = []
-        inter_cluster_dists = []
-
-        for label in unique_labels:
-            cluster_mask = labels_array == label
-            cluster_embeddings = embeddings_array[cluster_mask]
-
-            if len(cluster_embeddings) > 1:
-                for i in range(len(cluster_embeddings)):
-                    for j in range(i + 1, len(cluster_embeddings)):
-                        sim = np.dot(cluster_embeddings[i], cluster_embeddings[j]) / (
-                            np.linalg.norm(cluster_embeddings[i])
-                            * np.linalg.norm(cluster_embeddings[j])
-                        )
-                        intra_cluster_sims.append(sim)
-
-        for i, label_i in enumerate(unique_labels):
-            for label_j in unique_labels[i + 1 :]:
-                cluster_i = embeddings_array[labels_array == label_i]
-                cluster_j = embeddings_array[labels_array == label_j]
-
-                if len(cluster_i) > 0 and len(cluster_j) > 0:
-                    centroid_i = np.mean(cluster_i, axis=0)
-                    centroid_j = np.mean(cluster_j, axis=0)
-                    dist = np.linalg.norm(centroid_i - centroid_j)
-                    inter_cluster_dists.append(dist)
-
-        silhouette = 0.0
-        if n_clusters > 1:
-            try:
-                from sklearn.metrics import silhouette_score
-
-                silhouette = silhouette_score(
-                    embeddings_array, labels_array, metric="cosine"
-                )
-            except ImportError:
-                logger.warning("sklearn не установлен, silhouette_score не вычислен")
+        intrinsic_metrics = compute_intrinsic_metrics(embeddings_array)
 
         metrics = {
             "tier": 0,
-            "total_pairs": len(test_pairs),
-            "n_clusters": n_clusters,
-            "avg_intra_cluster_sim": float(np.mean(intra_cluster_sims))
-            if intra_cluster_sims
-            else 0.0,
-            "avg_inter_cluster_dist": float(np.mean(inter_cluster_dists))
-            if inter_cluster_dists
-            else 0.0,
-            "silhouette_score": float(silhouette),
+            "total_samples": len(embeddings),
+            **intrinsic_metrics,
         }
 
-        logger.info(f"Tier 0 завершён. Silhouette: {metrics['silhouette_score']:.4f}")
+        logger.info(
+            "Tier 0 завершён. avg_nn_distance=%.4f, density_score=%.4f",
+            metrics["avg_nn_distance"],
+            metrics["density_score"],
+        )
 
         return metrics
 

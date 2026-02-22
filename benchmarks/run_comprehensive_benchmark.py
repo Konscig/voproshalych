@@ -26,6 +26,8 @@ from qa.database import (
     create_engine,
 )
 from qa.database import QuestionAnswer
+from benchmarks.analyze_chunk_utilization import analyze_chunk_utilization
+from benchmarks.analyze_topic_coverage import analyze_topic_coverage
 from benchmarks.models.real_queries_benchmark import RealQueriesBenchmark
 from benchmarks.models.rag_benchmark import RAGBenchmark
 from benchmarks.utils.llm_judge import LLMJudge
@@ -213,6 +215,14 @@ def run_benchmark(
     real_limit: int = 500,
     real_latest: bool = False,
     judge_pipeline_dataset_path: Optional[str] = None,
+    analyze_utilization: bool = False,
+    analyze_topics: bool = False,
+    utilization_questions_source: str = "synthetic",
+    utilization_question_limit: int = 500,
+    utilization_top_k: int = 10,
+    topics_question_limit: int = 2000,
+    topics_count: int = 20,
+    topics_top_k: int = 5,
 ):
     """Запустить бенчмарк.
 
@@ -230,7 +240,7 @@ def run_benchmark(
     """
     if mode == "real-users":
         real_benchmark = RealQueriesBenchmark(engine, encoder)
-        return {
+        results: dict[str, Any] = {
             "tier_real_users": real_benchmark.run(
                 top_k=top_k,
                 score_filter=real_score_filter,
@@ -238,9 +248,45 @@ def run_benchmark(
                 latest=real_latest,
             )
         }
+        if analyze_utilization:
+            results["utilization_metrics"] = analyze_chunk_utilization(
+                engine=engine,
+                encoder=encoder,
+                questions_source=utilization_questions_source,
+                question_limit=utilization_question_limit,
+                top_k=utilization_top_k,
+            )
+        if analyze_topics:
+            results["topic_coverage_metrics"] = analyze_topic_coverage(
+                engine=engine,
+                encoder=encoder,
+                question_limit=topics_question_limit,
+                n_topics=topics_count,
+                top_k=topics_top_k,
+            )
+        return results
 
     benchmark = RAGBenchmark(engine, encoder, judge)
     dataset = dataset or []
+
+    def attach_additional_analytics(results: dict[str, Any]) -> dict[str, Any]:
+        if analyze_utilization:
+            results["utilization_metrics"] = analyze_chunk_utilization(
+                engine=engine,
+                encoder=encoder,
+                questions_source=utilization_questions_source,
+                question_limit=utilization_question_limit,
+                top_k=utilization_top_k,
+            )
+        if analyze_topics:
+            results["topic_coverage_metrics"] = analyze_topic_coverage(
+                engine=engine,
+                encoder=encoder,
+                question_limit=topics_question_limit,
+                n_topics=topics_count,
+                top_k=topics_top_k,
+            )
+        return results
 
     if tier == "all":
         results = benchmark.run_all_tiers(dataset, top_k=top_k)
@@ -254,34 +300,42 @@ def run_benchmark(
         results["tier_ux"] = benchmark.run_tier_ux(
             [{"questions": [item["question"] for item in dataset]}] if dataset else []
         )
-        return results
+        return attach_additional_analytics(results)
     elif tier == "1":
-        return {"tier_1": benchmark.run_tier_1(dataset, top_k=top_k)}
+        return attach_additional_analytics(
+            {"tier_1": benchmark.run_tier_1(dataset, top_k=top_k)}
+        )
     elif tier == "2":
-        return {"tier_2": benchmark.run_tier_2(dataset)}
+        return attach_additional_analytics({"tier_2": benchmark.run_tier_2(dataset)})
     elif tier == "3":
-        return {"tier_3": benchmark.run_tier_3(dataset)}
+        return attach_additional_analytics({"tier_3": benchmark.run_tier_3(dataset)})
     elif tier == "0":
-        return {"tier_0": benchmark.run_tier_0(dataset)}
+        return attach_additional_analytics({"tier_0": benchmark.run_tier_0(dataset)})
     elif tier == "judge":
-        return {"tier_judge": benchmark.run_tier_judge(dataset)}
+        return attach_additional_analytics(
+            {"tier_judge": benchmark.run_tier_judge(dataset)}
+        )
     elif tier == "judge_pipeline":
         judge_pipeline_dataset = load_judge_pipeline_dataset(
             judge_pipeline_dataset_path
         )
-        return {
-            "tier_judge_pipeline": benchmark.run_tier_judge_pipeline(
-                judge_pipeline_dataset
-            )
-        }
+        return attach_additional_analytics(
+            {
+                "tier_judge_pipeline": benchmark.run_tier_judge_pipeline(
+                    judge_pipeline_dataset
+                )
+            }
+        )
     elif tier == "ux":
-        return {
-            "tier_ux": benchmark.run_tier_ux(
-                [{"questions": [item["question"] for item in dataset]}]
-                if dataset
-                else []
-            )
-        }
+        return attach_additional_analytics(
+            {
+                "tier_ux": benchmark.run_tier_ux(
+                    [{"questions": [item["question"] for item in dataset]}]
+                    if dataset
+                    else []
+                )
+            }
+        )
     else:
         raise ValueError(f"Неизвестный уровень бенчмарка: {tier}")
 
@@ -348,13 +402,14 @@ def save_results(
         "git_branch": run_metadata["git_branch"],
         "git_commit_hash": run_metadata["git_commit_hash"],
         "run_author": run_metadata["run_author"],
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "dataset_file": os.path.basename(dataset_name),
         "dataset_type": mode,
         "judge_model": os.getenv("BENCHMARKS_JUDGE_MODEL")
         or os.getenv("JUDGE_MODEL")
         or Config.JUDGE_MODEL,
         "generation_model": os.getenv("GENERATION_MODEL") or Config.MISTRAL_MODEL,
+        "embedding_model": Config.EMBEDDING_MODEL_PATH,
         "tier_0_metrics": normalized_results.get("tier_0"),
         "tier_1_metrics": normalized_results.get("tier_1"),
         "tier_2_metrics": normalized_results.get("tier_2"),
@@ -363,6 +418,8 @@ def save_results(
         "tier_judge_pipeline_metrics": normalized_results.get("tier_judge_pipeline"),
         "tier_ux_metrics": normalized_results.get("tier_ux"),
         "real_user_metrics": normalized_results.get("tier_real_users"),
+        "utilization_metrics": normalized_results.get("utilization_metrics"),
+        "topic_coverage_metrics": normalized_results.get("topic_coverage_metrics"),
         "overall_status": overall_status,
     }
 
@@ -496,6 +553,61 @@ def main():
         help="Брать последние real-user вопросы по created_at",
     )
 
+    parser.add_argument(
+        "--analyze-utilization",
+        action="store_true",
+        help="Запустить дополнительный анализ chunk utilization",
+    )
+
+    parser.add_argument(
+        "--utilization-questions-source",
+        type=str,
+        choices=["synthetic", "real"],
+        default="synthetic",
+        help="Источник вопросов для utilization анализа",
+    )
+
+    parser.add_argument(
+        "--utilization-question-limit",
+        type=int,
+        default=500,
+        help="Лимит вопросов для utilization анализа",
+    )
+
+    parser.add_argument(
+        "--utilization-top-k",
+        type=int,
+        default=10,
+        help="Top-k retrieval для utilization анализа",
+    )
+
+    parser.add_argument(
+        "--analyze-topics",
+        action="store_true",
+        help="Запустить дополнительный анализ topic coverage",
+    )
+
+    parser.add_argument(
+        "--topics-question-limit",
+        type=int,
+        default=2000,
+        help="Лимит вопросов для topic coverage анализа",
+    )
+
+    parser.add_argument(
+        "--topics-count",
+        type=int,
+        default=20,
+        help="Количество тематических кластеров",
+    )
+
+    parser.add_argument(
+        "--topics-top-k",
+        type=int,
+        default=5,
+        help="Top-k retrieval для topic coverage анализа",
+    )
+
     args = parser.parse_args()
 
     engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
@@ -555,6 +667,14 @@ def main():
         judge_pipeline_dataset_path=None
         if args.tier == "judge_pipeline"
         else args.dataset,
+        analyze_utilization=args.analyze_utilization,
+        analyze_topics=args.analyze_topics,
+        utilization_questions_source=args.utilization_questions_source,
+        utilization_question_limit=args.utilization_question_limit,
+        utilization_top_k=args.utilization_top_k,
+        topics_question_limit=args.topics_question_limit,
+        topics_count=args.topics_count,
+        topics_top_k=args.topics_top_k,
     )
 
     dataset_name = resolved_dataset

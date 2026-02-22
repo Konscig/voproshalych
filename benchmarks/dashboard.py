@@ -27,7 +27,19 @@ logger = logging.getLogger(__name__)
 APP_TITLE = "RAG Quality Assurance System"
 
 METRICS_BY_TIER = {
-    "tier_0": ["avg_intra_cluster_sim", "avg_inter_cluster_dist", "silhouette_score"],
+    "tier_0": [
+        "avg_nn_distance",
+        "std_nn_distance",
+        "density_score",
+        "avg_spread",
+        "max_spread",
+        "spread_std",
+        "effective_dimensionality",
+        "avg_pairwise_distance",
+        "std_pairwise_distance",
+        "min_pairwise_distance",
+        "max_pairwise_distance",
+    ],
     "tier_1": ["mrr", "hit_rate@1", "hit_rate@5", "hit_rate@10"],
     "tier_2": [
         "avg_faithfulness",
@@ -64,12 +76,26 @@ METRICS_BY_TIER = {
         "precision@5",
         "ndcg@5",
     ],
+    "utilization_metrics": [
+        "total_chunks",
+        "used_chunks",
+        "unused_chunks",
+        "utilization_rate",
+        "question_count",
+        "top_k",
+    ],
+    "topic_coverage_metrics": [
+        "n_topics",
+        "total_questions",
+        "avg_chunks_per_topic",
+        "top_k",
+    ],
 }
 
 QUALITY_BASELINES = {
-    "avg_intra_cluster_sim": 0.85,
-    "avg_inter_cluster_dist": 0.30,
-    "silhouette_score": 0.50,
+    "avg_nn_distance": 0.30,
+    "density_score": 3.00,
+    "avg_pairwise_distance": 0.45,
     "mrr": 0.8,
     "hit_rate@1": 0.7,
     "hit_rate@5": 0.9,
@@ -142,6 +168,7 @@ class RAGBenchmarkDashboard:
                     "dataset_type": record.get("dataset_type") or "synthetic",
                     "judge_model": record.get("judge_model") or "unknown",
                     "generation_model": record.get("generation_model") or "unknown",
+                    "embedding_model": record.get("embedding_model") or "unknown",
                     "overall_status": record.get("overall_status"),
                     "tier_0": record.get("tier_0_metrics") or {},
                     "tier_1": record.get("tier_1_metrics") or {},
@@ -152,6 +179,9 @@ class RAGBenchmarkDashboard:
                     or {},
                     "tier_ux": record.get("tier_ux_metrics") or {},
                     "tier_real_users": record.get("real_user_metrics") or {},
+                    "utilization_metrics": record.get("utilization_metrics") or {},
+                    "topic_coverage_metrics": record.get("topic_coverage_metrics")
+                    or {},
                 }
             )
 
@@ -262,6 +292,15 @@ class RAGBenchmarkDashboard:
             with gr.Tab("Run Dataset"):
                 self._create_run_dataset_tab()
 
+            with gr.Tab("Vector Space"):
+                self._create_vector_space_tab()
+
+            with gr.Tab("Chunk Utilization"):
+                self._create_chunk_utilization_tab()
+
+            with gr.Tab("Topic Coverage"):
+                self._create_topic_coverage_tab()
+
             with gr.Tab("Справка"):
                 self._create_reference_tab()
 
@@ -304,122 +343,45 @@ class RAGBenchmarkDashboard:
                     f"- **Dataset type:** `{run.get('dataset_type', 'synthetic')}`",
                     f"- **Judge model:** `{run.get('judge_model', 'N/A')}`",
                     f"- **Generation model:** `{run.get('generation_model', 'N/A')}`",
+                    f"- **Embedding model:** `{run.get('embedding_model', 'N/A')}`",
                     f"- **Overall status:** `{run['overall_status']}`",
                 ]
             )
 
             rows = []
 
-            tier_0 = run.get("tier_0", {})
-            for m in [
-                "avg_intra_cluster_sim",
-                "avg_inter_cluster_dist",
-                "silhouette_score",
-            ]:
-                rows.append(
-                    [
-                        "Tier 0 (Embedding)",
-                        m.replace("_", " ").title(),
-                        round(_safe_float(tier_0.get(m)), 4),
-                    ]
-                )
+            tier_labels = {
+                "tier_0": "Tier 0 (Embedding)",
+                "tier_1": "Tier 1 (Retrieval)",
+                "tier_2": "Tier 2 (Generation)",
+                "tier_3": "Tier 3 (End-to-End)",
+                "tier_judge": "Tier Judge (Qwen)",
+                "tier_judge_pipeline": "Tier Judge Pipeline (Mistral)",
+                "tier_ux": "Tier UX",
+                "tier_real_users": "Real Users (Retrieval)",
+                "utilization_metrics": "Chunk Utilization",
+                "topic_coverage_metrics": "Topic Coverage",
+            }
 
-            tier_1 = run.get("tier_1", {})
-            for m in ["mrr", "hit_rate@1", "hit_rate@5", "hit_rate@10"]:
-                rows.append(
-                    [
-                        "Tier 1 (Retrieval)",
-                        m.replace("_", " ").title(),
-                        round(_safe_float(tier_1.get(m)), 4),
-                    ]
-                )
-
-            tier_2 = run.get("tier_2", {})
-            for m in [
-                "avg_faithfulness",
-                "avg_answer_relevance",
-                "avg_rouge1_f",
-                "avg_rougeL_f",
-                "avg_bleu",
-            ]:
-                rows.append(
-                    [
-                        "Tier 2 (Generation)",
-                        m.replace("_", " ").title(),
-                        round(_safe_float(tier_2.get(m)), 4),
-                    ]
-                )
-
-            tier_3 = run.get("tier_3", {})
-            for m in [
-                "avg_e2e_score",
-                "avg_semantic_similarity",
-                "avg_rouge1_f",
-                "avg_bleu",
-            ]:
-                rows.append(
-                    [
-                        "Tier 3 (End-to-End)",
-                        m.replace("_", " ").title(),
-                        round(_safe_float(tier_3.get(m)), 4),
-                    ]
-                )
-
-            tier_judge = run.get("tier_judge", {})
-            for m in [
-                "consistency_score",
-                "error_rate",
-                "avg_latency_ms",
-                "avg_faithfulness",
-            ]:
-                rows.append(
-                    [
-                        "Tier Judge (Qwen)",
-                        m.replace("_", " ").title(),
-                        round(_safe_float(tier_judge.get(m)), 4),
-                    ]
-                )
-
-            tier_judge_pipeline = run.get("tier_judge_pipeline", {})
-            for m in ["accuracy", "precision", "recall", "f1_score", "avg_latency_ms"]:
-                rows.append(
-                    [
-                        "Tier Judge Pipeline (Mistral)",
-                        m.replace("_", " ").title(),
-                        round(_safe_float(tier_judge_pipeline.get(m)), 4),
-                    ]
-                )
-
-            tier_ux = run.get("tier_ux", {})
-            for m in [
-                "cache_hit_rate",
-                "context_preservation",
-                "multi_turn_consistency",
-            ]:
-                rows.append(
-                    [
-                        "Tier UX",
-                        m.replace("_", " ").title(),
-                        round(_safe_float(tier_ux.get(m)), 4),
-                    ]
-                )
-
-            tier_real = run.get("tier_real_users", {})
-            for m in [
-                "mrr",
-                "recall@1",
-                "recall@5",
-                "precision@1",
-                "precision@5",
-                "ndcg@5",
-            ]:
-                rows.append(
-                    [
-                        "Real Users (Retrieval)",
-                        m.replace("_", " ").title(),
-                        round(_safe_float(tier_real.get(m)), 4),
-                    ]
-                )
+            for tier_key, tier_label in tier_labels.items():
+                tier_metrics = run.get(tier_key, {})
+                if not isinstance(tier_metrics, dict) or not tier_metrics:
+                    continue
+                for metric_name, metric_value in sorted(tier_metrics.items()):
+                    if isinstance(metric_value, (float, int)):
+                        rendered_value = round(float(metric_value), 4)
+                    else:
+                        rendered_value = json.dumps(
+                            metric_value,
+                            ensure_ascii=False,
+                        )
+                    rows.append(
+                        [
+                            tier_label,
+                            metric_name,
+                            rendered_value,
+                        ]
+                    )
 
             return info, rows
 
@@ -441,7 +403,6 @@ class RAGBenchmarkDashboard:
         def update_run(selected: str):
             info, rows = get_run_metrics(selected)
             return info, rows
-            return info, rows
 
         run_selector.change(
             fn=update_run,
@@ -457,16 +418,13 @@ class RAGBenchmarkDashboard:
             if not run:
                 return "Запуск не найден"
 
+            run_id = run.get("id")
             dataset_file = run.get("dataset_file", "")
-            if not dataset_file:
-                return "Имя файла датасета не найдено в запуске"
-
-            base_name = dataset_file.replace(".json", "")
+            base_name = dataset_file.replace(".json", "") if dataset_file else ""
             possible_paths = [
+                os.path.join("benchmarks/reports", f"rag_benchmark_{run_id}.md"),
                 os.path.join("benchmarks/reports", f"{base_name}.md"),
-                os.path.join(
-                    "benchmarks/reports", f"rag_benchmark_{base_name.split('_')[-1]}.md"
-                ),
+                os.path.join("benchmarks/reports", f"dataset_{run_id}.md"),
             ]
 
             for path in possible_paths:
@@ -592,6 +550,8 @@ class RAGBenchmarkDashboard:
             "tier_judge_pipeline": "Tier Judge Pipeline",
             "tier_ux": "Tier UX",
             "tier_real_users": "Real Users",
+            "utilization_metrics": "Chunk Utilization",
+            "topic_coverage_metrics": "Topic Coverage",
         }
 
         metric_dropdown = gr.Dropdown(
@@ -634,6 +594,8 @@ class RAGBenchmarkDashboard:
                 "tier_judge_pipeline": "Tier Judge Pipeline",
                 "tier_ux": "Tier UX",
                 "tier_real_users": "Real Users",
+                "utilization_metrics": "Chunk Utilization",
+                "topic_coverage_metrics": "Topic Coverage",
             }
 
             longest_dates: List[str] = []
@@ -774,14 +736,14 @@ class RAGBenchmarkDashboard:
 
         def load_dataset_preview(selected: str) -> tuple:
             if not selected:
-                return "", []
+                return "", pd.DataFrame()
 
             run = next(
                 (item for item in ordered_runs if format_run_choice(item) == selected),
                 None,
             )
             if run is None:
-                return "Не найден выбранный запуск", []
+                return "Не найден выбранный запуск", pd.DataFrame()
 
             if run.get("dataset_type") == "real-users":
                 real_metrics = run.get("tier_real_users", {})
@@ -794,7 +756,7 @@ class RAGBenchmarkDashboard:
                         f"**NDCG@5:** `{_safe_float(real_metrics.get('ndcg@5')):.4f}`",
                     ]
                 )
-                return info, []
+                return info, pd.DataFrame()
 
             dataset_file = run.get("dataset_file") or ""
             benchmark_dir = Path(__file__).resolve().parent
@@ -813,7 +775,7 @@ class RAGBenchmarkDashboard:
             if not dataset_path.exists():
                 return (
                     f"**Dataset:** `{dataset_file}`\n\nФайл не найден по пути `{dataset_path}`",
-                    [],
+                    pd.DataFrame(),
                 )
 
             try:
@@ -822,43 +784,44 @@ class RAGBenchmarkDashboard:
                 with open(dataset_path, "r", encoding="utf-8") as f:
                     dataset = json.load(f)
 
-                preview = []
+                all_keys = set()
+                for item in dataset:
+                    if isinstance(item, dict):
+                        all_keys.update(item.keys())
+
+                ordered_keys = sorted(all_keys)
+
+                preview_rows = []
                 for row in dataset[:30]:
-                    preview.append(
-                        [
-                            row.get("chunk_id"),
-                            row.get("question", ""),
-                            row.get("ground_truth_answer", ""),
-                            row.get("confluence_url", ""),
-                            ", ".join(
-                                map(str, row.get("relevant_chunk_ids", []) or [])
-                            ),
-                            ", ".join(row.get("relevant_urls", []) or []),
-                        ]
-                    )
+                    if not isinstance(row, dict):
+                        continue
+                    rendered_row = {}
+                    for key in ordered_keys:
+                        value = row.get(key)
+                        if isinstance(value, (dict, list)):
+                            rendered_row[key] = json.dumps(value, ensure_ascii=False)
+                        else:
+                            rendered_row[key] = value
+                    preview_rows.append(rendered_row)
+
+                preview = pd.DataFrame(preview_rows)
+                sample_records = json.dumps(dataset[:3], ensure_ascii=False, indent=2)
 
                 meta = (
                     f"**Dataset:** `{dataset_file}`\n"
                     f"\n**Mode:** `{run.get('dataset_type', 'synthetic')}`\n"
                     f"\n**Rows:** {len(dataset)}\n"
-                    f"\n**Linked run:** `{run['timestamp_readable']}`"
+                    f"\n**Linked run:** `{run['timestamp_readable']}`\n"
+                    f"\n**Поля ({len(ordered_keys)}):** `{', '.join(ordered_keys)}`\n"
+                    "\n**Первые 3 записи (JSON):**\n"
+                    f"```json\n{sample_records}\n```"
                 )
-
-                if dataset and isinstance(dataset[0], dict):
-                    if (
-                        "relevant_chunk_ids" in dataset[0]
-                        or "relevant_urls" in dataset[0]
-                    ):
-                        meta += (
-                            "\n\n`Manual dataset detected`: доступны поля "
-                            "`relevant_chunk_ids`, `relevant_urls`, `notes`."
-                        )
 
                 return meta, preview
             except Exception as error:
                 return (
                     f"**Dataset:** `{dataset_file}`\n\nОшибка чтения файла: `{error}`",
-                    [],
+                    pd.DataFrame(),
                 )
 
         mode_filter = gr.Dropdown(
@@ -879,14 +842,6 @@ class RAGBenchmarkDashboard:
         dataset_meta = gr.Markdown(value=initial_meta)
         dataset_preview = gr.Dataframe(
             value=initial_preview,
-            headers=[
-                "chunk_id",
-                "question",
-                "ground_truth_answer",
-                "confluence_url",
-                "relevant_chunk_ids",
-                "relevant_urls",
-            ],
             interactive=False,
             wrap=True,
         )
@@ -897,7 +852,7 @@ class RAGBenchmarkDashboard:
                 return (
                     gr.Dropdown(choices=[], value=None),
                     "",
-                    [[]],
+                    pd.DataFrame(),
                 )
             meta, preview = load_dataset_preview(options[0])
             return (
@@ -922,6 +877,212 @@ class RAGBenchmarkDashboard:
             outputs=[dataset_meta, dataset_preview],
         )
 
+    def _create_vector_space_tab(self):
+        gr.Markdown("### Визуализация векторного пространства чанков")
+
+        with gr.Row():
+            limit_slider = gr.Slider(
+                minimum=100,
+                maximum=10000,
+                value=3000,
+                step=100,
+                label="Количество чанков",
+            )
+            dim_radio = gr.Radio(["2D", "3D"], value="2D", label="Размерность")
+            color_by = gr.Dropdown(
+                choices=["section", "cluster", "chunk_id"],
+                value="section",
+                label="Раскраска",
+            )
+
+        output_html = gr.HTML(label="Векторное пространство")
+        visualize_btn = gr.Button("Визуализировать")
+
+        def run_visualization(limit: int, dimension: str, color: str):
+            try:
+                from benchmarks.visualize_vector_space import (
+                    _load_chunk_embeddings,
+                    visualize_embeddings,
+                )
+
+                dim = 3 if dimension == "3D" else 2
+                output_path = (
+                    self.reports_dir
+                    / f"vector_space_dashboard_{dim}d_{int(limit)}_{color}.html"
+                )
+                embeddings, metadata = _load_chunk_embeddings(int(limit))
+                html_path = visualize_embeddings(
+                    embeddings=embeddings,
+                    metadata=metadata,
+                    output_path=str(output_path),
+                    dim=dim,
+                    color_by=color,
+                )
+                with open(html_path, "r", encoding="utf-8") as file:
+                    return file.read()
+            except Exception as error:
+                return (
+                    "<div style='padding:12px;border:1px solid #ddd;'>"
+                    f"Ошибка визуализации: {error}</div>"
+                )
+
+        visualize_btn.click(
+            fn=run_visualization,
+            inputs=[limit_slider, dim_radio, color_by],
+            outputs=[output_html],
+        )
+
+    def _create_chunk_utilization_tab(self):
+        gr.Markdown("### Анализ использования чанков")
+        if not self.runs:
+            gr.Markdown("Нет запусков для анализа utilization.")
+            return
+
+        ordered_runs = list(reversed(self.runs))
+
+        def format_run_choice(run: Dict) -> str:
+            return (
+                f"{run['timestamp_readable']} | {run['dataset_type']} | "
+                f"{run['git_commit_hash'][:7]}"
+            )
+
+        run_choices = [format_run_choice(run) for run in ordered_runs]
+        run_selector = gr.Dropdown(
+            choices=run_choices,
+            value=run_choices[0],
+            label="Выберите запуск",
+        )
+
+        def build_utilization_view(selected: str):
+            import plotly.express as px
+            import plotly.graph_objects as go
+
+            run = next(
+                (item for item in ordered_runs if format_run_choice(item) == selected),
+                None,
+            )
+            if run is None:
+                return "Запуск не найден", go.Figure(), go.Figure()
+
+            metrics = run.get("utilization_metrics") or {}
+            if not metrics:
+                return "В запуске нет utilization_metrics", go.Figure(), go.Figure()
+
+            used = int(metrics.get("used_chunks", 0))
+            total = int(metrics.get("total_chunks", 0))
+            unused = int(metrics.get("unused_chunks", max(total - used, 0)))
+            rate = _safe_float(metrics.get("utilization_rate"))
+
+            pie = px.pie(
+                names=["used", "unused"],
+                values=[used, unused],
+                title="Utilization",
+            )
+
+            used_ids = metrics.get("used_chunk_ids") or []
+            top_ids = used_ids[:20]
+            top = px.bar(
+                x=list(range(len(top_ids))),
+                y=top_ids,
+                labels={"x": "Позиция", "y": "chunk_id"},
+                title="Первые 20 использованных chunk_id",
+            )
+
+            text = (
+                f"**Utilization rate:** `{rate:.4f}`\n"
+                f"\n**Used chunks:** `{used}` из `{total}`"
+            )
+            return text, pie, top
+
+        initial_text, initial_pie, initial_top = build_utilization_view(run_choices[0])
+        summary = gr.Markdown(value=initial_text)
+        pie_plot = gr.Plot(
+            value=initial_pie,
+            label="Использованные vs неиспользованные",
+        )
+        top_plot = gr.Plot(
+            value=initial_top,
+            label="Топ использованных chunk_id",
+        )
+
+        run_selector.change(
+            fn=build_utilization_view,
+            inputs=[run_selector],
+            outputs=[summary, pie_plot, top_plot],
+        )
+
+    def _create_topic_coverage_tab(self):
+        gr.Markdown("### Анализ покрытия тем")
+        if not self.runs:
+            gr.Markdown("Нет запусков для анализа topic coverage.")
+            return
+
+        ordered_runs = list(reversed(self.runs))
+
+        def format_run_choice(run: Dict) -> str:
+            return (
+                f"{run['timestamp_readable']} | {run['dataset_type']} | "
+                f"{run['git_commit_hash'][:7]}"
+            )
+
+        run_choices = [format_run_choice(run) for run in ordered_runs]
+        run_selector = gr.Dropdown(
+            choices=run_choices,
+            value=run_choices[0],
+            label="Выберите запуск",
+        )
+
+        def build_topic_view(selected: str):
+            import plotly.express as px
+            import plotly.graph_objects as go
+
+            run = next(
+                (item for item in ordered_runs if format_run_choice(item) == selected),
+                None,
+            )
+            if run is None:
+                return "Запуск не найден", go.Figure(), pd.DataFrame()
+
+            metrics = run.get("topic_coverage_metrics") or {}
+            topics = metrics.get("topic_coverage") or []
+            if not metrics or not topics:
+                return (
+                    "В запуске нет topic_coverage_metrics",
+                    go.Figure(),
+                    pd.DataFrame(),
+                )
+
+            table = pd.DataFrame(topics)
+            plot = px.bar(
+                table,
+                x="topic_id",
+                y="unique_chunks",
+                hover_data=["question_count", "unique_urls"],
+                title="Уникальные чанки по темам",
+            )
+            text = (
+                f"**Тем:** `{metrics.get('n_topics', 0)}`\n"
+                f"\n**Вопросов:** `{metrics.get('total_questions', 0)}`\n"
+                f"\n**Среднее число чанков на тему:** "
+                f"`{_safe_float(metrics.get('avg_chunks_per_topic')):.2f}`"
+            )
+            return text, plot, table
+
+        initial_text, initial_plot, initial_table = build_topic_view(run_choices[0])
+        summary = gr.Markdown(value=initial_text)
+        coverage_plot = gr.Plot(value=initial_plot, label="Покрытие по темам")
+        coverage_table = gr.Dataframe(
+            value=initial_table,
+            interactive=False,
+            wrap=True,
+        )
+
+        run_selector.change(
+            fn=build_topic_view,
+            inputs=[run_selector],
+            outputs=[summary, coverage_plot, coverage_table],
+        )
+
     def _create_reference_tab(self):
         gr.Markdown(
             """
@@ -940,9 +1101,9 @@ class RAGBenchmarkDashboard:
 
 Оценивает внутреннее качество эмбеддингов без использования LLM.
 
-- **avg_intra_cluster_sim**: средняя косинусная близость внутри кластера. Чем выше, тем лучше embeddings группируются по смыслу.
-- **avg_inter_cluster_dist**: среднее расстояние между кластерами. Чем выше, тем лучше разделены тематические группы.
-- **silhouette_score**: силуэт-коэффициент от -1 до 1. Значения ближе к 1 указывают на хорошую кластеризацию.
+- **avg_nn_distance**: среднее расстояние до ближайших соседей. Чем ниже, тем плотнее локальная структура.
+- **density_score**: обратная величина к avg_nn_distance. Чем выше, тем плотнее пространство.
+- **effective_dimensionality**: число компонент для 95% дисперсии.
 
 ### Tier 1: Retrieval
 
@@ -1024,8 +1185,8 @@ class RAGBenchmarkDashboard:
 
 | Tier | Метрика | Порог |
 |------|---------|-------|
-| Tier 0 | avg_intra_cluster_sim | >= 0.85 |
-| Tier 0 | silhouette_score | >= 0.50 |
+| Tier 0 | density_score | >= 3.00 |
+| Tier 0 | avg_nn_distance | <= 0.30 |
 | Tier 1 | MRR | >= 0.80 |
 | Tier 1 | HitRate@5 | >= 0.90 |
 | Tier 1 | HitRate@10 | >= 0.95 |

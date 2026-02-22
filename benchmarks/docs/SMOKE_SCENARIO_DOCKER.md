@@ -204,7 +204,26 @@ make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
 
 Дашборд доступен по адресу: `http://localhost:7860`
 
-## 8) Остановка
+## 8) Дополнительная аналитика
+
+```bash
+cd Submodules/voproshalych
+
+# Визуализация векторного пространства
+docker compose -f docker-compose.benchmarks.yml exec benchmarks \
+  uv run python benchmarks/visualize_vector_space.py --limit 5000
+
+# Анализ использования чанков
+docker compose -f docker-compose.benchmarks.yml exec benchmarks \
+  uv run python benchmarks/analyze_chunk_utilization.py \
+  --questions-source real --question-limit 500
+
+# Анализ покрытия тем
+docker compose -f docker-compose.benchmarks.yml exec benchmarks \
+  uv run python benchmarks/analyze_topic_coverage.py --n-topics 20
+```
+
+## 9) Остановка
 
 ```bash
 cd Submodules/voproshalych

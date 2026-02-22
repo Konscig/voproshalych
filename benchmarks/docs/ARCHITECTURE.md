@@ -567,6 +567,5 @@ effective_dimensionality, avg_pairwise_distance и др.
 ## Связанные документы
 
 - [METRICS.md](METRICS.md) — Полное научное описание всех метрик с формулами и обоснованием
-- [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md) — Локальный запуск
-- [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md) — Docker запуск
+- [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md) — Полный цикл проверки
 - [CLI_REFERENCE.md](CLI_REFERENCE.md) — Справочник по CLI командам

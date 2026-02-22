@@ -1,62 +1,82 @@
 # Smoke-сценарий для benchmarks (Локальный режим)
 
-Полный цикл проверки: synthetic, manual и real-users режимы без Docker.
+Полный цикл проверки: от подготовки БД до проверки дашборда.
 
 ## Предварительные требования
 
 - Python 3.12+
-- Установленный UV: `curl -LsSf https://astral.sh/uv | sh`
-- PostgreSQL доступен локально или по сети
-- Переменные окружения в `.env` или `.env.docker`
+- UV установлен (`curl -LsSf https://astral.sh/uv | sh`)
+- PostgreSQL доступен локально или в Docker
+- `.env.docker` заполнен рабочими значениями
 
-## 0) Поднять БД в Docker
-
-Для локального режима нужна база данных и миграции:
+## 0) Переход в проект
 
 ```bash
 cd Submodules/voproshalych
+```
+
+## 1) Поднять БД и миграции
+
+```bash
 docker compose -f docker-compose.benchmarks.yml up -d db db-migrate
 ```
 
-## 0) Установка зависимостей
+Или через Makefile:
+
+```bash
+cd Submodules/voproshalych/benchmarks
+make up
+```
+
+## 2) Установка зависимостей
 
 ```bash
 cd Submodules/voproshalych
 uv sync
 ```
 
-## 1) Подготовка окружения
-
-Создайте `.env.docker` файл:
+Или через Makefile:
 
 ```bash
-cd Submodules/voproshalych
-cp .env.docker.example .env.docker
+cd Submodules/voproshalych/benchmarks
+make install-local
 ```
 
-Обязательные переменные:
-- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
-- `MISTRAL_API`, `MISTRAL_MODEL`
-- `BENCHMARKS_JUDGE_API_KEY` (или `JUDGE_API`)
-- `EMBEDDING_MODEL_PATH` (или используется HF)
+## 3) Подготовка БД
 
-## 2) Подготовка БД
+### Тестовый режим
 
 ```bash
 cd Submodules/voproshalych
 uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-
-# Удалить таблицы без загрузки дампа
-uv run python benchmarks/load_database_dump.py --drop-tables-only
 ```
 
 Или через Makefile:
+
 ```bash
 cd Submodules/voproshalych/benchmarks
 make load-dump-local
 ```
 
-## 3) Генерация эмбеддингов
+### Полный режим
+
+```bash
+cd Submodules/voproshalych
+uv run python benchmarks/load_database_dump.py --drop-tables-only
+uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+```
+
+Или через Makefile:
+
+```bash
+cd Submodules/voproshalych/benchmarks
+make drop-tables-local
+make load-dump-local
+```
+
+## 4) Генерация эмбеддингов
+
+### Тестовый режим
 
 ```bash
 cd Submodules/voproshalych
@@ -64,191 +84,151 @@ uv run python benchmarks/generate_embeddings.py --chunks
 ```
 
 Или через Makefile:
+
 ```bash
 cd Submodules/voproshalych/benchmarks
 make generate-embeddings-local
 ```
 
-## 4) Synthetic dataset + benchmark
+### Полный режим
 
-### Генерация датасета
+```bash
+cd Submodules/voproshalych
+uv run python benchmarks/generate_embeddings.py --chunks
+uv run python benchmarks/generate_embeddings.py --check-coverage
+```
+
+## 5) Генерация датасетов
+
+### Тестовый режим (не более 10 вопросов)
 
 ```bash
 cd Submodules/voproshalych
 
-# Synthetic — вопросы из чанков через LLM
-# Тестовый режим (5 вопросов)
-uv run python benchmarks/generate_dataset.py \
-  --mode synthetic --max-questions 5
+# Synthetic
+uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 10
 
-# Полный режим (все чанки)
-uv run python benchmarks/generate_dataset.py \
-  --mode synthetic --max-questions 10000
+# Real questions
+uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 10
 
-# Из реальных вопросов
-# Тестовый режим (5 вопросов)
-uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions --max-questions 5
-
-# Полный режим (все вопросы)
-uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions --max-questions 10000
-
-# Только вопросы с оценкой 5
-# Тестовый режим (5 вопросов)
-uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions-score-5 --max-questions 5
-
-# Полный режим (все вопросы с оценкой 5)
-uv run python benchmarks/generate_dataset.py \
-  --mode from-real-questions-score-5 --max-questions 10000
+# Score=5
+uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 10
 
 # Экспорт для ручной аннотации
-uv run python benchmarks/generate_dataset.py \
-  --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
+uv run python benchmarks/generate_dataset.py --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
 ```
 
-Или через Makefile:
-```bash
-cd Submodules/voproshalych/benchmarks
-make generate-dataset-local
-```
-
-### Запуск benchmark
+### Полный режим
 
 ```bash
 cd Submodules/voproshalych
 
-# Synthetic — тестовый режим (5 вопросов)
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --tier all --mode synthetic --limit 5
-
-# Synthetic — полный режим (все вопросы)
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --tier all --mode synthetic
-
-# Manual — на аннотированном датасете (тестовый)
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --tier all --mode manual \
-  --manual-dataset benchmarks/data/annotation_20260222_101238.json \
-  --limit 5
-
-# Manual — полный режим
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --tier all --mode manual \
-  --manual-dataset benchmarks/data/dataset_for_annotation.json
-
-# Real users — тестовый режим
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --mode real-users --real-score 5 --real-limit 10 --top-k 10
-
-# Real users — полный режим
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --mode real-users --real-score 5 --real-limit 10000 --top-k 10
+uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 10000
+uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 10000
+uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 10000
 ```
 
-Или через Makefile:
-```bash
-cd Submodules/voproshalych/benchmarks
-make run-benchmarks-local
-```
+## 6) Запуск бенчмарков
 
-## 5) Manual dataset + benchmark
+### Тестовый режим (10 вопросов)
 
 ```bash
 cd Submodules/voproshalych
 
-# Экспорт для аннотации
-uv run python benchmarks/generate_dataset.py \
-  --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
+# Synthetic + новые анализы
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode synthetic --limit 10 \
+  --analyze-utilization \
+  --utilization-questions-source real \
+  --utilization-question-limit 10 \
+  --utilization-top-k 10 \
+  --analyze-topics \
+  --topics-question-limit 10 \
+  --topics-count 5 \
+  --topics-top-k 5
 
-# Запуск на аннотированном датасете (тестовый)
+# Manual
 uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode manual \
   --manual-dataset benchmarks/data/dataset_for_annotation.json \
-  --limit 5
+  --limit 10
+
+# Real users
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --mode real-users --real-score 5 --real-limit 10 --top-k 10 \
+  --analyze-utilization --utilization-questions-source real \
+  --utilization-question-limit 10 --analyze-topics \
+  --topics-question-limit 10 --topics-count 5
 ```
 
-Или через Makefile:
-```bash
-cd Submodules/voproshalych/benchmarks
-make generate-dataset-local
-make run-benchmarks-local
-```
-
-## 6) Real users benchmark
+### Полный режим
 
 ```bash
 cd Submodules/voproshalych
 
-# Тестовый режим
 uv run python benchmarks/run_comprehensive_benchmark.py \
-  --mode real-users --real-score 5 --real-limit 10 --top-k 10
+  --tier all --mode synthetic \
+  --analyze-utilization --utilization-questions-source real \
+  --utilization-question-limit 500 --utilization-top-k 10 \
+  --analyze-topics --topics-question-limit 2000 --topics-count 20 --topics-top-k 5
 
-# Полный режим
 uv run python benchmarks/run_comprehensive_benchmark.py \
-  --mode real-users --real-score 5 --real-limit 10000 --top-k 10
+  --mode real-users --real-score 5 --real-limit 10000 --top-k 10 \
+  --analyze-utilization --utilization-questions-source real \
+  --utilization-question-limit 500 --analyze-topics \
+  --topics-question-limit 2000 --topics-count 20
 ```
 
-Или через Makefile:
+## 7) Дополнительная аналитика
+
+### Тестовый режим
+
 ```bash
-cd Submodules/voproshalych/benchmarks
-make run-benchmarks-local
+cd Submodules/voproshalych
+
+# Визуализация UMAP (2D)
+uv run python benchmarks/visualize_vector_space.py --limit 500 --output benchmarks/reports/vector_space_test.html
+
+# Визуализация UMAP (3D)
+uv run python benchmarks/visualize_vector_space.py --limit 300 --3d --output benchmarks/reports/vector_space_test_3d.html
+
+# Анализ использования чанков
+uv run python benchmarks/analyze_chunk_utilization.py --questions-source real --question-limit 10 --top-k 10 --output benchmarks/reports/utilization_test.json
+
+# Анализ покрытия тем
+uv run python benchmarks/analyze_topic_coverage.py --question-limit 10 --n-topics 5 --top-k 5 --output benchmarks/reports/topic_coverage_test.json
 ```
 
-## 7) Дашборд
+### Полный режим
+
+```bash
+cd Submodules/voproshalych
+
+# Визуализация UMAP (2D)
+uv run python benchmarks/visualize_vector_space.py --limit 5000 --output benchmarks/reports/vector_space.html
+
+# Визуализация UMAP (3D)
+uv run python benchmarks/visualize_vector_space.py --limit 3000 --3d --output benchmarks/reports/vector_space_3d.html
+
+# Анализ использования чанков
+uv run python benchmarks/analyze_chunk_utilization.py --questions-source real --question-limit 500 --top-k 10 --output benchmarks/reports/utilization.json
+
+# Анализ покрытия тем
+uv run python benchmarks/analyze_topic_coverage.py --question-limit 2000 --n-topics 20 --top-k 5 --output benchmarks/reports/topic_coverage.json
+```
+
+## 8) Дашборд
 
 ```bash
 cd Submodules/voproshalych
 uv run python benchmarks/run_dashboard.py
 ```
 
-Или через Makefile:
-```bash
-cd Submodules/voproshalych/benchmarks
-make run-dashboard-local
-```
+Открой: `http://localhost:7860`
 
-Дашборд доступен по адресу: `http://localhost:7860`
-
-## 8) Дополнительная аналитика
-
-```bash
-cd Submodules/voproshalych
-
-# Визуализация векторного пространства (2D)
-uv run python benchmarks/visualize_vector_space.py --limit 5000
-
-# Визуализация (3D)
-uv run python benchmarks/visualize_vector_space.py --limit 3000 --3d \
-  --output benchmarks/reports/vector_space_3d.html
-
-# Анализ использования чанков
-uv run python benchmarks/analyze_chunk_utilization.py \
-  --questions-source real --question-limit 500
-
-# Анализ покрытия тем
-uv run python benchmarks/analyze_topic_coverage.py --n-topics 20
-```
-
-## Остановка
+## 9) Остановка и очистка
 
 ```bash
 cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml down
-```
-
-## Очистка
-
-```bash
-cd Submodules/voproshalych
-
-# Очистить отчёты
-rm -rf benchmarks/reports/*.json benchmarks/reports/*.md
-
-# Очистить историю запусков
-rm -f benchmarks/reports/benchmark_runs.json
-
-# Очистить датасеты
-rm -rf benchmarks/data/dataset_*.json
 ```

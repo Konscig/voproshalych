@@ -36,38 +36,8 @@ services:
         networks:
             - chatbot-conn
 
-    benchmarks:
-        build: ./benchmarks
-        image: virtassist/benchmarks:latest
-        container_name: virtassist-benchmarks
-        restart: unless-stopped
-        working_dir: /usr/src/app
-        env_file:
-            - .env.docker
-        environment:
-            - BENCHMARK_GIT_BRANCH=${BENCHMARK_GIT_BRANCH:-main}
-            - BENCHMARK_GIT_COMMIT_HASH=${BENCHMARK_GIT_COMMIT_HASH:-unknown}
-            - BENCHMARK_RUN_AUTHOR=${BENCHMARK_RUN_AUTHOR:-unknown}
-            - UV_CACHE_DIR=/root/.cache/uv
-        volumes:
-            - ./:/usr/src/app
-            - model-cache:/root/.cache/huggingface
-            - virtassist-uv-cache:/root/.cache/uv
-            - ./benchmarks/data:/usr/src/app/benchmarks/data
-            - ./benchmarks/reports:/usr/src/app/benchmarks/reports
-            - /var/run/docker.sock:/var/run/docker.sock
-        depends_on:
-            db:
-                condition: service_healthy
-            db-migrate:
-                condition: service_completed_successfully
-        networks:
-            - chatbot-conn
-
 volumes:
     db-data:
-    model-cache:
-    virtassist-uv-cache:
 
 networks:
     chatbot-conn:

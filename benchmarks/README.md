@@ -28,20 +28,18 @@ Enterprise-grade система бенчмарков для оценки Retriev
 |----------|----------|
 | [CLI_REFERENCE.md](docs/CLI_REFERENCE.md) | Справочник по CLI командам |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура с Mermaid диаграммами |
-| [RUN_MODES_LOCAL_VS_DOCKER.md](docs/RUN_MODES_LOCAL_VS_DOCKER.md) | Сравнение режимов работы |
-| [SMOKE_SCENARIO_LOCAL.md](docs/SMOKE_SCENARIO_LOCAL.md) | Инструкции для локального режима |
-| [SMOKE_SCENARIO_DOCKER.md](docs/SMOKE_SCENARIO_DOCKER.md) | Инструкции для Docker режима |
+| [SMOKE_SCENARIO_LOCAL.md](docs/SMOKE_SCENARIO_LOCAL.md) | Полный цикл проверки |
 | [manual_annotation_guide.md](docs/manual_annotation_guide.md) | Руководство по ручной разметке |
+| [METRICS.md](docs/METRICS.md) | Научное описание всех метрик |
 
 ---
 
 ## Быстрый старт
 
-### Локальный режим
-
 ```bash
 cd Submodules/voproshalych/benchmarks
 
+make up
 make install-local
 make load-dump-local
 make generate-embeddings-local
@@ -50,18 +48,7 @@ make run-benchmarks-local
 make run-dashboard-local
 ```
 
-### Docker режим
-
-```bash
-cd Submodules/voproshalych/benchmarks
-
-make COMPOSE_FILE=../docker-compose.benchmarks.yml up
-make COMPOSE_FILE=../docker-compose.benchmarks.yml load-dump
-make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-embeddings
-make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-dataset
-make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
-make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
-```
+Открой дашборд: `http://localhost:7860`
 
 ---
 
@@ -69,9 +56,9 @@ make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
 
 ### Tier 0: Intrinsic Embedding Quality
 
-Оценка внутреннего качества эмбеддингов через кластерный анализ.
+Оценка внутреннего качества эмбеддингов через статистические метрики.
 
-**Метрики:** `avg_intra_cluster_sim`, `avg_inter_cluster_dist`, `silhouette_score`
+**Метрики:** `avg_nn_distance`, `density_score`, `avg_spread`, `effective_dimensionality`
 
 ### Tier 1: Retrieval Accuracy
 
@@ -83,7 +70,7 @@ make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard
 
 Оценка качества генерации ответов при идеальном контексте.
 
-**Метрики:** `avg_faithfulness`, `avg_answer_relevance` (LLM Judge 1-5), `avg_rouge1_f`, `avg_rougeL_f`, `avg_bleu`
+**Метрики:** `avg_faithfulness`, `avg_answer_relevance` (LLM Judge), `avg_rouge1_f`, `avg_rougeL_f`, `avg_bleu`
 
 ### Tier 3: End-to-End
 
@@ -126,9 +113,8 @@ benchmarks/
 ├── docs/
 │   ├── CLI_REFERENCE.md
 │   ├── ARCHITECTURE.md
-│   ├── RUN_MODES_LOCAL_VS_DOCKER.md
 │   ├── SMOKE_SCENARIO_LOCAL.md
-│   ├── SMOKE_SCENARIO_DOCKER.md
+│   ├── METRICS.md
 │   └── manual_annotation_guide.md
 ├── models/
 │   ├── rag_benchmark.py
@@ -136,7 +122,10 @@ benchmarks/
 │   └── retrieval_benchmark.py
 ├── reports/
 │   ├── rag_benchmark_*.json
-│   └── rag_benchmark_*.md
+│   ├── rag_benchmark_*.md
+│   ├── vector_space.html
+│   ├── utilization.json
+│   └── topic_coverage.json
 ├── utils/
 │   ├── llm_judge.py
 │   ├── evaluator.py
@@ -144,23 +133,21 @@ benchmarks/
 │   ├── embedding_generator.py
 │   ├── database_dump_loader.py
 │   └── report_generator.py
-├── tests/
-├── Makefile
-├── Dockerfile
+├── visualize_vector_space.py      # UMAP визуализация
+├── analyze_chunk_utilization.py # Анализ использования чанков
+├── analyze_topic_coverage.py    # Анализ покрытия тем
 ├── generate_embeddings.py
 ├── generate_dataset.py
 ├── load_database_dump.py
 ├── run_comprehensive_benchmark.py
 ├── run_dashboard.py
 ├── dashboard.py
-└── save_models.py
+└── Makefile
 ```
 
 ---
 
 ## Makefile команды
-
-Справка по доступным командам:
 
 ```bash
 cd Submodules/voproshalych/benchmarks

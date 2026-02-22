@@ -11,11 +11,11 @@
 
 ## 0) Поднять БД в Docker
 
-Для локального режима нужна только база данных в Docker:
+Для локального режима нужна база данных и миграции:
 
 ```bash
 cd Submodules/voproshalych
-docker compose -f docker-compose.benchmarks.yml up -d db
+docker compose -f docker-compose.benchmarks.yml up -d db db-migrate
 ```
 
 ## 0) Установка зависимостей

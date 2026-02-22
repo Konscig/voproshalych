@@ -119,6 +119,13 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
   --limit 5
 ```
 
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-dataset
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
+```
+
 ## 6) Real users benchmark
 
 ```bash
@@ -131,6 +138,12 @@ docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python be
 # Полный режим
 docker compose -f docker-compose.benchmarks.yml exec benchmarks uv run python benchmarks/run_comprehensive_benchmark.py \
   --mode real-users --real-score 5 --real-limit 10000 --top-k 10
+```
+
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks
 ```
 
 ## 7) Дашборд

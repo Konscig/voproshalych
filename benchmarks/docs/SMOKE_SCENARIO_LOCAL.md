@@ -116,6 +116,13 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
   --limit 5
 ```
 
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make generate-dataset-local
+make run-benchmarks-local
+```
+
 ## 6) Real users benchmark
 
 ```bash
@@ -128,6 +135,12 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
 # Полный режим
 uv run python benchmarks/run_comprehensive_benchmark.py \
   --mode real-users --real-score 5 --real-limit 10000 --top-k 10
+```
+
+Или через Makefile:
+```bash
+cd Submodules/voproshalych/benchmarks
+make run-benchmarks-local
 ```
 
 ## 7) Дашборд

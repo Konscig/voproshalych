@@ -315,7 +315,7 @@ sequenceDiagram
 |------|------------|
 | `qa/main.py` | Генерация ответов через Mistral API |
 | `qa/config.py` | Конфигурация, промпты, переменные окружения |
-| `qa/database.py` | Модели SQLAlchemy (Chunk, QuestionAnswer, BenchmarkRun) |
+| `qa/database.py` | Модели SQLAlchemy (Chunk, QuestionAnswer) |
 
 ### Benchmark-модуль (benchmarks/)
 

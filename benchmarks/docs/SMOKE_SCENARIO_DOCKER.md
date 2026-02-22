@@ -15,8 +15,6 @@ cd Submodules/voproshalych
 docker compose -f docker-compose.benchmarks.yml up -d --build
 ```
 
-**Запускаются:** db, db-migrate, benchmarks
-
 ## 1) Проверка .env.docker
 
 Убедитесь что `.env.docker` настроен:

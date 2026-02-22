@@ -36,97 +36,6 @@ services:
         networks:
             - chatbot-conn
 
-    # QA сервис с профилем "api" - нужен только для HTTP API тестов
-    qa:
-        build: ./qa
-        image: virtassist/qa:latest
-        container_name: virtassist-qa
-        restart: unless-stopped
-        command: sh -c "cron && python main.py"
-        env_file:
-            - .env.docker
-        volumes:
-            # Общий volume для кэша моделей HuggingFace
-            - model-cache:/root/.cache/huggingface
-        depends_on:
-            db:
-                condition: service_healthy
-        networks:
-            - chatbot-conn
-        profiles:
-            - api
-            - full
-
-    # Chatbot с профилем "bot" - нужен только для интеграционных тестов
-    chatbot:
-        build: ./chatbot
-        image: virtassist/chatbot:latest
-        container_name: virtassist-chatbot
-        restart: unless-stopped
-        command: python main.py
-        env_file:
-            - .env.docker
-        depends_on:
-            db:
-                condition: service_healthy
-            qa:
-                condition: service_started
-            db-migrate:
-                condition: service_completed_successfully
-        networks:
-            - chatbot-conn
-        profiles:
-            - bot
-            - full
-
-    # Admin Panel с профилем "api"
-    adminpanel:
-        build: ./adminpanel
-        image: virtassist/adminpanel:latest
-        container_name: virtassist-adminpanel
-        command: gunicorn --bind 0.0.0.0:80 --timeout 1200 wsgi:app
-        restart: unless-stopped
-        ports:
-            - 80:80
-        env_file:
-            - .env.docker
-        depends_on:
-            db:
-                condition: service_healthy
-            qa:
-                condition: service_started
-            chatbot:
-                condition: service_started
-            db-migrate:
-                condition: service_completed_successfully
-        networks:
-            - chatbot-conn
-        profiles:
-            - api
-            - full
-
-    # Max с профилем "full"
-    max:
-        build: ./max
-        image: virtassist/max:latest
-        container_name: virtassist-max
-        restart: unless-stopped
-        env_file:
-            - .env.docker
-        depends_on:
-            db:
-                condition: service_healthy
-            qa:
-                condition: service_started
-            db-migrate:
-                condition: service_completed_successfully
-        networks:
-            - chatbot-conn
-        profiles:
-            - full
-
-    # Benchmarks - базовый сервис для бенчмарков
-    # Импортирует код из qa/ напрямую, не требует запущенного qa контейнера
     benchmarks:
         build: ./benchmarks
         image: virtassist/benchmarks:latest
@@ -142,11 +51,8 @@ services:
             - UV_CACHE_DIR=/root/.cache/uv
         volumes:
             - ./:/usr/src/app
-            # Общий volume для кэша моделей HuggingFace (shared with qa)
             - model-cache:/root/.cache/huggingface
-            # UV cache
             - virtassist-uv-cache:/root/.cache/uv
-            # Bind mount для данных и отчётов (локально)
             - ./benchmarks/data:/usr/src/app/benchmarks/data
             - ./benchmarks/reports:/usr/src/app/benchmarks/reports
             - /var/run/docker.sock:/var/run/docker.sock
@@ -160,9 +66,7 @@ services:
 
 volumes:
     db-data:
-    # Общий volume для кэша моделей HuggingFace
     model-cache:
-    # UV cache
     virtassist-uv-cache:
 
 networks:

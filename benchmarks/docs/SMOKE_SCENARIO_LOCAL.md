@@ -9,6 +9,15 @@
 - PostgreSQL доступен локально или по сети
 - Переменные окружения в `.env` или `.env.docker`
 
+## 0) Поднять БД в Docker
+
+Для локального режима нужна только база данных в Docker:
+
+```bash
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml up -d db
+```
+
 ## 0) Установка зависимостей
 
 ```bash
@@ -157,6 +166,13 @@ make run-dashboard-local
 ```
 
 Дашборд доступен по адресу: `http://localhost:7860`
+
+## Остановка
+
+```bash
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml down
+```
 
 ## Очистка
 

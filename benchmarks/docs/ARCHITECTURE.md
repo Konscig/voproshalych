@@ -17,6 +17,7 @@ sequenceDiagram
     participant RealBenchmark as RealQueriesBenchmark
     participant QA as qa.main
     participant DB as PostgreSQL
+    participant FS as Файловая система
     participant Dashboard as Dashboard
 
     Note over User,Dashboard: Фаза 1: Генерация эмбеддингов
@@ -32,9 +33,10 @@ sequenceDiagram
     Generator-->>CLI: stats
     CLI-->>User: Статистика генерации
 
-    Note over User,Dashboard: Фаза 2: Генерация датасета (synthetic)
+    Note over User,Dashboard: Фаза 2: Генерация датасета
 
-    User->>CLI: generate_dataset.py --max-questions N
+    Note over User,Dashboard: Режим Synthetic
+    User->>CLI: generate_dataset.py --mode synthetic --max-questions N
     CLI->>DB: SELECT Chunk WHERE embedding IS NOT NULL
     DB-->>CLI: chunks with embeddings
     loop Для каждого чанка до N вопросов
@@ -42,12 +44,60 @@ sequenceDiagram
         Judge-->>CLI: question, ground_truth_answer
         CLI->>CLI: dataset.append(item)
     end
-    CLI->>CLI: Сохранить dataset_*.json
+    CLI->>FS: Сохранить dataset_synthetic_*.json
     CLI-->>User: Путь к датасету
 
-    Note over User,Dashboard: Фаза 3: Запуск бенчмарков (Tier 1)
+    Note over User,Dashboard: Режим Real Questions
+    User->>CLI: generate_dataset.py --mode from-real-questions --max-questions N
+    CLI->>DB: SELECT QuestionAnswer WHERE embedding IS NOT NULL
+    DB-->>CLI: real questions
+    loop Для каждого вопроса
+        CLI->>CLI: encoder.encode(question)
+        CLI->>DB: SELECT Chunk ORDER BY cosine_distance LIMIT 5
+        DB-->>CLI: top-5 chunks
+        CLI->>CLI: is_relevant_chunk_matched = match(pageId)
+        CLI->>CLI: dataset.append(item)
+    end
+    CLI->>FS: Сохранить dataset_realq_*.json
 
-    User->>CLI: run_comprehensive_benchmark.py --tier 1
+    Note over User,Dashboard: Режим Score 5
+    User->>CLI: generate_dataset.py --mode from-real-questions-score-5 --max-questions N
+    CLI->>DB: SELECT QuestionAnswer WHERE score=5 AND embedding IS NOT NULL
+    DB-->>CLI: real questions with score=5
+    loop Для каждого вопроса
+        CLI->>CLI: encoder.encode(question)
+        CLI->>DB: SELECT Chunk ORDER BY cosine_distance LIMIT 5
+        DB-->>CLI: top-5 chunks
+        CLI->>CLI: dataset.append(item)
+    end
+    CLI->>FS: Сохранить dataset_realq5_*.json
+
+    Note over User,Dashboard: Режим Manual (ручная аннотация)
+    User->>CLI: generate_dataset.py --mode export-annotation --output dataset.json
+    CLI->>FS: Читает существующий датасет
+    FS-->>CLI: dataset
+    CLI->>CLI: Добавляет поля для аннотации
+    CLI->>FS: Сохраняет annotation_*.json
+    User->>CLI: Проверяет/редактирует поля вручную
+    User->>CLI: Помечает: is_question_ok, is_answer_ok, is_chunk_ok, is_confluence_url_ok
+
+    Note over User,Dashboard: Фаза 3: Запуск бенчмарков
+
+    Note over User,Dashboard: Tier 0: Embedding Quality
+    User->>CLI: run_comprehensive_benchmark.py --tier 0 --mode synthetic
+    CLI->>CLI: load_dataset(dataset_path)
+    CLI->>RAGBenchmark: run_tier_0(dataset)
+    loop Для каждого текста в датасете
+        RAGBenchmark->>RAGBenchmark: encoder.encode(text)
+        RAGBenchmark->>RAGBenchmark: compute silhouette_score
+        RAGBenchmark->>RAGBenchmark: compute intra_cluster_sim
+        RAGBenchmark->>RAGBenchmark: compute inter_cluster_dist
+    end
+    RAGBenchmark-->>CLI: tier_0_metrics
+    CLI->>FS: save to benchmark_runs.json
+
+    Note over User,Dashboard: Tier 1: Retrieval Accuracy
+    User->>CLI: run_comprehensive_benchmark.py --tier 1 --mode synthetic
     CLI->>CLI: load_dataset(dataset_path)
     CLI->>RAGBenchmark: run_tier_1(dataset, top_k)
     loop Для каждого вопроса в датасете
@@ -56,12 +106,11 @@ sequenceDiagram
         DB-->>RAGBenchmark: top_k chunks
         RAGBenchmark->>RAGBenchmark: compute hit_rate, mrr, ndcg
     end
-        RAGBenchmark-->>CLI: tier_1_metrics
+    RAGBenchmark-->>CLI: tier_1_metrics
     CLI->>FS: save to benchmark_runs.json
 
-    Note over User,Dashboard: Фаза 4: Запуск бенчмарков (Tier 2)
-
-    User->>CLI: run_comprehensive_benchmark.py --tier 2
+    Note over User,Dashboard: Tier 2: Generation Quality
+    User->>CLI: run_comprehensive_benchmark.py --tier 2 --mode synthetic
     CLI->>RAGBenchmark: run_tier_2(dataset)
     loop Для каждого вопроса в датасете
         RAGBenchmark->>RAGBenchmark: resolve_context(item)
@@ -71,13 +120,13 @@ sequenceDiagram
         Judge-->>RAGBenchmark: faithfulness_score
         RAGBenchmark->>Judge: evaluate_answer_relevance(question, answer)
         Judge-->>RAGBenchmark: relevance_score
+        RAGBenchmark->>RAGBenchmark: compute rouge, bleu
     end
     RAGBenchmark-->>CLI: tier_2_metrics
     CLI->>FS: save to benchmark_runs.json
 
-    Note over User,Dashboard: Фаза 5: Запуск бенчмарков (Tier 3)
-
-    User->>CLI: run_comprehensive_benchmark.py --tier 3
+    Note over User,Dashboard: Tier 3: End-to-End
+    User->>CLI: run_comprehensive_benchmark.py --tier 3 --mode synthetic
     CLI->>RAGBenchmark: run_tier_3(dataset)
     loop Для каждого вопроса в датасете
         RAGBenchmark->>RAGBenchmark: encoder.encode(question)
@@ -88,13 +137,56 @@ sequenceDiagram
         RAGBenchmark->>Judge: evaluate_e2e_quality(question, system_answer, ground_truth)
         Judge-->>RAGBenchmark: e2e_score
         RAGBenchmark->>RAGBenchmark: cosine_similarity(system_answer, ground_truth)
+        RAGBenchmark->>RAGBenchmark: compute rouge, bleu
     end
     RAGBenchmark-->>CLI: tier_3_metrics
     CLI->>FS: save to benchmark_runs.json
 
-    Note over User,Dashboard: Фаза 6: Real-users benchmark
+    Note over User,Dashboard: Tier Judge: LLM-as-a-Judge Quality
+    User->>CLI: run_comprehensive_benchmark.py --tier judge --mode synthetic
+    CLI->>RAGBenchmark: run_tier_judge(dataset)
+    loop Для каждого примера
+        RAGBenchmark->>Judge: evaluate_faithfulness() [1st call]
+        Judge-->>RAGBenchmark: score_1
+        RAGBenchmark->>Judge: evaluate_faithfulness() [2nd call]
+        Judge-->>RAGBenchmark: score_2
+        RAGBenchmark->>RAGBenchmark: compute consistency_score
+        RAGBenchmark->>RAGBenchmark: measure latency
+    end
+    RAGBenchmark-->>CLI: tier_judge_metrics
+    CLI->>FS: save to benchmark_runs.json
 
-    User->>CLI: run_comprehensive_benchmark.py --mode real-users
+    Note over User,Dashboard: Tier Judge Pipeline: Production Judge
+    User->>CLI: run_comprehensive_benchmark.py --tier judge_pipeline --mode synthetic
+    CLI->>CLI: load_dataset(dataset_judge_pipeline_*.json)
+    CLI->>RAGBenchmark: run_tier_judge_pipeline(judge_dataset)
+    loop Для каждой пары (question, answer, ground_truth_show)
+        RAGBenchmark->>QA: Config.get_judge_prompt(), get_judge_headers()
+        QA-->>RAGBenchmark: prompt, headers
+        RAGBenchmark->>RAGBenchmark: call Mistral API (JUDGE_MODEL)
+        RAGBenchmark->>RAGBenchmark: parse "Yes"/"No"
+        RAGBenchmark->>RAGBenchmark: compare with ground_truth_show
+        RAGBenchmark->>RAGBenchmark: compute accuracy, precision, recall, f1
+    end
+    RAGBenchmark-->>CLI: tier_judge_pipeline_metrics
+    CLI->>FS: save to benchmark_runs.json
+
+    Note over User,Dashboard: Tier UX: User Experience
+    User->>CLI: run_comprehensive_benchmark.py --tier ux --mode synthetic
+    CLI->>RAGBenchmark: run_tier_ux(dataset)
+    loop Для каждого вопроса
+        RAGBenchmark->>RAGBenchmark: encoder.encode(question)
+        RAGBenchmark->>DB: SELECT QuestionAnswer WHERE score=5
+        DB-->>RAGBenchmark: high_score_questions
+        RAGBenchmark->>RAGBenchmark: find similar in cache (cosine > 0.85)
+        RAGBenchmark->>RAGBenchmark: compute cache_hit_rate
+        RAGBenchmark->>RAGBenchmark: compute context_preservation
+    end
+    RAGBenchmark-->>CLI: tier_ux_metrics
+    CLI->>FS: save to benchmark_runs.json
+
+    Note over User,Dashboard: Real-users Benchmark
+    User->>CLI: run_comprehensive_benchmark.py --mode real-users --real-score 5
     CLI->>RealBenchmark: run(top_k, score_filter, limit)
     RealBenchmark->>DB: SELECT QuestionAnswer WHERE score=5 AND embedding IS NOT NULL
     DB-->>RealBenchmark: real_questions
@@ -108,7 +200,18 @@ sequenceDiagram
     RealBenchmark-->>CLI: real_user_metrics
     CLI->>FS: save to benchmark_runs.json
 
-    Note over User,Dashboard: Фаза 7: Просмотр результатов
+    Note over User,Dashboard: Запуск всех tiers (--tier all)
+    User->>CLI: run_comprehensive_benchmark.py --tier all --mode synthetic
+    CLI->>RAGBenchmark: run_tier_0(dataset)
+    CLI->>RAGBenchmark: run_tier_1(dataset, top_k)
+    CLI->>RAGBenchmark: run_tier_2(dataset)
+    CLI->>RAGBenchmark: run_tier_3(dataset)
+    CLI->>RAGBenchmark: run_tier_judge(dataset)
+    CLI->>RAGBenchmark: run_tier_judge_pipeline(judge_dataset)
+    CLI->>RAGBenchmark: run_tier_ux(dataset)
+    CLI->>FS: save all metrics to benchmark_runs.json
+
+    Note over User,Dashboard: Фаза 4: Просмотр результатов
 
     User->>CLI: run_dashboard.py
     CLI->>Dashboard: main
@@ -136,172 +239,237 @@ sequenceDiagram
 
 ---
 
-### Фаза 2: Генерация датасета (synthetic)
+### Фаза 2: Генерация датасета
 
-**Шаг 9-10:** Пользователь запускает `generate_dataset.py --max-questions N`. CLI запрашивает чанки с эмбеддингами.
+Система поддерживает 4 режима генерации датасета. Каждый режим создаёт JSON-файл в `benchmarks/data/`.
 
-**Шаг 11-14:** Для каждого чанка (до достижения N) вызывается `LLMJudge.generate_question_from_chunk()`, который генерирует вопрос и идеальный ответ на основе текста чанка.
+#### Режим Synthetic
 
-**Шаг 15-16:** Датасет сохраняется в файл `benchmarks/data/dataset_YYYYMMDD_HHMMSS.json`.
+**Команда:** `generate_dataset.py --mode synthetic --max-questions N`
 
-**Реализация:** `benchmarks/generate_dataset.py`, функция `generate_synthetic_dataset()`.
+**Процесс:**
+1. CLI запрашивает чанки с эмбеддингами из БД
+2. Для каждого чанка (до N) вызывается `LLMJudge.generate_question_from_chunk()`
+3. LLM генерирует вопрос и эталонный ответ на основе текста чанка
+4. Датасет сохраняется в `dataset_synthetic_YYYYMMDD_HHMMSS.json`
 
-### Альтернативные режимы генерации
+**Структура:**
+```json
+{
+  "id": "uuid",
+  "question": "Как настроить VPN?",
+  "ground_truth_answer": "Для настройки VPN...",
+  "chunk_id": 123,
+  "chunk_text": "Текст чанка...",
+  "confluence_url": "https://...",
+  "relevant_chunk_ids": [123, 456],
+  "source": "synthetic",
+  "question_source": "llm"
+}
+```
 
-| Режим | Команда | Описание |
-|-------|---------|----------|
-| Synthetic | `--mode synthetic` | Генерация вопросов из чанков через LLM |
-| From Real Questions | `--mode from-real-questions` | Использование реальных вопросов из QuestionAnswer |
-| Score 5 | `--mode from-real-questions-score-5` | Только вопросы с оценкой score=5 |
-| Export Annotation | `--mode export-annotation` | Экспорт для ручной аннотации |
+#### Режим Real Questions
 
-При использовании режимов `from-real-questions` или `from-real-questions-score-5`:
-- Вопросы берутся из таблицы `QuestionAnswer`
-- Для каждого вопроса выполняется similarity search для нахождения релевантных чанков
-- Ground truth answer берётся из `QuestionAnswer.answer`
-- Сохраняются `user_score` и `question_answer_id` для трассировки
+**Команда:** `generate_dataset.py --mode from-real-questions --max-questions N`
 
----
+**Процесс:**
+1. CLI запрашивает вопросы из `QuestionAnswer` с эмбеддингами
+2. Для каждого вопроса выполняется similarity search (top-5 чанков)
+3. Вычисляется `is_relevant_chunk_matched` — совпадение pageId из URL
+4. Сохраняется в `dataset_realq_YYYYMMDD_HHMMSS.json`
 
-### Фаза 3: Запуск бенчмарков (Tier 1)
+**Особенности:**
+- Ground truth answer: `QuestionAnswer.answer`
+- Сохраняется: `user_score`, `question_answer_id`, `is_relevant_chunk_matched`
 
-**Шаг 17-19:** Пользователь запускает `run_comprehensive_benchmark.py --tier 1`. Загружается датасет и создаётся `RAGBenchmark`.
+#### Режим Score 5
 
-**Шаг 20-23:** Для каждого вопроса:
-- Генерируется эмбеддинг вопроса
-- Выполняется векторный поиск через `Chunk.embedding.cosine_distance()`
-- Вычисляются метрики: HitRate@K, MRR, NDCG@K
+**Команда:** `generate_dataset.py --mode from-real-questions-score-5 --max-questions N`
 
-**Шаг 24-25:** Результаты сохраняются в `benchmark_runs.json` файл.
+Аналогично Real Questions, но фильтр по `score = 5` (наиболее удовлетворённые пользователи).
 
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_1()`.
+#### Режим Manual (ручная аннотация)
 
----
+**Команда:** `generate_dataset.py --mode export-annotation --output dataset.json`
 
-### Фаза 4: Запуск бенчмарков (Tier 2)
+**Процесс:**
+1. CLI читает существующий датасет
+2. Добавляет поля для ручной проверки:
+   - `is_question_ok` — вопрос корректен
+   - `is_answer_ok` — ответ корректен
+   - `is_chunk_ok` — чанок релевантен
+   - `is_confluence_url_ok` — URL корректен
+   - `notes` — примечания
+3. Сохраняет в `annotation_YYYYMMDD_HHMMSS.json`
+4. Пользователь вручную проверяет и редактирует поля
 
-**Шаг 26-28:** Пользователь запускает `run_comprehensive_benchmark.py --tier 2`. Создаётся `RAGBenchmark`.
-
-**Шаг 29-33:** Для каждого вопроса:
-- Определяется контекст из датасета (`chunk_text`, `relevant_chunk_ids`, или `chunk_id`)
-- Вызывается `qa.main.get_answer()` для генерации ответа (импорт из qa!)
-- `LLMJudge` оценивает faithfulness (фактичность) и answer_relevance (релевантность)
-- Вычисляются алгоритмические метрики: ROUGE-1, ROUGE-L, BLEU
-
-**Шаг 34-35:** Результаты сохраняются.
-
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_2()`, использует импорт `get_answer` из `qa.main`.
-
----
-
-### Фаза 5: Запуск бенчмарков (Tier 3)
-
-**Шаг 36-38:** Пользователь запускает `run_comprehensive_benchmark.py --tier 3`.
-
-**Шаг 39-44:** Для каждого вопроса:
-- Выполняется retrieval через `qa.confluence_retrieving.get_chunk()` (импорт из production!)
-- Генерируется ответ через `qa.main.get_answer()`
-- `LLMJudge` оценивает E2E качество
-- Вычисляется cosine similarity между системным и эталонным ответом
-- Вычисляются алгоритмические метрики: ROUGE-1, ROUGE-L, BLEU
-
-**Шаг 45-46:** Результаты сохраняются.
-
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_3()`, использует импорт `get_chunk` из `qa.confluence_retrieving`.
-
-**Важно:** Tier 3 точно воспроизводит текущую production реализацию (1 чанк, top-1).
+**Реализация:** `benchmarks/generate_dataset.py`, функции `generate_synthetic_dataset()`, `generate_from_real_questions()`, `export_for_annotation()`.
 
 ---
 
-### Фаза 6: Real-users benchmark
+### Фаза 3: Запуск бенчмарков
 
-**Шаг 47-49:** Пользователь запускает `run_comprehensive_benchmark.py --mode real-users`. Создаётся `RealQueriesBenchmark`.
+Система поддерживает запуск отдельных tiers или всех сразу (`--tier all`).
 
-**Шаг 50-54:** Для каждого реального вопроса из `QuestionAnswer` с `score=5`:
-- Генерируется эмбеддинг вопроса
-- Выполняется retrieval top-k
-- Retrieved URL сравниваются с `QuestionAnswer.confluence_url`
-- Вычисляются retrieval-метрики
+#### Запуск всех tiers
 
-**Шаг 55-56:** Результаты сохраняются.
+**Команда:** `run_comprehensive_benchmark.py --tier all --mode synthetic`
 
-**Реализация:** `benchmarks/models/real_queries_benchmark.py`, метод `run()`.
+Последовательно выполняет все tiers и сохраняет все метрики в `benchmark_runs.json`.
 
 ---
 
-### Фаза 6a: Запуск бенчмарков (Tier 0)
+#### Tier 0: Embedding Quality (качество эмбеддингов)
 
-**Шаг 56a:** Пользователь запускает `run_comprehensive_benchmark.py --tier 0`. Создаётся `RAGBenchmark`.
+**Команда:** `--tier 0`
 
-**Шаг 57-59:** Для кластерного анализа эмбеддингов:
-- Извлекаются тексты и метки кластеров из датасета
-- Вычисляются эмбеддинги для каждого текста
-- Рассчитываются intra-cluster similarity (внутриклассовое сходство)
-- Рассчитываются inter-cluster distance (межклассовое расстояние)
-- Вычисляется silhouette score
+**Процесс:**
+1. Извлекаются тексты и метки кластеров из датасета
+2. Вычисляются эмбеддинги для каждого текста
+3. Рассчитываются: silhouette_score, intra_cluster_sim, inter_cluster_dist
 
-**Шаг 60:** Результаты сохраняются.
+**Метрики:** silhouette_score, avg_intra_cluster_sim, avg_inter_cluster_dist
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_0()`.
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_0()`.
 
 ---
 
-### Фаза 6b: Запуск бенчмарков (Tier Judge)
+#### Tier 1: Retrieval Accuracy (точность поиска)
 
-**Шаг 61:** Пользователь запускает `run_comprehensive_benchmark.py --tier judge`. Создаётся `RAGBenchmark`.
+**Команда:** `--tier 1`
 
-**Шаг 62-64:** Для оценки качества LLM-судьи:
-- Используется `LLMJudge` из `benchmarks.utils.llm_judge` (свой код, НЕ из qa!)
-- Вызывается `judge.evaluate_faithfulness()` первый раз
-- При включенной проверке консистентности — повторный вызов
-- Сравниваются оценки для вычисления consistency score
-- Замеряется latency каждого вызова
+**Процесс:**
+1. Для каждого вопроса генерируется эмбеддинг
+2. Выполняется векторный поиск через `Chunk.embedding.cosine_distance()` top-k
+3. Сравниваются retrieved chunk_id с ground truth
+4. Вычисляются: HitRate@K, MRR, NDCG@K, Recall@K, Precision@K
 
-**Шаг 65:** Результаты сохраняются.
+**Метрики:** hit_rate@1/5/10, mrr, recall@1/3/5/10, precision@1/3/5/10, ndcg@5/10
 
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge()`, использует `benchmarks.utils.llm_judge.LLMJudge`.
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_1()`.
 
 ---
 
-### Фаза 6b: Запуск бенчмарков (Tier Judge Pipeline)
+#### Tier 2: Generation Quality (качество генерации)
 
-**Шаг 62:** Пользователь запускает `run_comprehensive_benchmark.py --tier judge_pipeline`. Создаётся `RAGBenchmark`.
+**Команда:** `--tier 2`
 
-**Шаг 63-65:** Для оценки production judge (Mistral):
-- Загружается датасет `dataset_judge_pipeline_*.json` с парами (question, answer, ground_truth_show)
-- Для каждой пары вызывается production judge через `qa.config.Config.get_judge_prompt()` и `Config.get_judge_headers()` (импорт из qa!)
-- Сравнивается решение judge ("Yes"/"No") с ground truth
-- Вычисляются метрики: accuracy, precision, recall, F1
+**Процесс:**
+1. Контекст берётся из датасета (`chunk_text`, `relevant_chunk_ids`, или `chunk_id`)
+2. Вызывается `qa.main.get_answer()` для генерации ответа (Mistral)
+3. LLMJudge оценивает faithfulness и answer_relevance
+4. Вычисляются алгоритмические метрики: ROUGE-1/2/L, BLEU
 
-**Шаг 66:** Результаты сохраняются.
+**Метрики:** avg_faithfulness, avg_answer_relevance, avg_rouge1_f, avg_rouge2_f, avg_rougeL_f, avg_bleu
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_2()`, использует импорт `get_answer` из `qa.main`.
+
+---
+
+#### Tier 3: End-to-End (сквозной)
+
+**Команда:** `--tier 3`
+
+**Процесс:**
+1. Retrieval выполняется через production код (`qa.confluence_retrieving.get_chunk()`)
+2. Генерируется ответ через `qa.main.get_answer()`
+3. LLMJudge оценивает E2E качество
+4. Вычисляется cosine similarity с ground truth
+5. Вычисляются алгоритмические метрики: ROUGE, BLEU
+
+**Метрики:** avg_e2e_score, avg_semantic_similarity, avg_rouge1_f, avg_rouge2_f, avg_rougeL_f, avg_bleu
+
+**Важно:** Tier 3 точно воспроизводит production пайпайн (1 чанк, top-1).
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_3()`, использует импорт `get_chunk` из `qa.confluence_retrieving`.
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_3()`.
+
+---
+
+#### Tier Judge: LLM-as-a-Judge Quality (качество LLM-судьи)
+
+**Команда:** `--tier judge`
+
+**Процесс:**
+1. Используется `LLMJudge` из `benchmarks.utils.llm_judge` (модель Qwen)
+2. Для каждого примера вызывается `judge.evaluate_faithfulness()` первый раз
+3. При включённой проверке консистентности — повторный вызов
+4. Сравниваются оценки для вычисления consistency_score
+5. Замеряется latency каждого вызова
+
+**Метрики:** consistency_score, error_rate, avg_latency_ms, avg_faithfulness
+
+**Отличие от Tier Judge Pipeline:**
+- Tier Judge тестирует `BENCHMARKS_JUDGE_MODEL` (Qwen) — свой код в benchmarks
+- Tier Judge Pipeline тестирует `JUDGE_MODEL` (Mistral) — production judge
+
+**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge()`.
+
+---
+
+#### Tier Judge Pipeline: Production Judge (качество production судьи)
+
+**Команда:** `--tier judge_pipeline`
+
+**Процесс:**
+1. Загружается датасет `dataset_judge_pipeline_*.json` с парами (question, answer, ground_truth_show)
+2. Для каждой пары вызывается production judge через `qa.config.Config.get_judge_prompt()` и `Config.get_judge_headers()`
+3. Mistral (JUDGE_MODEL) возвращает "Yes"/"No"
+4. Сравнивается решение судьи с ground_truth_show
+5. Вычисляются: accuracy, precision, recall, F1
+
+**Метрики:** accuracy, precision, recall, f1_score, avg_latency_ms, TP/FP/FN/TN
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge_pipeline()`.
 
-**Отличия от Tier Judge:**
-- **Tier Judge** тестирует `BENCHMARKS_JUDGE_*` (Qwen) — свой код в benchmarks, НЕ импортируется из qa
-- **Tier Judge Pipeline** тестирует `JUDGE_*` (Mistral) — импорт из `qa.config.Config` — тестируется production judge
-
 ---
 
-### Фаза 6c: Запуск бенчмарков (Tier UX)
+#### Tier UX: User Experience (пользовательский опыт)
 
-**Шаг 66:** Пользователь запускает `run_comprehensive_benchmark.py --tier ux`. Создаётся `RAGBenchmark`.
+**Команда:** `--tier ux`
 
-**Шаг 67-69:** Для оценки пользовательского опыта:
-- Загружаются вопросы с `score=5` из `QuestionAnswer`
-- Для каждого вопроса в сессии ищется похожий вопрос в кэше
-- Вычисляется cache hit rate (попадания в кэш)
-- Для многотуровых сессий вычисляется context preservation
+**Процесс:**
+1. Загружаются вопросы с `score=5` из `QuestionAnswer`
+2. Для каждого вопроса ищется семантически схожий вопрос в кэше (similarity > 0.85)
+3. Вычисляется cache_hit_rate
+4. Для многотуровых сессий вычисляется context_preservation
 
-**Шаг 70:** Результаты сохраняются.
+**Метрики:** cache_hit_rate, context_preservation, multi_turn_consistency
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_ux()`.
 
 ---
 
-### Фаза 7: Просмотр результатов
+#### Real-users Benchmark (бенчмарк на реальных пользователях)
 
-**Шаг 57-60:** Пользователь запускает `run_dashboard.py`. Dashboard загружает все запуски из `benchmark_runs.json` и создаёт Gradio интерфейс.
+**Команда:** `--mode real-users --real-score 5 --real-limit N --top-k K`
+
+**Процесс:**
+1. Загружаются вопросы из `QuestionAnswer` с фильтром score (обычно 5)
+2. Для каждого вопроса генерируется эмбеддинг
+3. Выполняется retrieval top-k
+4. Retrieved URLs сравниваются с `QuestionAnswer.confluence_url` (ground truth)
+5. Вычисляются: HitRate, MRR, NDCG, Recall, Precision
+
+**Метрики:** hit_rate@1/5/10, mrr, recall@K, precision@K, ndcg@5/10
+
+**Ground truth:** `QuestionAnswer.confluence_url` — URL документа, показанного пользователю в production
+
+**Реализация:** `benchmarks/models/real_queries_benchmark.py`, метод `run()`.
+
+---
+
+### Фаза 4: Просмотр результатов
+
+**Команда:** `run_dashboard.py`
+
+**Процесс:**
+1. Dashboard загружает все запуски из `benchmark_runs.json`
+2. Создаётся Gradio интерфейс с графиками и таблицами
+3. Доступен по адресу: http://localhost:7860
 
 **Реализация:** `benchmarks/dashboard.py`, класс `RAGBenchmarkDashboard`.
 
@@ -392,7 +560,7 @@ sequenceDiagram
 
 ## Связанные документы
 
-- [RUN_MODES_LOCAL_VS_DOCKER.md](RUN_MODES_LOCAL_VS_DOCKER.md) — режимы работы
-- [CLI_REFERENCE.md](CLI_REFERENCE.md) — справочник по CLI командам
-- [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md) — инструкции для локального режима
-- [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md) — инструкции для Docker режима
+- [METRICS.md](METRICS.md) — Полное научное описание всех метрик с формулами и обоснованием
+- [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md) — Локальный запуск
+- [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md) — Docker запуск
+- [CLI_REFERENCE.md](CLI_REFERENCE.md) — Справочник по CLI командам

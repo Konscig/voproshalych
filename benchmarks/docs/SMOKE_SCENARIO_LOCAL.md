@@ -45,6 +45,9 @@ cp .env.docker.example .env.docker
 ```bash
 cd Submodules/voproshalych
 uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+
+# Удалить таблицы без загрузки дампа
+uv run python benchmarks/load_database_dump.py --drop-tables-only
 ```
 
 Или через Makefile:
@@ -81,6 +84,28 @@ uv run python benchmarks/generate_dataset.py \
 # Полный режим (все чанки)
 uv run python benchmarks/generate_dataset.py \
   --mode synthetic --max-questions 10000
+
+# Из реальных вопросов
+# Тестовый режим (5 вопросов)
+uv run python benchmarks/generate_dataset.py \
+  --mode from-real-questions --max-questions 5
+
+# Полный режим (все вопросы)
+uv run python benchmarks/generate_dataset.py \
+  --mode from-real-questions --max-questions 10000
+
+# Только вопросы с оценкой 5
+# Тестовый режим (5 вопросов)
+uv run python benchmarks/generate_dataset.py \
+  --mode from-real-questions-score-5 --max-questions 5
+
+# Полный режим (все вопросы с оценкой 5)
+uv run python benchmarks/generate_dataset.py \
+  --mode from-real-questions-score-5 --max-questions 10000
+
+# Экспорт для ручной аннотации
+uv run python benchmarks/generate_dataset.py \
+  --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
 ```
 
 Или через Makefile:
@@ -94,13 +119,32 @@ make generate-dataset-local
 ```bash
 cd Submodules/voproshalych
 
-# Тестовый режим (5 вопросов)
+# Synthetic — тестовый режим (5 вопросов)
 uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode synthetic --limit 5
 
-# Полный режим (все вопросы)
+# Synthetic — полный режим (все вопросы)
 uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode synthetic
+
+# Manual — на аннотированном датасете (тестовый)
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode manual \
+  --manual-dataset benchmarks/data/annotation_20260222_101238.json \
+  --limit 5
+
+# Manual — полный режим
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all --mode manual \
+  --manual-dataset benchmarks/data/dataset_for_annotation.json
+
+# Real users — тестовый режим
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --mode real-users --real-score 5 --real-limit 10 --top-k 10
+
+# Real users — полный режим
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --mode real-users --real-score 5 --real-limit 10000 --top-k 10
 ```
 
 Или через Makefile:

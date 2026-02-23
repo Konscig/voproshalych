@@ -8,7 +8,7 @@ import os
 import json
 import re
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 from tenacity import (
@@ -20,20 +20,31 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 
 
-def _parse_json_payload(text: str) -> Dict[str, str]:
+def _parse_json_payload(text: str) -> Dict[str, Any]:
     """Распарсить JSON-ответ модели с учётом markdown-обёрток."""
     cleaned = text.strip()
+
+    if not cleaned:
+        logger.warning("Пустой ответ от модели при парсинге JSON")
+        return {"score": 3.0}
 
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
 
+    cleaned = cleaned.strip()
+    if not cleaned:
+        logger.warning("Пустой ответ после очистки markdown")
+        return {"score": 3.0}
+
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.warning(f"Невалидный JSON: {e}, text: {cleaned[:200]}")
         match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
         if not match:
-            raise
+            logger.warning("Не найден JSON объект в ответе")
+            return {"score": 3.0}
         return json.loads(match.group(0))
 
 
@@ -282,13 +293,15 @@ class LLMJudge:
 Контекст: {context}
 Ответ системы: {answer}
 
-Ответ только числом от 1 до 5.
+Верни ТОЛЬКО JSON в формате:
+{{"score": 1}}
+Где score — число от 1 до 5.
 """
 
         if self.evaluation_mode == "reasoned":
             prompt += (
                 "\nСначала рассуждай пошагово про себя, но в ответе верни только "
-                "одно число от 1 до 5 без пояснений."
+                "JSON с оценкой."
             )
 
         try:
@@ -299,26 +312,23 @@ class LLMJudge:
                         "role": "system",
                         "content": "Ты эксперт по оценке качества ответов чат-ботов.",
                     },
-                    {"role": "user", "content": prompt.format(**locals())},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
-                max_tokens=10,
+                max_tokens=200,
             )
 
-            score_str = (response.choices[0].message.content or "").strip()
+            content = (response.choices[0].message.content or "").strip()
+            payload = _parse_json_payload(content)
 
-            try:
-                score = float(score_str)
-                score = max(1.0, min(5.0, score))
+            score = float(payload.get("score", 3.0))
+            score = max(1.0, min(5.0, score))
 
-                logger.info(f"Faithfulness оценка: {score}")
+            logger.info(f"Faithfulness оценка: {score}")
 
-                time.sleep(self.request_delay)
+            time.sleep(self.request_delay)
 
-                return score
-
-            except ValueError:
-                raise ValueError(f"Некорректный формат оценки: {score_str}")
+            return score
 
         except Exception as e:
             error_msg = f"Ошибка оценки faithfulness: {e}"
@@ -361,13 +371,15 @@ class LLMJudge:
 Вопрос: {question}
 Ответ: {answer}
 
-Ответ только числом от 1 до 5.
+Верни ТОЛЬКО JSON в формате:
+{{"score": 1}}
+Где score — число от 1 до 5.
 """
 
         if self.evaluation_mode == "reasoned":
             prompt += (
                 "\nСначала рассуждай пошагово про себя, но в ответе верни только "
-                "одно число от 1 до 5 без пояснений."
+                "JSON с оценкой."
             )
 
         try:
@@ -376,28 +388,25 @@ class LLMJudge:
                 messages=[
                     {
                         "role": "system",
-                        "content": "Ты эксперт по оценке релевантности ответов.",
+                        "content": "Ты эксперт по оценке качества ответов чат-ботов.",
                     },
-                    {"role": "user", "content": prompt.format(**locals())},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
-                max_tokens=10,
+                max_tokens=200,
             )
 
-            score_str = (response.choices[0].message.content or "").strip()
+            content = (response.choices[0].message.content or "").strip()
+            payload = _parse_json_payload(content)
 
-            try:
-                score = float(score_str)
-                score = max(1.0, min(5.0, score))
+            score = float(payload.get("score", 3.0))
+            score = max(1.0, min(5.0, score))
 
-                logger.info(f"Answer Relevance оценка: {score}")
+            logger.info(f"Answer Relevance оценка: {score}")
 
-                time.sleep(self.request_delay)
+            time.sleep(self.request_delay)
 
-                return score
-
-            except ValueError:
-                raise ValueError(f"Некорректный формат оценки: {score_str}")
+            return score
 
         except Exception as e:
             error_msg = f"Ошибка оценки answer relevance: {e}"
@@ -433,7 +442,7 @@ class LLMJudge:
         prompt = """Оцени качество ответа системы по сравнению с идеальным ответом по шкале от 1 до 5.
 
 Критерии:
-- 5: Ответ системы близок к идеальному, полностью отвечает на вопрос
+- 5: Ответ систем близок к идеальному, полностью отвечает на вопрос
 - 4: Ответ системы хорош, но есть отличия от идеального
 - 3: Ответ системы приемлемый, но есть заметные отличия
 - 2: Ответ системы слабый, существенно отличается от идеального
@@ -443,13 +452,15 @@ class LLMJudge:
 Ответ системы: {system_answer}
 Идеальный ответ: {ground_truth_answer}
 
-Ответ только числом от 1 до 5.
+Верни ТОЛЬКО JSON в формате:
+{{"score": 1}}
+Где score — число от 1 до 5.
 """
 
         if self.evaluation_mode == "reasoned":
             prompt += (
                 "\nСначала рассуждай пошагово про себя, но в ответе верни только "
-                "одно число от 1 до 5 без пояснений."
+                "JSON с оценкой."
             )
 
         try:
@@ -460,26 +471,23 @@ class LLMJudge:
                         "role": "system",
                         "content": "Ты эксперт по оценке качества ответов чат-ботов.",
                     },
-                    {"role": "user", "content": prompt.format(**locals())},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
-                max_tokens=10,
+                max_tokens=200,
             )
 
-            score_str = (response.choices[0].message.content or "").strip()
+            content = (response.choices[0].message.content or "").strip()
+            payload = _parse_json_payload(content)
 
-            try:
-                score = float(score_str)
-                score = max(1.0, min(5.0, score))
+            score = float(payload.get("score", 3.0))
+            score = max(1.0, min(5.0, score))
 
-                logger.info(f"E2E Quality оценка: {score}")
+            logger.info(f"E2E Quality оценка: {score}")
 
-                time.sleep(self.request_delay)
+            time.sleep(self.request_delay)
 
-                return score
-
-            except ValueError:
-                raise ValueError(f"Некорректный формат оценки: {score_str}")
+            return score
 
         except Exception as e:
             error_msg = f"Ошибка оценки E2E качества: {e}"

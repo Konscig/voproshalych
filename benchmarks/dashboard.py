@@ -437,6 +437,7 @@ class RAGBenchmarkDashboard:
             headers=["Tier", "Metric", "Value", "Baseline", "Status"],
             interactive=False,
             wrap=True,
+            column_widths=["20%", "25%", "20%", "15%", "15%"],
         )
 
         executive_summary = gr.Markdown(
@@ -705,6 +706,18 @@ class RAGBenchmarkDashboard:
             headers=headers,
             interactive=False,
             wrap=False,
+            column_widths=[
+                "18%",
+                "12%",
+                "10%",
+                "8%",
+                "8%",
+                "10%",
+                "8%",
+                "8%",
+                "12%",
+                "14%",
+            ],
         )
 
         def update_table(filter_mode: str):
@@ -1092,6 +1105,7 @@ class RAGBenchmarkDashboard:
             value=initial_table,
             interactive=False,
             wrap=True,
+            max_height=400,
         )
 
         run_selector.change(
@@ -1121,10 +1135,6 @@ class RAGBenchmarkDashboard:
             label="Выберите запуск",
         )
 
-        summary = gr.Markdown()
-        score_table = gr.Dataframe(interactive=False, wrap=True)
-        token_table = gr.Dataframe(interactive=False, wrap=True)
-
         def build_domain_view(selected: str):
             run = next(
                 (item for item in ordered_runs if format_run_choice(item) == selected),
@@ -1151,7 +1161,7 @@ class RAGBenchmarkDashboard:
             score_distribution = metrics.get("score_distribution", {})
             score_df = pd.DataFrame(
                 [
-                    {"score": str(score), "count": count}
+                    {"Score": str(score), "Count": count}
                     for score, count in score_distribution.items()
                 ]
             )
@@ -1165,8 +1175,23 @@ class RAGBenchmarkDashboard:
             run_choices[0]
         )
         summary = gr.Markdown(value=initial_summary)
-        score_table = gr.Dataframe(value=initial_scores, interactive=False, wrap=True)
-        token_table = gr.Dataframe(value=initial_tokens, interactive=False, wrap=True)
+
+        gr.Markdown("### Распределение оценок")
+        score_table = gr.Dataframe(
+            value=initial_scores,
+            interactive=False,
+            wrap=True,
+            column_widths=["50%", "50%"],
+            headers=["Score", "Count"],
+        )
+
+        gr.Markdown("### Топ токенов в вопросах")
+        token_table = gr.Dataframe(
+            value=initial_tokens,
+            interactive=False,
+            wrap=True,
+            column_widths=["50%", "50%"],
+        )
 
         run_selector.change(
             fn=build_domain_view,
@@ -1374,6 +1399,86 @@ class RAGBenchmarkDashboard:
     def _create_reference_tab(self):
         gr.Markdown("# Справка по системе оценки RAG")
         gr.Markdown("Содержит полный список метрик, используемых в дашборде и отчётах.")
+
+        gr.Markdown("## Архитектура pipeline бенчмаркинга")
+
+        mermaid_diagram = """
+```mermaid
+flowchart LR
+    subgraph Input
+        A[Synthetic Dataset] --> B[Real User Questions]
+    end
+    
+    subgraph Tier0["Tier 0: Embedding Quality"]
+        C[Embedding Model] --> D[Vector Space Analysis]
+        D --> D1[NN Distance]
+        D --> D2[Spread]
+        D --> D3[Density]
+        D --> D4[Effective Dimensionality]
+    end
+    
+    subgraph Tier1["Tier 1: Retrieval"]
+        E[Query] --> F[Embedding]
+        F --> G[Vector Search]
+        G --> H[Top-K Chunks]
+        H --> I1[Hit Rate]
+        H --> I2[MRR]
+        H --> I3[NDCG]
+        H --> I4[Recall/Precision]
+    end
+    
+    subgraph Tier2["Tier 2: Generation Quality"]
+        J[Context] --> K[LLM Generation]
+        K --> L[Generated Answer]
+        L --> M1[Faithfulness]
+        L --> M2[Answer Relevance]
+        L --> M3[Answer Correctness]
+        L --> M4[ROUGE/BLEU]
+    end
+    
+    subgraph Tier3["Tier 3: End-to-End"]
+        N[Full Query] --> O[Retrieval]
+        O --> P[Generation]
+        P --> Q[E2E Score]
+        Q --> Q1[Semantic Similarity]
+        Q --> Q2[Consistency]
+    end
+    
+    subgraph Analytics["Additional Analytics"]
+        R[Chunk Utilization] --> R1[Used/Unused Chunks]
+        S[Topic Coverage] --> S1[Cluster Analysis]
+        T[Domain Analysis] --> T1[Question Patterns]
+        T --> T2[Token Frequency]
+    end
+    
+    Input --> Tier0
+    Tier0 --> Tier1
+    Tier1 --> Tier2
+    Tier2 --> Tier3
+    Tier1 --> Analytics
+    Tier2 --> Analytics
+    Tier3 --> Analytics
+
+    style Tier0 fill:#e1f5fe
+    style Tier1 fill:#e8f5e8
+    style Tier2 fill:#fff3e0
+    style Tier3 fill:#fce4ec
+    style Analytics fill:#f5f5f5
+```
+"""
+        gr.Markdown(mermaid_diagram)
+
+        gr.Markdown("## Описание уровней оценки")
+
+        tier_descriptions = """
+| Tier | Название | Описание |
+|------|---------|----------|
+| Tier 0 | Embedding Quality | Анализ качества векторных представлений без использования внешних меток |
+| Tier 1 | Retrieval | Оценка качества поиска релевантных документов |
+| Tier 2 | Generation | Оценка качества сгенерированных ответов |
+| Tier 3 | End-to-End | Комплексная оценка всего пайплайна |
+"""
+        gr.Markdown(tier_descriptions)
 
         rows = []
         for tier, metrics in METRICS_BY_TIER.items():

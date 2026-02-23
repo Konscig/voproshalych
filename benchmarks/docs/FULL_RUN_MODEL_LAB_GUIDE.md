@@ -101,7 +101,12 @@ make run-local SCRIPT=benchmarks/generate_dataset.py ARGS="--mode export-annotat
 
 ```bash
 cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --consistency-runs 2 --judge-eval-mode reasoned --analyze-utilization --utilization-questions-source real --utilization-question-limit 100000 --utilization-top-k 10 --analyze-topics --topics-question-limit 100000 --topics-count 20 --topics-top-k 5 --analyze-domain --domain-limit 100000"
+
+# Сначала получите имя последнего датасета:
+# ls benchmarks/data/dataset_synthetic_*.json | tail -1
+
+# Затем запустите бенчмарк (замените <TIMESTAMP> на реальное):
+make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_20260223_183530.json --consistency-runs 2 --judge-eval-mode reasoned --analyze-utilization --utilization-questions-source real --utilization-question-limit 100000 --utilization-top-k 10 --analyze-topics --topics-question-limit 100000 --topics-count 20 --topics-top-k 5 --analyze-domain --domain-limit 100000"
 ```
 
 Пояснения к full-limit для real-user аналитики:
@@ -140,21 +145,27 @@ make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all
 
 ```bash
 cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier 2 --mode synthetic --limit 202 --consistency-runs 2 --judge-eval-mode reasoned --generation-models \"m1,m2,m3,m4,m5,m6,m7,m8,m9,m10\" --judge-models \"j1,j2,j3,j4,j5,j6,j7,j8,j9,j10\" --production-judge-models \"p_base\""
+
+# Получите имя последнего датасета и вставьте ниже:
+make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier 2 --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --consistency-runs 2 --judge-eval-mode reasoned --generation-models \"m1,m2,m3,m4,m5,m6,m7,m8,m9,m10\" --judge-models \"j1,j2,j3,j4,j5,j6,j7,j8,j9,j10\" --production-judge-models \"p_base\""
 ```
 
 2) **Production Judge sweep** (фиксируем generation и benchmark judge):
 
 ```bash
 cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier judge_pipeline --mode synthetic --limit 202 --generation-models \"m_base\" --judge-models \"j_base\" --production-judge-models \"p1,p2,p3,p4,p5,p6,p7,p8,p9,p10\""
+
+# Получите имя последнего датасета и вставьте ниже:
+make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier judge_pipeline --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --generation-models \"m_base\" --judge-models \"j_base\" --production-judge-models \"p1,p2,p3,p4,p5,p6,p7,p8,p9,p10\""
 ```
 
 Пример с выбором конкретных токенов и model-source:
 
 ```bash
 cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY --generation-model-source deepseek --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY --production-judge-model-source mistral --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY --judge-model-source openrouter"
+
+# Получите имя последнего датасета и вставьте ниже:
+make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY --generation-model-source deepseek --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY --production-judge-model-source mistral --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY --judge-model-source openrouter"
 ```
 
 Пример с ручным списком моделей (старый способ):

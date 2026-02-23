@@ -43,7 +43,7 @@ def _parse_json_payload(text: str) -> Dict[str, Any]:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
-        logger.warning(f"Невалидный JSON: {e}, text: {cleaned[:200]}")
+        logger.info(f"Невалидный JSON: {e}, text: {cleaned[:200]}")
 
         # Искать полный JSON {...}
         match = re.search(r"\{[^{}]*\}", cleaned, flags=re.DOTALL)

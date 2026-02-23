@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=".env.docker")
+load_dotenv(dotenv_path=".env.benchmark-models", override=False)
 
 
 def check_prerequisites(
@@ -360,6 +361,8 @@ def save_results(
         return value
 
     normalized_results: dict = to_builtin(results)
+    model_runs_payload = normalized_results.get("model_runs") or []
+    selected_model_run = model_runs_payload[0] if model_runs_payload else {}
 
     report_generator = ReportGenerator()
     run_metadata = report_generator.get_run_metadata()
@@ -398,10 +401,16 @@ def save_results(
         "schema_version": "2.0",
         "dataset_file": os.path.basename(dataset_name),
         "dataset_type": mode,
-        "judge_model": os.getenv("BENCHMARKS_JUDGE_MODEL")
+        "judge_model": selected_model_run.get("judge_model")
+        or os.getenv("BENCHMARKS_JUDGE_MODEL")
         or os.getenv("JUDGE_MODEL")
         or Config.JUDGE_MODEL,
-        "generation_model": os.getenv("GENERATION_MODEL") or Config.MISTRAL_MODEL,
+        "production_judge_model": selected_model_run.get("production_judge_model")
+        or os.getenv("JUDGE_MODEL")
+        or Config.JUDGE_MODEL,
+        "generation_model": selected_model_run.get("generation_model")
+        or os.getenv("GENERATION_MODEL")
+        or Config.MISTRAL_MODEL,
         "embedding_model": Config.EMBEDDING_MODEL_PATH,
         "judge_eval_mode": judge_eval_mode,
         "consistency_runs": consistency_runs,
@@ -614,6 +623,13 @@ def main():
     )
 
     parser.add_argument(
+        "--production-judge-models",
+        type=str,
+        default="",
+        help="CSV список production judge моделей для tier_judge_pipeline сравнения",
+    )
+
+    parser.add_argument(
         "--analyze-domain",
         action="store_true",
         help="Запустить анализ предметной области по real-user вопросам",
@@ -673,8 +689,15 @@ def main():
     default_generation_model = (
         os.getenv("GENERATION_MODEL") or Config.MISTRAL_MODEL or ""
     )
+    default_production_judge_model = (
+        os.getenv("JUDGE_MODEL") or Config.JUDGE_MODEL or ""
+    )
     judge_models = parse_models(args.judge_models, default_judge_model)
     generation_models = parse_models(args.generation_models, default_generation_model)
+    production_judge_models = parse_models(
+        args.production_judge_models,
+        default_production_judge_model,
+    )
 
     if dataset is not None:
         logger.info(
@@ -689,55 +712,62 @@ def main():
     model_runs: list[dict[str, Any]] = []
     base_results: Optional[dict] = None
     base_generation_model = Config.MISTRAL_MODEL
+    base_production_judge_model = Config.JUDGE_MODEL
 
     for generation_model in generation_models:
         Config.MISTRAL_MODEL = generation_model
         os.environ["GENERATION_MODEL"] = generation_model
 
-        for judge_model in judge_models:
-            judge = None
-            if needs_judge:
-                judge = LLMJudge(
-                    model=judge_model,
-                    evaluation_mode=args.judge_eval_mode,
+        for production_judge_model in production_judge_models:
+            Config.JUDGE_MODEL = production_judge_model
+            os.environ["JUDGE_MODEL"] = production_judge_model
+
+            for judge_model in judge_models:
+                judge = None
+                if needs_judge:
+                    judge = LLMJudge(
+                        model=judge_model,
+                        evaluation_mode=args.judge_eval_mode,
+                    )
+
+                run_result = run_benchmark(
+                    engine,
+                    encoder,
+                    judge,
+                    dataset,
+                    args.tier,
+                    args.mode,
+                    args.top_k,
+                    judge_pipeline_dataset_path=None
+                    if args.tier == "judge_pipeline"
+                    else args.dataset,
+                    analyze_utilization=args.analyze_utilization,
+                    analyze_topics=args.analyze_topics,
+                    utilization_questions_source=args.utilization_questions_source,
+                    utilization_question_limit=args.utilization_question_limit,
+                    utilization_top_k=args.utilization_top_k,
+                    topics_question_limit=args.topics_question_limit,
+                    topics_count=args.topics_count,
+                    topics_top_k=args.topics_top_k,
+                    consistency_runs=max(1, args.consistency_runs),
+                    analyze_domain=args.analyze_domain,
+                    domain_limit=max(1, args.domain_limit),
                 )
 
-            run_result = run_benchmark(
-                engine,
-                encoder,
-                judge,
-                dataset,
-                args.tier,
-                args.mode,
-                args.top_k,
-                judge_pipeline_dataset_path=None
-                if args.tier == "judge_pipeline"
-                else args.dataset,
-                analyze_utilization=args.analyze_utilization,
-                analyze_topics=args.analyze_topics,
-                utilization_questions_source=args.utilization_questions_source,
-                utilization_question_limit=args.utilization_question_limit,
-                utilization_top_k=args.utilization_top_k,
-                topics_question_limit=args.topics_question_limit,
-                topics_count=args.topics_count,
-                topics_top_k=args.topics_top_k,
-                consistency_runs=max(1, args.consistency_runs),
-                analyze_domain=args.analyze_domain,
-                domain_limit=max(1, args.domain_limit),
-            )
-
-            model_runs.append(
-                {
-                    "judge_model": judge_model,
-                    "generation_model": generation_model,
-                    "judge_eval_mode": args.judge_eval_mode,
-                    "metrics": run_result,
-                }
-            )
-            if base_results is None:
-                base_results = run_result
+                model_runs.append(
+                    {
+                        "judge_model": judge_model,
+                        "production_judge_model": production_judge_model,
+                        "generation_model": generation_model,
+                        "judge_eval_mode": args.judge_eval_mode,
+                        "metrics": run_result,
+                    }
+                )
+                if base_results is None:
+                    base_results = run_result
 
     Config.MISTRAL_MODEL = base_generation_model
+    Config.JUDGE_MODEL = base_production_judge_model
 
     if base_results is None:
         raise RuntimeError("Не удалось получить результаты бенчмарка")

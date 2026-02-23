@@ -177,6 +177,8 @@ class RAGBenchmarkDashboard:
                     "dataset_file": record.get("dataset_file") or "unknown",
                     "dataset_type": record.get("dataset_type") or "synthetic",
                     "judge_model": record.get("judge_model") or "unknown",
+                    "production_judge_model": record.get("production_judge_model")
+                    or "unknown",
                     "generation_model": record.get("generation_model") or "unknown",
                     "embedding_model": record.get("embedding_model") or "unknown",
                     "judge_eval_mode": record.get("judge_eval_mode") or "direct",
@@ -195,6 +197,7 @@ class RAGBenchmarkDashboard:
                     or {},
                     "domain_analysis_metrics": record.get("domain_analysis_metrics")
                     or {},
+                    "model_runs": record.get("model_runs") or [],
                     "executive_summary": record.get("executive_summary", ""),
                 }
             )
@@ -307,6 +310,15 @@ class RAGBenchmarkDashboard:
             with gr.Tab("Domain Insights"):
                 self._create_domain_insights_tab()
 
+            with gr.Tab("LLM Comparison"):
+                self._create_llm_comparison_tab()
+
+            with gr.Tab("Judge Comparison"):
+                self._create_benchmark_judge_comparison_tab()
+
+            with gr.Tab("Prod Judge Comparison"):
+                self._create_production_judge_comparison_tab()
+
             with gr.Tab("Справка"):
                 self._create_reference_tab()
 
@@ -348,6 +360,7 @@ class RAGBenchmarkDashboard:
                     f"- **Dataset:** `{run.get('dataset_file', 'N/A')}`",
                     f"- **Dataset type:** `{run.get('dataset_type', 'synthetic')}`",
                     f"- **Judge model:** `{run.get('judge_model', 'N/A')}`",
+                    f"- **Production judge model:** `{run.get('production_judge_model', 'N/A')}`",
                     f"- **Generation model:** `{run.get('generation_model', 'N/A')}`",
                     f"- **Embedding model:** `{run.get('embedding_model', 'N/A')}`",
                     f"- **Judge eval mode:** `{run.get('judge_eval_mode', 'N/A')}`",
@@ -1160,6 +1173,203 @@ class RAGBenchmarkDashboard:
             inputs=[run_selector],
             outputs=[summary, score_table, token_table],
         )
+
+    def _extract_model_run_rows(self) -> pd.DataFrame:
+        """Нормализовать model_runs из benchmark_runs в табличный формат."""
+        rows: List[Dict[str, Any]] = []
+        for run in self.runs:
+            model_runs = run.get("model_runs") or []
+            for item in model_runs:
+                metrics = item.get("metrics") or {}
+                tier2 = metrics.get("tier_2") or {}
+                tier3 = metrics.get("tier_3") or {}
+                tier_judge = metrics.get("tier_judge") or {}
+                tier_judge_pipeline = metrics.get("tier_judge_pipeline") or {}
+                rows.append(
+                    {
+                        "timestamp": run.get("timestamp_readable"),
+                        "dataset_type": run.get("dataset_type"),
+                        "generation_model": item.get("generation_model", "unknown"),
+                        "benchmark_judge_model": item.get("judge_model", "unknown"),
+                        "production_judge_model": item.get(
+                            "production_judge_model",
+                            run.get("production_judge_model", "unknown"),
+                        ),
+                        "judge_eval_mode": item.get("judge_eval_mode", "direct"),
+                        "tier2_faithfulness": _safe_float(
+                            tier2.get("avg_faithfulness")
+                        ),
+                        "tier2_relevance": _safe_float(
+                            tier2.get("avg_answer_relevance")
+                        ),
+                        "tier2_correctness": _safe_float(
+                            tier2.get("avg_answer_correctness")
+                        ),
+                        "tier3_e2e": _safe_float(tier3.get("avg_e2e_score")),
+                        "tier3_semantic": _safe_float(
+                            tier3.get("avg_semantic_similarity")
+                        ),
+                        "judge_consistency": _safe_float(
+                            tier_judge.get("consistency_score")
+                        ),
+                        "judge_error_rate": _safe_float(tier_judge.get("error_rate")),
+                        "judge_latency_ms": _safe_float(
+                            tier_judge.get("avg_latency_ms")
+                        ),
+                        "prod_accuracy": _safe_float(
+                            tier_judge_pipeline.get("accuracy")
+                        ),
+                        "prod_precision": _safe_float(
+                            tier_judge_pipeline.get("precision")
+                        ),
+                        "prod_recall": _safe_float(tier_judge_pipeline.get("recall")),
+                        "prod_f1": _safe_float(tier_judge_pipeline.get("f1_score")),
+                        "prod_latency_ms": _safe_float(
+                            tier_judge_pipeline.get("avg_latency_ms")
+                        ),
+                    }
+                )
+        return pd.DataFrame(rows)
+
+    def _create_llm_comparison_tab(self):
+        gr.Markdown("### Сравнение Generation LLM моделей")
+        df = self._extract_model_run_rows()
+        if df.empty:
+            gr.Markdown(
+                "Нет model_runs данных. Запустите benchmark с --generation-models."
+            )
+            return
+
+        metric = gr.Dropdown(
+            choices=[
+                "tier2_faithfulness",
+                "tier2_relevance",
+                "tier2_correctness",
+                "tier3_e2e",
+                "tier3_semantic",
+            ],
+            value="tier3_e2e",
+            label="Метрика для сравнения",
+        )
+        plot = gr.Plot()
+        table = gr.Dataframe(value=df, interactive=False, wrap=True)
+
+        def build(metric_name: str):
+            import plotly.express as px
+
+            metric_map = {
+                "prod_accuracy": "accuracy",
+                "prod_precision": "precision",
+                "prod_recall": "recall",
+                "prod_f1": "f1_score",
+                "prod_latency_ms": "avg_latency_ms",
+            }
+            y_col = metric_map.get(metric_name, "accuracy")
+
+            grouped = (
+                df.groupby("generation_model", as_index=False)[metric_name]
+                .mean()
+                .sort_values(metric_name, ascending=False)
+            )
+            fig = px.bar(
+                grouped,
+                x="generation_model",
+                y=metric_name,
+                title=f"Generation model comparison: {metric_name}",
+            )
+            fig.update_xaxes(showgrid=True)
+            fig.update_yaxes(showgrid=True)
+            return fig
+
+        plot.value = build("tier3_e2e")
+        metric.change(fn=build, inputs=[metric], outputs=[plot])
+
+    def _create_benchmark_judge_comparison_tab(self):
+        gr.Markdown("### Сравнение Benchmark Judge моделей")
+        df = self._extract_model_run_rows()
+        if df.empty:
+            gr.Markdown("Нет model_runs данных. Запустите benchmark с --judge-models.")
+            return
+
+        metric = gr.Dropdown(
+            choices=["judge_consistency", "judge_error_rate", "judge_latency_ms"],
+            value="judge_consistency",
+            label="Метрика judge",
+        )
+        plot = gr.Plot()
+
+        def build(metric_name: str):
+            import plotly.express as px
+
+            grouped = (
+                df.groupby("benchmark_judge_model", as_index=False)[metric_name]
+                .mean()
+                .sort_values(metric_name, ascending=metric_name == "judge_error_rate")
+            )
+            fig = px.bar(
+                grouped,
+                x="benchmark_judge_model",
+                y=metric_name,
+                title=f"Benchmark judge comparison: {metric_name}",
+            )
+            fig.update_xaxes(showgrid=True)
+            fig.update_yaxes(showgrid=True)
+            return fig
+
+        plot.value = build("judge_consistency")
+        metric.change(fn=build, inputs=[metric], outputs=[plot])
+
+    def _create_production_judge_comparison_tab(self):
+        gr.Markdown("### Сравнение Production Judge моделей")
+        df = self._extract_model_run_rows()
+        if df.empty:
+            gr.Markdown(
+                "Нет model_runs данных. Запустите benchmark с --production-judge-models."
+            )
+            return
+
+        metric = gr.Dropdown(
+            choices=[
+                "prod_accuracy",
+                "prod_precision",
+                "prod_recall",
+                "prod_f1",
+                "prod_latency_ms",
+            ],
+            value="prod_accuracy",
+            label="Метрика production judge",
+        )
+        plot = gr.Plot()
+        summary = gr.Dataframe(interactive=False, wrap=True)
+
+        def build(metric_name: str):
+            import plotly.express as px
+
+            grouped = (
+                df.groupby("production_judge_model", as_index=False)
+                .agg(
+                    accuracy=("prod_accuracy", "mean"),
+                    precision=("prod_precision", "mean"),
+                    recall=("prod_recall", "mean"),
+                    f1_score=("prod_f1", "mean"),
+                    avg_latency_ms=("prod_latency_ms", "mean"),
+                )
+                .sort_values("f1_score", ascending=False)
+            )
+            fig = px.bar(
+                grouped,
+                x="production_judge_model",
+                y=y_col,
+                title=f"Production judge comparison: {metric_name}",
+            )
+            fig.update_xaxes(showgrid=True)
+            fig.update_yaxes(showgrid=True)
+            return fig, grouped
+
+        initial_fig, initial_grouped = build("prod_accuracy")
+        plot.value = initial_fig
+        summary.value = initial_grouped
+        metric.change(fn=build, inputs=[metric], outputs=[plot, summary])
 
     def _create_reference_tab(self):
         gr.Markdown("# Справка по системе оценки RAG")

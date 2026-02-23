@@ -44,6 +44,7 @@ End-to-End качества, качества LLM-судьи и аналитик
 | [CLI_REFERENCE.md](docs/CLI_REFERENCE.md) | Справочник по CLI командам |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура и детальный пайплайн |
 | [SMOKE_SCENARIO_LOCAL.md](docs/SMOKE_SCENARIO_LOCAL.md) | Полный локальный smoke-цикл |
+| [MODEL_COMPARISON_GUIDE.md](docs/MODEL_COMPARISON_GUIDE.md) | Гайд по multi-model сравнениям |
 | [manual_annotation_guide.md](docs/manual_annotation_guide.md) | Ручная аннотация датасетов |
 | [METRICS.md](docs/METRICS.md) | Научное описание всех метрик |
 

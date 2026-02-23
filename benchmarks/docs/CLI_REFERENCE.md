@@ -102,6 +102,7 @@ uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virta
 | `--judge-eval-mode` | str | direct | `direct` или `reasoned` |
 | `--judge-models` | str | "" | CSV judge моделей для multi-run |
 | `--generation-models` | str | "" | CSV generation моделей для multi-run |
+| `--production-judge-models` | str | "" | CSV production judge моделей для tier_judge_pipeline |
 | `--analyze-domain` | flag | False | Запустить real-user domain analysis |
 | `--domain-limit` | int | 5000 | Лимит domain analysis вопросов |
 
@@ -212,4 +213,5 @@ uv run python benchmarks/run_dashboard.py --port 7860
 - [ARCHITECTURE.md](ARCHITECTURE.md)
 - [METRICS.md](METRICS.md)
 - [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md)
+- [MODEL_COMPARISON_GUIDE.md](MODEL_COMPARISON_GUIDE.md)
 - [manual_annotation_guide.md](manual_annotation_guide.md)

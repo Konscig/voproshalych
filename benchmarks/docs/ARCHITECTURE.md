@@ -495,6 +495,7 @@ effective_dimensionality, avg_pairwise_distance и др.
 | `visualize_vector_space.py` | UMAP-визуализация векторного пространства |
 | `analyze_chunk_utilization.py` | Анализ доли используемых чанков |
 | `analyze_topic_coverage.py` | Анализ покрытия тематических кластеров |
+| `analyze_real_users_domain.py` | Анализ real-user предметной области |
 | `run_dashboard.py` | Запуск дашборда |
 | `dashboard.py` | Gradio дашборд |
 | `models/rag_benchmark.py` | Tier 0/1/2/3/Judge/UX бенчмарки |
@@ -558,6 +559,8 @@ effective_dimensionality, avg_pairwise_distance и др.
 | real_user_metrics | json | Метрики real-users |
 | utilization_metrics | json | Метрики использования чанков |
 | topic_coverage_metrics | json | Метрики покрытия тем |
+| domain_analysis_metrics | json | Метрики анализа real-user домена |
+| executive_summary | text | Сводка запуска для дашборда |
 | overall_status | text | Итоговый статус |
 
 **schema_version:** Поле для обеспечения совместимости при изменении архитектуры. Текущая версия: `2.0`. При изменении структуры метрик — увеличивать версию.

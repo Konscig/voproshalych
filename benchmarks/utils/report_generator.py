@@ -16,8 +16,12 @@ QUALITY_BASELINES = {
     "hit_rate@10": 0.95,
     "avg_faithfulness": 4.5,
     "avg_answer_relevance": 4.2,
+    "avg_answer_correctness": 4.2,
     "avg_e2e_score": 4.2,
     "avg_semantic_similarity": 0.85,
+    "response_exact_match_rate": 0.7,
+    "response_semantic_consistency": 0.85,
+    "retrieval_consistency": 0.95,
 }
 
 

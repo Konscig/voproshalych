@@ -23,6 +23,42 @@ from benchmarks.utils.evaluator import compute_retrieval_metrics
 logger = logging.getLogger(__name__)
 
 
+def _answer_consistency_metrics(
+    answers: List[str],
+    encoder: SentenceTransformer,
+) -> Dict[str, float]:
+    """Вычислить согласованность набора ответов между повторами."""
+    cleaned_answers = [
+        answer.strip() for answer in answers if answer and answer.strip()
+    ]
+    if len(cleaned_answers) < 2:
+        return {
+            "response_exact_match_rate": 1.0,
+            "response_semantic_consistency": 1.0,
+        }
+
+    exact_match = sum(
+        1 for answer in cleaned_answers[1:] if answer == cleaned_answers[0]
+    ) / (len(cleaned_answers) - 1)
+
+    embeddings = [encoder.encode(answer) for answer in cleaned_answers]
+    similarities = []
+    for i in range(len(embeddings)):
+        for j in range(i + 1, len(embeddings)):
+            emb_i = embeddings[i]
+            emb_j = embeddings[j]
+            norm_i = np.linalg.norm(emb_i)
+            norm_j = np.linalg.norm(emb_j)
+            if norm_i > 0 and norm_j > 0:
+                similarities.append(float(np.dot(emb_i, emb_j) / (norm_i * norm_j)))
+
+    semantic_consistency = float(np.mean(similarities)) if similarities else 0.0
+    return {
+        "response_exact_match_rate": float(exact_match),
+        "response_semantic_consistency": semantic_consistency,
+    }
+
+
 def _empty_intrinsic_metrics() -> Dict[str, float | int]:
     """Вернуть пустой набор intrinsic-метрик Tier 0."""
     return {
@@ -225,6 +261,7 @@ class RAGBenchmark:
         self,
         dataset: List[Dict],
         top_k: int = 10,
+        consistency_runs: int = 1,
     ) -> Dict[str, float]:
         """Выполнить бенчмарк Tier 1 (Retrieval Accuracy).
 
@@ -243,6 +280,7 @@ class RAGBenchmark:
 
         hit_rates = {k: 0 for k in [1, 5, 10]}
         reciprocal_ranks = []
+        retrieval_consistency_scores = []
         retrieval_questions: List[str] = []
         retrieval_results: Dict[str, List[str]] = {}
         retrieval_ground_truth: Dict[str, Set[str]] = {}
@@ -269,6 +307,29 @@ class RAGBenchmark:
 
                 top_chunk_ids = [c.id for c in top_chunks]
                 top_urls = [c.confluence_url for c in top_chunks if c.confluence_url]
+
+                if consistency_runs > 1:
+                    per_question_runs = [top_chunk_ids]
+                    for _ in range(consistency_runs - 1):
+                        repeated_chunks = session.scalars(
+                            select(Chunk)
+                            .where(Chunk.embedding.isnot(None))
+                            .order_by(
+                                Chunk.embedding.cosine_distance(question_embedding)
+                            )
+                            .limit(top_k)
+                        ).all()
+                        per_question_runs.append(
+                            [chunk.id for chunk in repeated_chunks]
+                        )
+
+                    reference = per_question_runs[0]
+                    matches = sum(
+                        1 for run_ids in per_question_runs[1:] if run_ids == reference
+                    )
+                    retrieval_consistency_scores.append(
+                        matches / max(len(per_question_runs) - 1, 1)
+                    )
 
                 for k in [1, 5, 10]:
                     if k <= top_k and set(top_chunk_ids[:k]).intersection(
@@ -305,6 +366,9 @@ class RAGBenchmark:
             "hit_rate@5": hit_rates[5] / total if total > 0 else 0,
             "hit_rate@10": hit_rates[10] / total if total > 0 else 0,
             "mrr": float(np.mean(reciprocal_ranks)) if reciprocal_ranks else 0.0,
+            "retrieval_consistency": float(np.mean(retrieval_consistency_scores))
+            if retrieval_consistency_scores
+            else 1.0,
         }
 
         if retrieval_questions:
@@ -323,6 +387,7 @@ class RAGBenchmark:
     def run_tier_2(
         self,
         dataset: List[Dict],
+        consistency_runs: int = 1,
     ) -> Dict[str, float]:
         """Выполнить бенчмарк Tier 2 (Generation Quality).
 
@@ -340,6 +405,9 @@ class RAGBenchmark:
 
         faithfulness_scores = []
         relevance_scores = []
+        correctness_scores = []
+        response_exact_match_scores = []
+        response_semantic_consistency_scores = []
         text_metrics_list = []
         errors = 0
 
@@ -373,11 +441,37 @@ class RAGBenchmark:
                     question=question, answer=system_answer
                 )
 
+                ground_truth = item.get("ground_truth_answer", "")
+                correctness = 0.0
+                if ground_truth:
+                    correctness = judge.evaluate_answer_correctness(
+                        question=question,
+                        system_answer=system_answer,
+                        ground_truth_answer=ground_truth,
+                    )
+
+                if consistency_runs > 1:
+                    repeated_answers = [system_answer]
+                    for _ in range(consistency_runs - 1):
+                        repeated_answers.append(self.get_answer_func(question, context))
+                    consistency = _answer_consistency_metrics(
+                        repeated_answers, self.encoder
+                    )
+                    response_exact_match_scores.append(
+                        consistency["response_exact_match_rate"]
+                    )
+                    response_semantic_consistency_scores.append(
+                        consistency["response_semantic_consistency"]
+                    )
+                else:
+                    response_exact_match_scores.append(1.0)
+                    response_semantic_consistency_scores.append(1.0)
+
                 faithfulness_scores.append(faithfulness)
                 relevance_scores.append(relevance)
+                correctness_scores.append(correctness)
 
                 # Алгоритмические метрики
-                ground_truth = item.get("ground_truth_answer", "")
                 if ground_truth and system_answer:
                     text_metrics = compute_all_text_metrics(
                         hypothesis=system_answer,
@@ -431,6 +525,17 @@ class RAGBenchmark:
             "avg_answer_relevance": float(np.mean(relevance_scores))
             if relevance_scores
             else 0.0,
+            "avg_answer_correctness": float(np.mean(correctness_scores))
+            if correctness_scores
+            else 0.0,
+            "response_exact_match_rate": float(np.mean(response_exact_match_scores))
+            if response_exact_match_scores
+            else 0.0,
+            "response_semantic_consistency": float(
+                np.mean(response_semantic_consistency_scores)
+            )
+            if response_semantic_consistency_scores
+            else 0.0,
             **avg_text_metrics,
         }
 
@@ -441,6 +546,7 @@ class RAGBenchmark:
     def run_tier_3(
         self,
         dataset: List[Dict],
+        consistency_runs: int = 1,
     ) -> Dict[str, float]:
         """Выполнить бенчмарк Tier 3 (End-to-End).
 
@@ -458,6 +564,10 @@ class RAGBenchmark:
 
         e2e_scores = []
         semantic_similarities = []
+        dot_similarities = []
+        euclidean_distances = []
+        response_exact_match_scores = []
+        response_semantic_consistency_scores = []
         text_metrics_list = []
         errors = 0
 
@@ -502,11 +612,38 @@ class RAGBenchmark:
                     cosine_sim = np.dot(system_embedding, gt_embedding) / (
                         norm_system * norm_gt
                     )
+                    dot_sim = float(np.dot(system_embedding, gt_embedding))
+                    euclidean_dist = float(
+                        np.linalg.norm(system_embedding - gt_embedding)
+                    )
                 else:
                     cosine_sim = 0.0
+                    dot_sim = 0.0
+                    euclidean_dist = 0.0
+
+                if consistency_runs > 1:
+                    repeated_answers = [system_answer]
+                    for _ in range(consistency_runs - 1):
+                        repeated_answers.append(
+                            self.get_answer_func(question, retrieved_context)
+                        )
+                    consistency = _answer_consistency_metrics(
+                        repeated_answers, self.encoder
+                    )
+                    response_exact_match_scores.append(
+                        consistency["response_exact_match_rate"]
+                    )
+                    response_semantic_consistency_scores.append(
+                        consistency["response_semantic_consistency"]
+                    )
+                else:
+                    response_exact_match_scores.append(1.0)
+                    response_semantic_consistency_scores.append(1.0)
 
                 e2e_scores.append(e2e_score)
                 semantic_similarities.append(cosine_sim)
+                dot_similarities.append(dot_sim)
+                euclidean_distances.append(euclidean_dist)
 
                 # Алгоритмические метрики
                 if system_answer and ground_truth:
@@ -558,6 +695,20 @@ class RAGBenchmark:
             "avg_semantic_similarity": float(np.mean(semantic_similarities))
             if semantic_similarities
             else 0.0,
+            "avg_dot_similarity": float(np.mean(dot_similarities))
+            if dot_similarities
+            else 0.0,
+            "avg_euclidean_distance": float(np.mean(euclidean_distances))
+            if euclidean_distances
+            else 0.0,
+            "response_exact_match_rate": float(np.mean(response_exact_match_scores))
+            if response_exact_match_scores
+            else 0.0,
+            "response_semantic_consistency": float(
+                np.mean(response_semantic_consistency_scores)
+            )
+            if response_semantic_consistency_scores
+            else 0.0,
             **avg_text_metrics,
         }
 
@@ -569,6 +720,7 @@ class RAGBenchmark:
         self,
         dataset: List[Dict],
         top_k: int = 10,
+        consistency_runs: int = 1,
     ) -> Dict[str, Dict[str, float]]:
         """Выполнить все уровни тестирования.
 
@@ -583,9 +735,19 @@ class RAGBenchmark:
 
         results = {}
 
-        results["tier_1"] = self.run_tier_1(dataset, top_k=top_k)
-        results["tier_2"] = self.run_tier_2(dataset)
-        results["tier_3"] = self.run_tier_3(dataset)
+        results["tier_1"] = self.run_tier_1(
+            dataset,
+            top_k=top_k,
+            consistency_runs=consistency_runs,
+        )
+        results["tier_2"] = self.run_tier_2(
+            dataset,
+            consistency_runs=consistency_runs,
+        )
+        results["tier_3"] = self.run_tier_3(
+            dataset,
+            consistency_runs=consistency_runs,
+        )
 
         logger.info("✅ Все уровни тестирования завершены")
 

@@ -27,6 +27,7 @@ from qa.database import (
 )
 from qa.database import QuestionAnswer
 from benchmarks.analyze_chunk_utilization import analyze_chunk_utilization
+from benchmarks.analyze_real_users_domain import analyze_real_users_domain
 from benchmarks.analyze_topic_coverage import analyze_topic_coverage
 from benchmarks.models.real_queries_benchmark import RealQueriesBenchmark
 from benchmarks.models.rag_benchmark import RAGBenchmark
@@ -223,6 +224,9 @@ def run_benchmark(
     topics_question_limit: int = 2000,
     topics_count: int = 20,
     topics_top_k: int = 5,
+    consistency_runs: int = 1,
+    analyze_domain: bool = False,
+    domain_limit: int = 5000,
 ):
     """Запустить бенчмарк.
 
@@ -264,6 +268,11 @@ def run_benchmark(
                 n_topics=topics_count,
                 top_k=topics_top_k,
             )
+        if analyze_domain:
+            results["domain_analysis_metrics"] = analyze_real_users_domain(
+                engine=engine,
+                limit=domain_limit,
+            )
         return results
 
     benchmark = RAGBenchmark(engine, encoder, judge)
@@ -286,10 +295,19 @@ def run_benchmark(
                 n_topics=topics_count,
                 top_k=topics_top_k,
             )
+        if analyze_domain:
+            results["domain_analysis_metrics"] = analyze_real_users_domain(
+                engine=engine,
+                limit=domain_limit,
+            )
         return results
 
     if tier == "all":
-        results = benchmark.run_all_tiers(dataset, top_k=top_k)
+        results = benchmark.run_all_tiers(
+            dataset,
+            top_k=top_k,
+            consistency_runs=consistency_runs,
+        )
         results["tier_0"] = benchmark.run_tier_0(dataset)
         results["tier_judge"] = benchmark.run_tier_judge(dataset)
         judge_pipeline_dataset = load_judge_pipeline_dataset()
@@ -303,12 +321,32 @@ def run_benchmark(
         return attach_additional_analytics(results)
     elif tier == "1":
         return attach_additional_analytics(
-            {"tier_1": benchmark.run_tier_1(dataset, top_k=top_k)}
+            {
+                "tier_1": benchmark.run_tier_1(
+                    dataset,
+                    top_k=top_k,
+                    consistency_runs=consistency_runs,
+                )
+            }
         )
     elif tier == "2":
-        return attach_additional_analytics({"tier_2": benchmark.run_tier_2(dataset)})
+        return attach_additional_analytics(
+            {
+                "tier_2": benchmark.run_tier_2(
+                    dataset,
+                    consistency_runs=consistency_runs,
+                )
+            }
+        )
     elif tier == "3":
-        return attach_additional_analytics({"tier_3": benchmark.run_tier_3(dataset)})
+        return attach_additional_analytics(
+            {
+                "tier_3": benchmark.run_tier_3(
+                    dataset,
+                    consistency_runs=consistency_runs,
+                )
+            }
+        )
     elif tier == "0":
         return attach_additional_analytics({"tier_0": benchmark.run_tier_0(dataset)})
     elif tier == "judge":
@@ -346,6 +384,8 @@ def save_results(
     dataset_name: str,
     engine,
     mode: str,
+    judge_eval_mode: str = "direct",
+    consistency_runs: int = 1,
 ):
     """Сохранить результаты бенчмарка.
 
@@ -378,6 +418,9 @@ def save_results(
     artifact_payload = dict(normalized_results)
     artifact_payload["run_metadata"] = run_metadata
     artifact_payload["overall_status"] = overall_status
+    artifact_payload["executive_summary"] = report_generator.generate_executive_summary(
+        normalized_results
+    )
     artifact_payload["dataset_file"] = os.path.basename(dataset_name)
     artifact_payload["dataset_type"] = mode
 
@@ -410,6 +453,8 @@ def save_results(
         or Config.JUDGE_MODEL,
         "generation_model": os.getenv("GENERATION_MODEL") or Config.MISTRAL_MODEL,
         "embedding_model": Config.EMBEDDING_MODEL_PATH,
+        "judge_eval_mode": judge_eval_mode,
+        "consistency_runs": consistency_runs,
         "tier_0_metrics": normalized_results.get("tier_0"),
         "tier_1_metrics": normalized_results.get("tier_1"),
         "tier_2_metrics": normalized_results.get("tier_2"),
@@ -420,6 +465,9 @@ def save_results(
         "real_user_metrics": normalized_results.get("tier_real_users"),
         "utilization_metrics": normalized_results.get("utilization_metrics"),
         "topic_coverage_metrics": normalized_results.get("topic_coverage_metrics"),
+        "domain_analysis_metrics": normalized_results.get("domain_analysis_metrics"),
+        "model_runs": normalized_results.get("model_runs"),
+        "executive_summary": artifact_payload.get("executive_summary", ""),
         "overall_status": overall_status,
     }
 
@@ -608,7 +656,52 @@ def main():
         help="Top-k retrieval для topic coverage анализа",
     )
 
+    parser.add_argument(
+        "--consistency-runs",
+        type=int,
+        default=1,
+        help="Количество повторов запроса для consistency-метрик",
+    )
+
+    parser.add_argument(
+        "--judge-eval-mode",
+        choices=["direct", "reasoned"],
+        default="direct",
+        help="Режим LLM-судьи: direct или reasoned (CoT-style)",
+    )
+
+    parser.add_argument(
+        "--judge-models",
+        type=str,
+        default="",
+        help="CSV список judge моделей для multi-model сравнения",
+    )
+
+    parser.add_argument(
+        "--generation-models",
+        type=str,
+        default="",
+        help="CSV список generation моделей для multi-model сравнения",
+    )
+
+    parser.add_argument(
+        "--analyze-domain",
+        action="store_true",
+        help="Запустить анализ предметной области по real-user вопросам",
+    )
+
+    parser.add_argument(
+        "--domain-limit",
+        type=int,
+        default=5000,
+        help="Лимит вопросов для domain analysis",
+    )
+
     args = parser.parse_args()
+
+    def parse_models(raw: str, fallback: str) -> list[str]:
+        models = [item.strip() for item in raw.split(",") if item.strip()]
+        return models or [fallback]
 
     engine = create_engine(Config.SQLALCHEMY_DATABASE_URI)
 
@@ -641,7 +734,18 @@ def main():
         "3",
         "all",
     }
-    judge = LLMJudge() if needs_judge else None
+
+    default_judge_model = (
+        os.getenv("BENCHMARKS_JUDGE_MODEL")
+        or os.getenv("JUDGE_MODEL")
+        or Config.JUDGE_MODEL
+        or ""
+    )
+    default_generation_model = (
+        os.getenv("GENERATION_MODEL") or Config.MISTRAL_MODEL or ""
+    )
+    judge_models = parse_models(args.judge_models, default_judge_model)
+    generation_models = parse_models(args.generation_models, default_generation_model)
 
     if dataset is not None:
         logger.info(
@@ -653,29 +757,68 @@ def main():
     else:
         logger.info("Запуск бенчмарка mode=%s, tier=%s", args.mode, args.tier)
 
-    results = run_benchmark(
-        engine,
-        encoder,
-        judge,
-        dataset,
-        args.tier,
-        args.mode,
-        args.top_k,
-        real_score_filter=args.real_score,
-        real_limit=args.real_limit,
-        real_latest=args.real_latest,
-        judge_pipeline_dataset_path=None
-        if args.tier == "judge_pipeline"
-        else args.dataset,
-        analyze_utilization=args.analyze_utilization,
-        analyze_topics=args.analyze_topics,
-        utilization_questions_source=args.utilization_questions_source,
-        utilization_question_limit=args.utilization_question_limit,
-        utilization_top_k=args.utilization_top_k,
-        topics_question_limit=args.topics_question_limit,
-        topics_count=args.topics_count,
-        topics_top_k=args.topics_top_k,
-    )
+    model_runs: list[dict[str, Any]] = []
+    base_results: Optional[dict] = None
+    base_generation_model = Config.MISTRAL_MODEL
+
+    for generation_model in generation_models:
+        Config.MISTRAL_MODEL = generation_model
+        os.environ["GENERATION_MODEL"] = generation_model
+
+        for judge_model in judge_models:
+            judge = None
+            if needs_judge:
+                judge = LLMJudge(
+                    model=judge_model,
+                    evaluation_mode=args.judge_eval_mode,
+                )
+
+            run_result = run_benchmark(
+                engine,
+                encoder,
+                judge,
+                dataset,
+                args.tier,
+                args.mode,
+                args.top_k,
+                real_score_filter=args.real_score,
+                real_limit=args.real_limit,
+                real_latest=args.real_latest,
+                judge_pipeline_dataset_path=None
+                if args.tier == "judge_pipeline"
+                else args.dataset,
+                analyze_utilization=args.analyze_utilization,
+                analyze_topics=args.analyze_topics,
+                utilization_questions_source=args.utilization_questions_source,
+                utilization_question_limit=args.utilization_question_limit,
+                utilization_top_k=args.utilization_top_k,
+                topics_question_limit=args.topics_question_limit,
+                topics_count=args.topics_count,
+                topics_top_k=args.topics_top_k,
+                consistency_runs=max(1, args.consistency_runs),
+                analyze_domain=args.analyze_domain,
+                domain_limit=max(1, args.domain_limit),
+            )
+
+            model_runs.append(
+                {
+                    "judge_model": judge_model,
+                    "generation_model": generation_model,
+                    "judge_eval_mode": args.judge_eval_mode,
+                    "metrics": run_result,
+                }
+            )
+            if base_results is None:
+                base_results = run_result
+
+    Config.MISTRAL_MODEL = base_generation_model
+
+    if base_results is None:
+        raise RuntimeError("Не удалось получить результаты бенчмарка")
+
+    results = base_results
+    if len(model_runs) > 1:
+        results["model_runs"] = model_runs
 
     dataset_name = resolved_dataset
     if args.mode == "real-users":
@@ -687,6 +830,8 @@ def main():
         dataset_name=dataset_name,
         engine=engine,
         mode=args.mode,
+        judge_eval_mode=args.judge_eval_mode,
+        consistency_runs=max(1, args.consistency_runs),
     )
     print_results(results)
 

@@ -13,7 +13,8 @@
 5. [visualize_vector_space.py](#visualize_vector_spacepy)
 6. [analyze_chunk_utilization.py](#analyze_chunk_utilizationpy)
 7. [analyze_topic_coverage.py](#analyze_topic_coveragepy)
-8. [run_dashboard.py](#run_dashboardpy)
+8. [analyze_real_users_domain.py](#analyze_real_users_domainpy)
+9. [run_dashboard.py](#run_dashboardpy)
 
 ---
 
@@ -176,6 +177,10 @@ uv run python benchmarks/generate_dataset.py --mode export-annotation --output b
 | `--topics-question-limit` | int | 2000 | Лимит вопросов для topic coverage |
 | `--topics-count` | int | 20 | Количество тематических кластеров |
 | `--topics-top-k` | int | 5 | top-k для анализа тем |
+| `--consistency-runs` | int | 1 | Повторы одного запроса для consistency метрик |
+| `--judge-eval-mode` | str | direct | Режим судьи: direct или reasoned |
+| `--analyze-domain` | flag | False | Запустить domain analysis real-user вопросов |
+| `--domain-limit` | int | 5000 | Лимит вопросов для domain analysis |
 
 ### Режимы
 
@@ -292,6 +297,25 @@ uv run python benchmarks/analyze_chunk_utilization.py --questions-source real --
 
 ```bash
 uv run python benchmarks/analyze_topic_coverage.py --n-topics 20 --question-limit 2000
+```
+
+---
+
+## analyze_real_users_domain.py
+
+Анализ предметной области на основе real-user вопросов.
+
+**Файл:** `benchmarks/analyze_real_users_domain.py`
+
+| Флаг | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `--limit` | int | 5000 | Лимит вопросов для анализа |
+| `--output` | str | benchmarks/reports/real_users_domain_analysis.json | JSON-отчёт |
+
+Пример:
+
+```bash
+uv run python benchmarks/analyze_real_users_domain.py --limit 5000
 ```
 
 ---

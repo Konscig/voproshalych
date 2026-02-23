@@ -44,6 +44,9 @@ METRICS_BY_TIER = {
     "tier_2": [
         "avg_faithfulness",
         "avg_answer_relevance",
+        "avg_answer_correctness",
+        "response_exact_match_rate",
+        "response_semantic_consistency",
         "avg_rouge1_f",
         "avg_rougeL_f",
         "avg_bleu",
@@ -51,6 +54,10 @@ METRICS_BY_TIER = {
     "tier_3": [
         "avg_e2e_score",
         "avg_semantic_similarity",
+        "avg_dot_similarity",
+        "avg_euclidean_distance",
+        "response_exact_match_rate",
+        "response_semantic_consistency",
         "avg_rouge1_f",
         "avg_bleu",
     ],
@@ -75,6 +82,16 @@ METRICS_BY_TIER = {
         "precision@1",
         "precision@5",
         "ndcg@5",
+    ],
+    "domain_analysis_metrics": [
+        "total_questions",
+        "with_answers",
+        "without_answers",
+        "with_answers_rate",
+        "scored_questions",
+        "score_5_questions",
+        "score_1_questions",
+        "avg_question_length",
     ],
     "utilization_metrics": [
         "total_chunks",
@@ -108,6 +125,7 @@ QUALITY_BASELINES = {
     "ndcg@5": 0.8,
     "avg_faithfulness": 4.5,
     "avg_answer_relevance": 4.2,
+    "avg_answer_correctness": 4.2,
     "avg_e2e_score": 4.2,
     "avg_semantic_similarity": 0.85,
     "avg_rouge1_f": 0.50,
@@ -169,6 +187,8 @@ class RAGBenchmarkDashboard:
                     "judge_model": record.get("judge_model") or "unknown",
                     "generation_model": record.get("generation_model") or "unknown",
                     "embedding_model": record.get("embedding_model") or "unknown",
+                    "judge_eval_mode": record.get("judge_eval_mode") or "direct",
+                    "consistency_runs": record.get("consistency_runs") or 1,
                     "overall_status": record.get("overall_status"),
                     "tier_0": record.get("tier_0_metrics") or {},
                     "tier_1": record.get("tier_1_metrics") or {},
@@ -182,6 +202,9 @@ class RAGBenchmarkDashboard:
                     "utilization_metrics": record.get("utilization_metrics") or {},
                     "topic_coverage_metrics": record.get("topic_coverage_metrics")
                     or {},
+                    "domain_analysis_metrics": record.get("domain_analysis_metrics")
+                    or {},
+                    "executive_summary": record.get("executive_summary", ""),
                 }
             )
 
@@ -266,17 +289,6 @@ class RAGBenchmarkDashboard:
                 "ответов RAG-системы."
             )
 
-            with gr.Accordion("System Info", open=False):
-                gr.Markdown(
-                    "\n".join(
-                        [
-                            f"- Judge model: `{os.getenv('BENCHMARKS_JUDGE_MODEL') or os.getenv('JUDGE_MODEL') or Config.JUDGE_MODEL or 'unknown'}`",
-                            f"- Generation model: `{os.getenv('GENERATION_MODEL') or Config.MISTRAL_MODEL or 'unknown'}`",
-                            f"- Embedding model: `{Config.EMBEDDING_MODEL_PATH}`",
-                        ]
-                    )
-                )
-
             with gr.Tab("Run Details"):
                 self._create_run_details_tab()
 
@@ -300,6 +312,9 @@ class RAGBenchmarkDashboard:
 
             with gr.Tab("Topic Coverage"):
                 self._create_topic_coverage_tab()
+
+            with gr.Tab("Domain Insights"):
+                self._create_domain_insights_tab()
 
             with gr.Tab("Справка"):
                 self._create_reference_tab()
@@ -344,6 +359,8 @@ class RAGBenchmarkDashboard:
                     f"- **Judge model:** `{run.get('judge_model', 'N/A')}`",
                     f"- **Generation model:** `{run.get('generation_model', 'N/A')}`",
                     f"- **Embedding model:** `{run.get('embedding_model', 'N/A')}`",
+                    f"- **Judge eval mode:** `{run.get('judge_eval_mode', 'N/A')}`",
+                    f"- **Consistency runs:** `{run.get('consistency_runs', 'N/A')}`",
                     f"- **Overall status:** `{run['overall_status']}`",
                 ]
             )
@@ -361,6 +378,7 @@ class RAGBenchmarkDashboard:
                 "tier_real_users": "Real Users (Retrieval)",
                 "utilization_metrics": "Chunk Utilization",
                 "topic_coverage_metrics": "Topic Coverage",
+                "domain_analysis_metrics": "Domain Analysis",
             }
 
             for tier_key, tier_label in tier_labels.items():
@@ -368,18 +386,36 @@ class RAGBenchmarkDashboard:
                 if not isinstance(tier_metrics, dict) or not tier_metrics:
                     continue
                 for metric_name, metric_value in sorted(tier_metrics.items()):
+                    baseline = QUALITY_BASELINES.get(metric_name)
                     if isinstance(metric_value, (float, int)):
                         rendered_value = round(float(metric_value), 4)
+                        if baseline is None:
+                            status = "n/a"
+                        else:
+                            lower_is_better = metric_name in {
+                                "avg_nn_distance",
+                                "avg_euclidean_distance",
+                                "error_rate",
+                                "avg_latency_ms",
+                            }
+                            if lower_is_better:
+                                status = (
+                                    "ok" if float(metric_value) <= baseline else "below"
+                                )
+                            else:
+                                status = (
+                                    "ok" if float(metric_value) >= baseline else "below"
+                                )
                     else:
-                        rendered_value = json.dumps(
-                            metric_value,
-                            ensure_ascii=False,
-                        )
+                        rendered_value = json.dumps(metric_value, ensure_ascii=False)
+                        status = "n/a"
                     rows.append(
                         [
                             tier_label,
                             metric_name,
                             rendered_value,
+                            "-" if baseline is None else baseline,
+                            status,
                         ]
                     )
 
@@ -395,66 +431,35 @@ class RAGBenchmarkDashboard:
         run_info = gr.Markdown(value=initial_info)
         metrics_table = gr.Dataframe(
             value=initial_rows,
-            headers=["Tier", "Metric", "Value"],
+            headers=["Tier", "Metric", "Value", "Baseline", "Status"],
             interactive=False,
             wrap=True,
         )
 
-        def update_run(selected: str):
-            info, rows = get_run_metrics(selected)
-            return info, rows
-
-        run_selector.change(
-            fn=update_run,
-            inputs=[run_selector],
-            outputs=[run_info, metrics_table],
+        executive_summary = gr.Markdown(
+            value=f"### Executive Summary\n\n{ordered_runs[0].get('executive_summary', 'Нет данных')}"
         )
 
-        def load_markdown_report(selected: str) -> str:
+        def update_run(selected: str):
+            info, rows = get_run_metrics(selected)
             run = next(
                 (r for r in ordered_runs if format_run_choice(r) == selected),
                 None,
             )
-            if not run:
-                return "Запуск не найден"
-
-            run_id = run.get("id")
-            dataset_file = run.get("dataset_file", "")
-            base_name = dataset_file.replace(".json", "") if dataset_file else ""
-            possible_paths = [
-                os.path.join("benchmarks/reports", f"rag_benchmark_{run_id}.md"),
-                os.path.join("benchmarks/reports", f"{base_name}.md"),
-                os.path.join("benchmarks/reports", f"dataset_{run_id}.md"),
-            ]
-
-            for path in possible_paths:
-                if os.path.exists(path):
-                    try:
-                        with open(path, "r", encoding="utf-8") as f:
-                            return f.read()
-                    except Exception as e:
-                        return f"Ошибка чтения файла: {e}"
-
-            return f"Markdown отчёт не найден. Искали: {possible_paths}"
-
-        gr.Markdown("---")
-        gr.Markdown("### 📄 Markdown Report")
-
-        initial_markdown = load_markdown_report(run_choices[0])
-
-        markdown_display = gr.Markdown(value=initial_markdown)
-
-        def update_markdown(selected: str):
-            return load_markdown_report(selected)
+            summary = "Нет данных"
+            if run:
+                summary = run.get("executive_summary", "Нет данных")
+            return info, rows, f"### Executive Summary\n\n{summary}"
 
         run_selector.change(
-            fn=update_markdown,
+            fn=update_run,
             inputs=[run_selector],
-            outputs=[markdown_display],
+            outputs=[run_info, metrics_table, executive_summary],
         )
 
     def _create_history_tab(self):
         gr.Markdown("### Historical trend for selected metric")
+        import plotly.graph_objects as go
 
         all_tiers = list(METRICS_BY_TIER.keys())
 
@@ -482,27 +487,56 @@ class RAGBenchmarkDashboard:
                 label="Metric",
             )
 
-        initial_history = pd.DataFrame(
-            self._build_series_rows(
-                *self.get_metric_history(default_tier, default_metric),
-                default_metric,
-                default_metric,
-            )
-        )
+        def build_history_figure(tier: str, metric: str):
+            dates, values = self.get_metric_history(tier, metric)
+            fig = go.Figure()
+            if not dates or not values:
+                fig.update_layout(
+                    title="Metric vs Baseline",
+                    xaxis_title="Run",
+                    yaxis_title="Value",
+                    template="plotly_white",
+                )
+                fig.update_xaxes(showgrid=True)
+                fig.update_yaxes(showgrid=True)
+                return fig
 
-        plot = gr.LinePlot(
-            value=initial_history,
-            x="timestamp",
-            y="value",
-            color="series",
-            title="Metric vs Baseline",
-            x_title="Run",
-            y_title="Value",
-            tooltip="all",
-            height=420,
-            color_map={"Baseline": "#808080"},
-            sort="x",
-        )
+            fig.add_trace(
+                go.Scatter(
+                    x=dates,
+                    y=values,
+                    mode="lines+markers",
+                    marker={"size": 11},
+                    line={"width": 2},
+                    name=metric,
+                )
+            )
+
+            baseline = QUALITY_BASELINES.get(metric)
+            if baseline is not None:
+                fig.add_trace(
+                    go.Scatter(
+                        x=dates,
+                        y=[baseline] * len(dates),
+                        mode="lines+markers",
+                        marker={"size": 9},
+                        line={"width": 1.5, "dash": "dot"},
+                        name="Baseline",
+                    )
+                )
+
+            fig.update_layout(
+                title="Metric vs Baseline",
+                xaxis_title="Run",
+                yaxis_title="Value",
+                template="plotly_white",
+                legend={"orientation": "h"},
+            )
+            fig.update_xaxes(showgrid=True)
+            fig.update_yaxes(showgrid=True)
+            return fig
+
+        plot = gr.Plot(value=build_history_figure(default_tier, default_metric))
 
         def update_metric_choices(tier: str):
             options = self._metric_options_for_tier(tier)
@@ -511,12 +545,8 @@ class RAGBenchmarkDashboard:
 
         def update_plot(tier: str, metric: str):
             if not metric:
-                return pd.DataFrame(columns=["timestamp", "value", "series"])
-            dates, values = self.get_metric_history(tier, metric)
-            if not dates:
-                return pd.DataFrame(columns=["timestamp", "value", "series"])
-            rows = self._build_series_rows(dates, values, metric, metric)
-            return pd.DataFrame(rows)
+                return go.Figure()
+            return build_history_figure(tier, metric)
 
         tier_dropdown.change(
             fn=update_metric_choices,
@@ -536,6 +566,7 @@ class RAGBenchmarkDashboard:
 
     def _create_comparison_tab(self):
         gr.Markdown("### Compare tiers by metric")
+        import plotly.graph_objects as go
 
         comparison_metrics = sorted(
             {metric for metrics in METRICS_BY_TIER.values() for metric in metrics}
@@ -552,6 +583,7 @@ class RAGBenchmarkDashboard:
             "tier_real_users": "Real Users",
             "utilization_metrics": "Chunk Utilization",
             "topic_coverage_metrics": "Topic Coverage",
+            "domain_analysis_metrics": "Domain Analysis",
         }
 
         metric_dropdown = gr.Dropdown(
@@ -560,46 +592,10 @@ class RAGBenchmarkDashboard:
             label="Metric",
         )
 
-        initial_comparison_rows: List[Dict[str, str | float]] = []
-        for tier_name, label in tier_labels.items():
-            if tier_name in METRICS_BY_TIER:
-                dates, values = self.get_metric_history(tier_name, "mrr")
-                if dates:
-                    initial_comparison_rows.extend(
-                        self._build_series_rows(dates, values, "mrr", label)
-                    )
-
-        plot = gr.LinePlot(
-            value=pd.DataFrame(initial_comparison_rows),
-            x="timestamp",
-            y="value",
-            color="series",
-            title="Tier comparison",
-            x_title="Run",
-            y_title="Value",
-            tooltip="all",
-            height=420,
-            color_map={"Baseline": "#808080"},
-            sort="x",
-        )
-
-        def update_comparison_plot(metric: str):
-            all_rows: List[Dict[str, str | float]] = []
-            series_by_tier = {
-                "tier_0": "Tier 0 (Embed)",
-                "tier_1": "Tier 1 (Retrieval)",
-                "tier_2": "Tier 2 (Generation)",
-                "tier_3": "Tier 3 (E2E)",
-                "tier_judge": "Tier Judge (Qwen)",
-                "tier_judge_pipeline": "Tier Judge Pipeline",
-                "tier_ux": "Tier UX",
-                "tier_real_users": "Real Users",
-                "utilization_metrics": "Chunk Utilization",
-                "topic_coverage_metrics": "Topic Coverage",
-            }
-
+        def build_comparison_figure(metric: str):
+            fig = go.Figure()
             longest_dates: List[str] = []
-            for tier_name, label in series_by_tier.items():
+            for tier_name, label in tier_labels.items():
                 if tier_name not in METRICS_BY_TIER:
                     continue
                 if metric not in METRICS_BY_TIER[tier_name]:
@@ -608,40 +604,46 @@ class RAGBenchmarkDashboard:
                 if not dates:
                     continue
                 if len(dates) > len(longest_dates):
-                    longest_dates = dates[:]
-                all_rows.extend(
-                    self._build_series_rows(dates, values, metric, series_name=label)
+                    longest_dates = dates
+                fig.add_trace(
+                    go.Scatter(
+                        x=dates,
+                        y=values,
+                        mode="lines+markers",
+                        marker={"size": 10},
+                        line={"width": 2},
+                        name=label,
+                    )
                 )
-
-            if not all_rows:
-                return pd.DataFrame(columns=["timestamp", "value", "series"])
 
             baseline = QUALITY_BASELINES.get(metric)
             if baseline is not None and longest_dates:
-                baseline_dates = longest_dates
-                if len(baseline_dates) == 1:
-                    baseline_dates = [
-                        baseline_dates[0],
-                        f"{baseline_dates[0]}_point",
-                    ]
-                all_rows.extend(
-                    {
-                        "timestamp": date,
-                        "value": baseline,
-                        "series": "Baseline",
-                    }
-                    for date in baseline_dates
+                fig.add_trace(
+                    go.Scatter(
+                        x=longest_dates,
+                        y=[baseline] * len(longest_dates),
+                        mode="lines+markers",
+                        marker={"size": 8},
+                        line={"dash": "dot", "width": 1.5},
+                        name="Baseline",
+                    )
                 )
 
-            deduped = []
-            seen = set()
-            for row in all_rows:
-                key = (row["timestamp"], row["value"], row["series"])
-                if key in seen:
-                    continue
-                seen.add(key)
-                deduped.append(row)
-            return pd.DataFrame(deduped)
+            fig.update_layout(
+                title="Tier comparison",
+                xaxis_title="Run",
+                yaxis_title="Value",
+                template="plotly_white",
+                legend={"orientation": "h"},
+            )
+            fig.update_xaxes(showgrid=True)
+            fig.update_yaxes(showgrid=True)
+            return fig
+
+        plot = gr.Plot(value=build_comparison_figure("mrr"))
+
+        def update_comparison_plot(metric: str):
+            return build_comparison_figure(metric)
 
         metric_dropdown.change(
             fn=update_comparison_plot,
@@ -668,31 +670,31 @@ class RAGBenchmarkDashboard:
                 tjp = run.get("tier_judge_pipeline", {})
                 rows.append(
                     [
-                        run["timestamp_readable"][:16],
-                        run["git_branch"][:12] if run.get("git_branch") else "N/A",
-                        run.get("dataset_type", "synthetic")[:8],
+                        run["timestamp_readable"],
+                        run["git_branch"] if run.get("git_branch") else "N/A",
+                        run.get("dataset_type", "synthetic"),
                         round(_safe_float(t1.get("mrr")), 2),
                         round(_safe_float(t1.get("hit_rate@5")), 2),
                         round(_safe_float(t2.get("avg_faithfulness")), 2),
                         round(_safe_float(t2.get("avg_answer_relevance")), 2),
                         round(_safe_float(t3.get("avg_e2e_score")), 2),
                         round(_safe_float(tjp.get("accuracy")), 2) if tjp else "-",
-                        run["overall_status"][:8],
+                        run["overall_status"],
                     ]
                 )
             return rows
 
         headers = [
             "Time",
-            "Branch",
-            "Type",
+            "Git Branch",
+            "Dataset Type",
             "MRR",
-            "Hit@5",
-            "Faith",
-            "Relev",
+            "Hit Rate@5",
+            "Faithfulness",
+            "Relevance",
             "E2E",
-            "TJP Acc",
-            "Status",
+            "Judge Pipeline Accuracy",
+            "Overall Status",
         ]
 
         initial_rows = build_registry_rows("all")
@@ -789,7 +791,37 @@ class RAGBenchmarkDashboard:
                     if isinstance(item, dict):
                         all_keys.update(item.keys())
 
-                ordered_keys = sorted(all_keys)
+                text_priority = [
+                    "question",
+                    "ground_truth_answer",
+                    "chunk_text",
+                    "confluence_url",
+                    "relevant_urls",
+                    "notes",
+                    "source",
+                    "question_source",
+                ]
+                numeric_priority = [
+                    "chunk_id",
+                    "question_answer_id",
+                    "user_score",
+                    "is_relevant_chunk_matched",
+                    "is_question_ok",
+                    "is_answer_ok",
+                    "is_chunk_ok",
+                ]
+
+                ordered_keys = [key for key in text_priority if key in all_keys]
+                ordered_keys.extend(
+                    key
+                    for key in sorted(all_keys)
+                    if key not in ordered_keys and key not in numeric_priority
+                )
+                ordered_keys.extend(
+                    key
+                    for key in numeric_priority
+                    if key in all_keys and key not in ordered_keys
+                )
 
                 preview_rows = []
                 for row in dataset[:30]:
@@ -805,16 +837,12 @@ class RAGBenchmarkDashboard:
                     preview_rows.append(rendered_row)
 
                 preview = pd.DataFrame(preview_rows)
-                sample_records = json.dumps(dataset[:3], ensure_ascii=False, indent=2)
-
                 meta = (
                     f"**Dataset:** `{dataset_file}`\n"
                     f"\n**Mode:** `{run.get('dataset_type', 'synthetic')}`\n"
                     f"\n**Rows:** {len(dataset)}\n"
                     f"\n**Linked run:** `{run['timestamp_readable']}`\n"
-                    f"\n**Поля ({len(ordered_keys)}):** `{', '.join(ordered_keys)}`\n"
-                    "\n**Первые 3 записи (JSON):**\n"
-                    f"```json\n{sample_records}\n```"
+                    f"\n**Поля ({len(ordered_keys)}):** `{', '.join(ordered_keys)}`"
                 )
 
                 return meta, preview
@@ -1083,133 +1111,99 @@ class RAGBenchmarkDashboard:
             outputs=[summary, coverage_plot, coverage_table],
         )
 
-    def _create_reference_tab(self):
-        gr.Markdown(
-            """
-# Справка по системе оценки RAG
+    def _create_domain_insights_tab(self):
+        gr.Markdown("### Анализ предметной области на real-user данных")
+        if not self.runs:
+            gr.Markdown("Нет запусков для domain analysis.")
+            return
 
-## Назначение
+        ordered_runs = list(reversed(self.runs))
 
-Дашборд предназначен для мониторинга качества Retrieval-Augmented Generation системы. 
-Он позволяет отслеживать метрики на различных этапах пайплайна и анализировать динамику изменений между запусками.
+        def format_run_choice(run: Dict) -> str:
+            return (
+                f"{run['timestamp_readable']} | {run['dataset_type']} | "
+                f"{run['git_commit_hash'][:7]}"
+            )
 
----
-
-## Уровни оценки (Tiers)
-
-### Tier 0: Embedding Quality
-
-Оценивает внутреннее качество эмбеддингов без использования LLM.
-
-- **avg_nn_distance**: среднее расстояние до ближайших соседей. Чем ниже, тем плотнее локальная структура.
-- **density_score**: обратная величина к avg_nn_distance. Чем выше, тем плотнее пространство.
-- **effective_dimensionality**: число компонент для 95% дисперсии.
-
-### Tier 1: Retrieval
-
-Оценивает качество векторного поиска релевантных документов.
-
-- **HitRate@K**: доля запросов, для которых хотя бы один релевантный документ найден в топ-K.
-- **MRR (Mean Reciprocal Rank)**: среднее значение обратного ранга первого релевантного документа.
-- **Recall@K**: полнота - доля найденных релевантных документов от общего числа.
-- **Precision@K**: точность - доля релевантных документов среди топ-K.
-- **NDCG@K**: нормализованная дисконтированная накопленная выгода.
-
-Интерпретация: высокие значения MRR и Recall означают, что система находит релевантные документы.
-
-### Tier 2: Generation
-
-Оценивает качество сгенерированного ответа при известном релевантном контексте.
-
-- **avg_faithfulness**: насколько ответ соответствует предоставленному контексту (шкала 1-5).
-- **avg_answer_relevance**: насколько ответ релевантен вопросу (шкала 1-5).
-
-Эти метрики выставляются LLM-судьей. Значения выше 4.0 считаются хорошими.
-
-### Tier 3: End-to-End
-
-Оценивает полный пайплайн retrieval + generation.
-
-- **avg_e2e_score**: общая оценка качества ответа LLM-судьей (шкала 1-5).
-- **avg_semantic_similarity**: косинусная близость между сгенерированным и эталонным ответами.
-
-### Tier Judge (Qwen)
-
-Оценивает согласованность judge-модели при повторных запусках.
-
-- **consistency_score**: доля запросов, где оценка не изменилась при повторном запуске.
-- **error_rate**: доля запросов, где произошла ошибка API.
-- **avg_latency_ms**: среднее время отклика API в миллисекундах.
-
-### Tier Judge Pipeline (Mistral)
-
-Тестирует production judge, который решает "показывать ответ пользователю или нет".
-
-- **accuracy**: точность решений судьи по сравнению с размеченными данными.
-- **precision/recall/f1_score**: для класса "показывать ответ".
-
-### Tier UX
-
-Анализирует пользовательский опыт взаимодействия.
-
-- **cache_hit_rate**: доля запросов, найденных в кэше похожих вопросов.
-- **context_preserve**: сохранение контекста в многоturn диалогах.
-- **multi_turn_consistency**: согласованность ответов в рамках одной сессии.
-
-### Real Users
-
-Метрики на реальных вопросах пользователей из таблицы QuestionAnswer.
-
-- Используются те же метрики retrieval: MRR, Recall@K, Precision@K, NDCG@K.
-- Позволяют оценить качество на реальном трафике.
-
----
-
-## Типы запусков
-
-### Synthetic
-
-Автоматически сгенерированный датасет из чанков через LLM. Используется для быстрой проверки и регрессионного тестирования.
-
-### Manual / Аннотация
-
-Датасет, подготовленный для ручной разметки. Позволяет оценить качество с участием человека-эксперта.
-
-### Real Users
-
-Использование реальных вопросов из таблицы QuestionAnswer. Наиболее репрезентативный сценарий.
-
----
-
-## Рекомендуемые пороги (Baseline)
-
-| Tier | Метрика | Порог |
-|------|---------|-------|
-| Tier 0 | density_score | >= 3.00 |
-| Tier 0 | avg_nn_distance | <= 0.30 |
-| Tier 1 | MRR | >= 0.80 |
-| Tier 1 | HitRate@5 | >= 0.90 |
-| Tier 1 | HitRate@10 | >= 0.95 |
-| Tier 2 | Faithfulness | >= 4.5 |
-| Tier 2 | Answer Relevance | >= 4.2 |
-| Tier 3 | E2E Score | >= 4.2 |
-| Tier 3 | Semantic Similarity | >= 0.85 |
-| Tier Judge | consistency_score | >= 0.90 |
-| Tier Judge | error_rate | <= 0.05 |
-| Tier Judge Pipeline | accuracy | >= 0.85 |
-| Tier Judge Pipeline | f1_score | >= 0.85 |
-
----
-
-## Работа с историей
-
-- **Metric History**: отслеживание динамики конкретной метрики во времени.
-- **Tier Comparison**: сравнение производительности разных уровней на одной метрике.
-- **Runs Registry**: список всех запусков с основными метриками для быстрого обзора.
-
-При анализе регрессий обращайте внимание на метрики ниже baseline - они указывают на потенциальные проблемы в системе.
-            """
+        run_choices = [format_run_choice(run) for run in ordered_runs]
+        run_selector = gr.Dropdown(
+            choices=run_choices,
+            value=run_choices[0],
+            label="Выберите запуск",
         )
+
+        summary = gr.Markdown()
+        score_table = gr.Dataframe(interactive=False, wrap=True)
+        token_table = gr.Dataframe(interactive=False, wrap=True)
+
+        def build_domain_view(selected: str):
+            run = next(
+                (item for item in ordered_runs if format_run_choice(item) == selected),
+                None,
+            )
+            if run is None:
+                return "Запуск не найден", pd.DataFrame(), pd.DataFrame()
+
+            metrics = run.get("domain_analysis_metrics") or {}
+            if not metrics:
+                return (
+                    "В запуске нет domain_analysis_metrics",
+                    pd.DataFrame(),
+                    pd.DataFrame(),
+                )
+
+            summary_text = (
+                f"**Всего вопросов:** `{metrics.get('total_questions', 0)}`\n"
+                f"\n**С ответами:** `{metrics.get('with_answers', 0)}`\n"
+                f"\n**Без ответов:** `{metrics.get('without_answers', 0)}`\n"
+                f"\n**Средняя длина вопроса:** `{_safe_float(metrics.get('avg_question_length')):.2f}`"
+            )
+
+            score_distribution = metrics.get("score_distribution", {})
+            score_df = pd.DataFrame(
+                [
+                    {"score": str(score), "count": count}
+                    for score, count in score_distribution.items()
+                ]
+            )
+
+            top_tokens = metrics.get("top_tokens_all", [])
+            token_df = pd.DataFrame(top_tokens)
+
+            return summary_text, score_df, token_df
+
+        initial_summary, initial_scores, initial_tokens = build_domain_view(
+            run_choices[0]
+        )
+        summary = gr.Markdown(value=initial_summary)
+        score_table = gr.Dataframe(value=initial_scores, interactive=False, wrap=True)
+        token_table = gr.Dataframe(value=initial_tokens, interactive=False, wrap=True)
+
+        run_selector.change(
+            fn=build_domain_view,
+            inputs=[run_selector],
+            outputs=[summary, score_table, token_table],
+        )
+
+    def _create_reference_tab(self):
+        gr.Markdown("# Справка по системе оценки RAG")
+        gr.Markdown("Содержит полный список метрик, используемых в дашборде и отчётах.")
+
+        rows = []
+        for tier, metrics in METRICS_BY_TIER.items():
+            for metric in metrics:
+                baseline = QUALITY_BASELINES.get(metric)
+                rows.append(
+                    {
+                        "Tier": tier,
+                        "Metric": metric,
+                        "Baseline": "-" if baseline is None else baseline,
+                    }
+                )
+
+        table_df = pd.DataFrame(rows)
+        gr.HTML("<div style='text-align:center'><h3>Все метрики</h3></div>")
+        gr.Dataframe(value=table_df, interactive=False, wrap=False)
 
 
 def find_free_port(start_port=7860, max_port=7870):

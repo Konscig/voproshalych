@@ -86,6 +86,7 @@ class LLMJudge:
         model: Optional[str] = None,
         request_delay: float = 2.0,
         request_timeout: float = 120.0,
+        evaluation_mode: str = "direct",
     ):
         """Инициализировать LLM-судью.
 
@@ -99,6 +100,10 @@ class LLMJudge:
         Raises:
             ValueError: Если не удалось подключиться к API
         """
+        if evaluation_mode not in {"direct", "reasoned"}:
+            raise ValueError("evaluation_mode должен быть direct или reasoned")
+        self.evaluation_mode = evaluation_mode
+
         candidates: List[tuple[str, str, str]] = []
         if api_key and base_url and model:
             candidates.append((api_key, base_url, model))
@@ -278,6 +283,12 @@ class LLMJudge:
 Ответ только числом от 1 до 5.
 """
 
+        if self.evaluation_mode == "reasoned":
+            prompt += (
+                "\nСначала рассуждай пошагово про себя, но в ответе верни только "
+                "одно число от 1 до 5 без пояснений."
+            )
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -350,6 +361,12 @@ class LLMJudge:
 
 Ответ только числом от 1 до 5.
 """
+
+        if self.evaluation_mode == "reasoned":
+            prompt += (
+                "\nСначала рассуждай пошагово про себя, но в ответе верни только "
+                "одно число от 1 до 5 без пояснений."
+            )
 
         try:
             response = self.client.chat.completions.create(
@@ -427,6 +444,12 @@ class LLMJudge:
 Ответ только числом от 1 до 5.
 """
 
+        if self.evaluation_mode == "reasoned":
+            prompt += (
+                "\nСначала рассуждай пошагово про себя, но в ответе верни только "
+                "одно число от 1 до 5 без пояснений."
+            )
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -460,3 +483,117 @@ class LLMJudge:
             error_msg = f"Ошибка оценки E2E качества: {e}"
             logger.error(error_msg)
             raise RuntimeError(error_msg)
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_random_exponential(min=5, max=120),
+        reraise=True,
+    )
+    def evaluate_answer_correctness(
+        self,
+        question: str,
+        system_answer: str,
+        ground_truth_answer: str,
+    ) -> float:
+        """Оценить корректность ответа относительно эталона по шкале 1-5."""
+        prompt = """Оцени корректность ответа системы по отношению к эталонному ответу.
+
+Критерии:
+- 5: ответ полностью корректен и покрывает ключевые факты эталона
+- 4: в целом корректен, есть небольшие пропуски
+- 3: частично корректен, значимые пробелы
+- 2: много неточностей или искажений
+- 1: в основном некорректен
+
+Вопрос: {question}
+Ответ системы: {system_answer}
+Эталонный ответ: {ground_truth_answer}
+
+Ответ только числом от 1 до 5.
+"""
+        if self.evaluation_mode == "reasoned":
+            prompt += (
+                "\nСначала рассуждай пошагово про себя, но в ответе верни только "
+                "одно число от 1 до 5 без пояснений."
+            )
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Ты эксперт по проверке фактической корректности ответов.",
+                    },
+                    {"role": "user", "content": prompt.format(**locals())},
+                ],
+                temperature=0.2,
+                max_tokens=10,
+            )
+
+            score_str = (response.choices[0].message.content or "").strip()
+            try:
+                score = float(score_str)
+                score = max(1.0, min(5.0, score))
+                time.sleep(self.request_delay)
+                return score
+            except ValueError as error:
+                raise ValueError(f"Некорректный формат оценки: {score_str}") from error
+
+        except Exception as e:
+            error_msg = f"Ошибка оценки answer correctness: {e}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_random_exponential(min=5, max=120),
+        reraise=True,
+    )
+    def compare_answers_pairwise(
+        self,
+        question: str,
+        answer_a: str,
+        answer_b: str,
+        allow_tie: bool = True,
+    ) -> Dict[str, str]:
+        """Сравнить два ответа и вернуть победителя (A/B/Tie)."""
+        tie_option = "Tie" if allow_tie else "A or B"
+        prompt = f"""Сравни два ответа на один вопрос и выбери лучший.
+
+Вопрос: {question}
+Ответ A: {answer_a}
+Ответ B: {answer_b}
+
+Критерии: релевантность, корректность, полезность.
+Разрешённый формат ответа: {tie_option}.
+Если ответы равноценны, выбери Tie.
+
+Верни строго JSON вида:
+{{"winner": "A|B|Tie", "reason": "краткое объяснение"}}
+"""
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Ты сравниваешь ответы для pairwise-evaluation.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=200,
+        )
+
+        content = (response.choices[0].message.content or "").strip()
+        payload = _parse_json_payload(content)
+        winner = str(payload.get("winner", "Tie"))
+        if winner not in {"A", "B", "Tie"}:
+            winner = "Tie"
+        if not allow_tie and winner == "Tie":
+            winner = "A"
+        return {
+            "winner": winner,
+            "reason": str(payload.get("reason", "")),
+        }

@@ -1049,6 +1049,46 @@ UMAP-визуализация (`2D/3D`) используется как диаг
 
 Скрипт: `benchmarks/visualize_vector_space.py`.
 
+### 12.4 Domain Analysis по real-user вопросам
+
+Да, это корректно называть **вычисляемыми метриками**, но по классу это
+**аналитические метрики предметной области**, а не quality-метрики Tier 0-3.
+
+Скрипт: `benchmarks/analyze_real_users_domain.py`.
+
+Ключевые вычисляемые метрики:
+
+- `total_questions` — общее число real-user вопросов в выборке.
+- `with_answers` / `without_answers` — количество вопросов с ответом/без ответа.
+- `with_answers_rate` — доля вопросов с ответом:
+
+$$
+\text{with\_answers\_rate} = \frac{N_{with\_answers}}{N_{total\_questions}}
+$$
+
+- `scored_questions` — число вопросов с пользовательской оценкой.
+- `score_distribution` — распределение оценок `score`.
+- `score_5_questions`, `score_1_questions` — крайние когорты удовлетворённости.
+- `avg_question_length` — средняя длина вопроса:
+
+$$
+\text{avg\_question\_length} =
+\frac{1}{N}\sum_{i=1}^{N}|q_i|
+$$
+
+- `top_tokens_all`, `top_tokens_with_answers`,
+  `top_tokens_without_answers` — частотные токены для лингвистического профиля.
+- `slang_indicator_counts` — частоты заранее заданных доменных/сленговых маркеров.
+
+Интерпретация:
+
+- высокая `without_answers` и низкая `with_answers_rate` указывают на зоны,
+  где база знаний и/или маршрутизация ответов требуют усиления;
+- перекос `score_distribution` в сторону низких оценок сигнализирует о
+  проблемах покрытия, формулировок или качества финальных ответов;
+- `top_tokens*` и `slang_indicator_counts` используются для улучшения
+  генерации synthetic датасета и настройки промптов.
+
 ---
 
 ## 13. Заключение

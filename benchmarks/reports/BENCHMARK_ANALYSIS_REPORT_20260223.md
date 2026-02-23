@@ -1,3 +1,54 @@
+<script type="text/javascript" 
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\\[','\\]']],
+    processEscapes: true,
+    processEnvironments: true
+  }
+});
+</script>
+
+<style>
+  body {
+    font-family: "Times New Roman", Times, serif;
+  }
+</style>
+
+<br>
+<br>
+<br>
+<br>
+
+<div align="center">
+    <strong>КОМПЛЕКСНЫЙ НАУЧНО-ТЕХНИЧЕСКИЙ ОТЧЁТ</strong>
+    <br><br>
+    <strong>по результатам бенчмаркинга RAG-системы «Вопрошалыч»</strong>
+    <br><br>
+    <strong>Версия документа 1.0</strong>
+</div>
+
+<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+<br><br><br><br><br><br><br>
+
+<div align="right">
+    Дата проведения исследования: 23 февраля 2026 года<br>
+    Версия системы: Git-коммит 488332f<br>
+    Автор запуска: webmasha
+</div>
+
+<br><br><br><br><br><br>
+
+<div align="center">
+    Тюмень, 2026
+</div>
+
+<div style="page-break-after: always;"></div>
+
 # Комплексный научно-технический отчёт по результатам бенчмаркинга RAG-системы «Вопрошалыч»
 
 **Дата проведения исследования:** 23 февраля 2026 года  

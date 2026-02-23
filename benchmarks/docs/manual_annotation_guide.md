@@ -90,8 +90,31 @@ uv run python benchmarks/generate_dataset.py \
 uv run python benchmarks/run_comprehensive_benchmark.py \
     --mode manual \
     --manual-dataset benchmarks/data/dataset_annotated.json \
-    --tier all
+    --tier all \
+    --judge-eval-mode reasoned
 ```
+
+### Рекомендация по LLM Judge для аннотированного synthetic датасета
+
+Для вручную проверенного synthetic-датасета рекомендуемый режим:
+
+- `--mode manual`
+- `--judge-eval-mode reasoned`
+- `--consistency-runs 2` (или выше для контроля воспроизводимости)
+
+Пример:
+
+```bash
+uv run python benchmarks/run_comprehensive_benchmark.py \
+    --tier all \
+    --mode manual \
+    --manual-dataset benchmarks/data/dataset_annotated.json \
+    --judge-eval-mode reasoned \
+    --consistency-runs 2
+```
+
+Такой запуск повышает строгость оценки при работе с датасетом,
+проверенным доменным экспертом.
 
 ---
 

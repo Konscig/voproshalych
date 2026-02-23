@@ -1,15 +1,19 @@
-ROOT_DIR := .. 
+ROOT_DIR := ..
+COMPOSE_FILE := ../docker-compose.benchmarks.yml
 
-.PHONY: install-local load-dump-local drop-tables-local generate-embeddings-local generate-dataset-local generate-dataset-real-local generate-dataset-score5-local run-benchmarks-local run-dashboard-local run-local help up down
+.PHONY: up down install-local load-dump-local drop-tables-local
+.PHONY: generate-embeddings-local generate-dataset-local
+.PHONY: generate-dataset-real-local generate-dataset-score5-local
+.PHONY: run-benchmarks-local run-dashboard-local run-local help
 
-# Поднять/опустить БД
+# Сервисы инфраструктуры (только БД + миграции)
 up:
-	docker compose -f docker-compose.benchmarks.yml up -d db db-migrate
+	docker compose -f $(COMPOSE_FILE) up -d db db-migrate
 
 down:
-	docker compose -f docker-compose.benchmarks.yml down
+	docker compose -f $(COMPOSE_FILE) down
 
-# Локальный режим
+# Локальный режим (UV + локальные скрипты)
 install-local:
 	uv sync
 
@@ -24,20 +28,21 @@ generate-embeddings-local:
 	uv run python $(ROOT_DIR)/benchmarks/generate_embeddings.py --check-coverage
 
 generate-dataset-local:
-	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode synthetic --max-questions 20
+	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode synthetic --max-questions 10
 
 generate-dataset-real-local:
-	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions --max-questions 20
+	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions --max-questions 10
 
 generate-dataset-score5-local:
-	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 20
+	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 10
 
 run-benchmarks-local:
-	@GIT_BRANCH=$$(git rev-parse --abbrev-ref HEAD) && \
-	GIT_COMMIT=$$(git rev-parse --short HEAD) && \
-	GIT_AUTHOR=$$(git config user.name) && \
+	@GIT_BRANCH=$$(git -C $(ROOT_DIR) rev-parse --abbrev-ref HEAD) && \
+	GIT_COMMIT=$$(git -C $(ROOT_DIR) rev-parse --short HEAD) && \
+	GIT_AUTHOR=$$(git -C $(ROOT_DIR) config user.name) && \
 	echo "Using git branch: $$GIT_BRANCH, commit: $$GIT_COMMIT, author: $$GIT_AUTHOR" && \
-	BENCHMARK_GIT_BRANCH=$$GIT_BRANCH BENCHMARK_GIT_COMMIT_HASH=$$GIT_COMMIT BENCHMARK_RUN_AUTHOR=$$GIT_AUTHOR uv run python $(ROOT_DIR)/benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic
+	BENCHMARK_GIT_BRANCH=$$GIT_BRANCH BENCHMARK_GIT_COMMIT_HASH=$$GIT_COMMIT BENCHMARK_RUN_AUTHOR=$$GIT_AUTHOR \
+	uv run python $(ROOT_DIR)/benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10 --analyze-utilization --analyze-topics --analyze-domain
 
 run-dashboard-local:
 	uv run python $(ROOT_DIR)/benchmarks/run_dashboard.py
@@ -46,36 +51,21 @@ run-local:
 	@test -n "$(SCRIPT)" || (echo "Usage: make run-local SCRIPT=benchmarks/script.py ARGS=\"...\"" && exit 1)
 	uv run python $(ROOT_DIR)/$(SCRIPT) $(ARGS)
 
-.PHONY: help
 help:
-	@echo "Доступные команды:"
+	@echo "Доступные команды benchmarks:"
 	@echo ""
-	@echo "Поднять/опустить БД:"
-	@echo "  make up                         - Поднять БД и миграции"
-	@echo "  make down                       - Остановить БД"
+	@echo "Инфраструктура:"
+	@echo "  make up                           - Поднять db и db-migrate"
+	@echo "  make down                         - Остановить сервисы"
 	@echo ""
-	@echo "Локальный режим:"
-	@echo "  make install-local              - Установить зависимости через uv sync"
-	@echo "  make load-dump-local           - Загрузить дамп БД"
-	@echo "  make drop-tables-local         - Удалить таблицы БД"
-	@echo "  make generate-embeddings-local - Сгенерировать эмбеддинги"
-	@echo "  make generate-dataset-local    - Сгенерировать synthetic датасет (20 вопросов)"
-	@echo "  make generate-dataset-real-local - Сгенерировать датасет из реальных вопросов (20 вопросов)"
-	@echo "  make generate-dataset-score5-local - Сгенерировать датасет из вопросов с оценкой 5"
-	@echo "  make run-benchmarks-local      - Запустить бенчмарки (synthetic mode)"
-	@echo "  make run-dashboard-local      - Запустить дашборд"
-	@echo "  make run-local                 - Запустить произвольный Python script"
-	@echo ""
-	@echo "Примеры:"
-	@echo ""
-	@echo "Полный цикл:"
-	@echo "  make up"
-	@echo "  make install-local"
-	@echo "  make load-dump-local"
-	@echo "  make generate-embeddings-local"
-	@echo "  make generate-dataset-local"
-	@echo "  make run-benchmarks-local"
-	@echo "  make run-dashboard-local"
-	@echo ""
-	@echo "Запуск произвольного скрипта:"
-	@echo "  make run-local SCRIPT=benchmarks/generate_dataset.py ARGS=\"--mode synthetic --max-questions 10\""
+	@echo "Локальные скрипты (UV):"
+	@echo "  make install-local                - Установить зависимости"
+	@echo "  make load-dump-local              - Загрузить дамп БД"
+	@echo "  make drop-tables-local            - Очистить таблицы"
+	@echo "  make generate-embeddings-local    - Эмбеддинги чанков + coverage"
+	@echo "  make generate-dataset-local       - Synthetic dataset (10 вопросов)"
+	@echo "  make generate-dataset-real-local  - Dataset из real вопросов (10)"
+	@echo "  make generate-dataset-score5-local - Dataset score=5 (10)"
+	@echo "  make run-benchmarks-local         - Комплексный тестовый запуск"
+	@echo "  make run-dashboard-local          - Запустить дашборд"
+	@echo "  make run-local SCRIPT=... ARGS=... - Запуск произвольного скрипта"

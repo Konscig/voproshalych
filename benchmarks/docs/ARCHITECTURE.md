@@ -79,7 +79,7 @@ sequenceDiagram
     CLI->>CLI: Добавляет поля для аннотации
     CLI->>FS: Сохраняет annotation_*.json
     User->>CLI: Проверяет/редактирует поля вручную
-    User->>CLI: Помечает: is_question_ok, is_answer_ok, is_chunk_ok, is_confluence_url_ok
+    User->>CLI: Помечает: is_question_ok, is_answer_ok, is_chunk_ok, notes
 
     Note over User,Dashboard: Фаза 3: Запуск бенчмарков
 
@@ -119,6 +119,9 @@ sequenceDiagram
         Judge-->>RAGBenchmark: faithfulness_score
         RAGBenchmark->>Judge: evaluate_answer_relevance(question, answer)
         Judge-->>RAGBenchmark: relevance_score
+        RAGBenchmark->>Judge: evaluate_answer_correctness(question, answer, ground_truth)
+        Judge-->>RAGBenchmark: correctness_score
+        RAGBenchmark->>RAGBenchmark: response consistency (N repeats)
         RAGBenchmark->>RAGBenchmark: compute rouge, bleu
     end
     RAGBenchmark-->>CLI: tier_2_metrics
@@ -136,6 +139,8 @@ sequenceDiagram
         RAGBenchmark->>Judge: evaluate_e2e_quality(question, system_answer, ground_truth)
         Judge-->>RAGBenchmark: e2e_score
         RAGBenchmark->>RAGBenchmark: cosine_similarity(system_answer, ground_truth)
+        RAGBenchmark->>RAGBenchmark: dot_similarity + euclidean_distance
+        RAGBenchmark->>RAGBenchmark: response consistency (N repeats)
         RAGBenchmark->>RAGBenchmark: compute rouge, bleu
     end
     RAGBenchmark-->>CLI: tier_3_metrics
@@ -198,6 +203,18 @@ sequenceDiagram
     end
     RealBenchmark-->>CLI: real_user_metrics
     CLI->>FS: save to benchmark_runs.json
+
+    Note over User,Dashboard: Source Analytics
+    User->>CLI: --analyze-utilization / --analyze-topics / --analyze-domain
+    CLI->>CLI: analyze_chunk_utilization()
+    CLI->>CLI: analyze_topic_coverage()
+    CLI->>CLI: analyze_real_users_domain()
+    CLI->>FS: save utilization/topic/domain metrics
+
+    Note over User,Dashboard: Multi-model sweep
+    User->>CLI: --judge-models --generation-models
+    CLI->>CLI: iterate model combinations
+    CLI->>FS: save model_runs[] in benchmark_runs.json
 
     Note over User,Dashboard: Запуск всех tiers (--tier all)
     User->>CLI: run_comprehensive_benchmark.py --tier all --mode synthetic
@@ -332,8 +349,6 @@ effective_dimensionality, avg_pairwise_distance и др.
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_0()`.
 
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_0()`.
-
 ---
 
 #### Tier 1: Retrieval Accuracy (точность поиска)
@@ -343,10 +358,12 @@ effective_dimensionality, avg_pairwise_distance и др.
 **Процесс:**
 1. Для каждого вопроса генерируется эмбеддинг
 2. Выполняется векторный поиск через `Chunk.embedding.cosine_distance()` top-k
-3. Сравниваются retrieved chunk_id с ground truth
-4. Вычисляются: HitRate@K, MRR, NDCG@K, Recall@K, Precision@K
+3. При `consistency_runs > 1` проверяется стабильность top-k выдачи
+4. Сравниваются retrieved chunk_id с ground truth
+5. Вычисляются: HitRate@K, MRR, NDCG@K, Recall@K, Precision@K
 
-**Метрики:** hit_rate@1/5/10, mrr, recall@1/3/5/10, precision@1/3/5/10, ndcg@5/10
+**Метрики:** hit_rate@1/5/10, mrr, recall@1/3/5/10,
+precision@1/3/5/10, ndcg@5/10, retrieval_consistency
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_1()`.
 
@@ -360,9 +377,13 @@ effective_dimensionality, avg_pairwise_distance и др.
 1. Контекст берётся из датасета (`chunk_text`, `relevant_chunk_ids`, или `chunk_id`)
 2. Вызывается `qa.main.get_answer()` для генерации ответа (Mistral)
 3. LLMJudge оценивает faithfulness и answer_relevance
-4. Вычисляются алгоритмические метрики: ROUGE-1/2/L, BLEU
+4. LLMJudge оценивает answer_correctness по эталону
+5. При `consistency_runs > 1` считаются consistency-метрики ответа
+6. Вычисляются алгоритмические метрики: ROUGE-1/2/L, BLEU
 
-**Метрики:** avg_faithfulness, avg_answer_relevance, avg_rouge1_f, avg_rouge2_f, avg_rougeL_f, avg_bleu
+**Метрики:** avg_faithfulness, avg_answer_relevance, avg_answer_correctness,
+response_exact_match_rate, response_semantic_consistency,
+avg_rouge1_f, avg_rouge2_f, avg_rougeL_f, avg_bleu
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_2()`, использует импорт `get_answer` из `qa.main`.
 
@@ -376,16 +397,18 @@ effective_dimensionality, avg_pairwise_distance и др.
 1. Retrieval выполняется через production код (`qa.confluence_retrieving.get_chunk()`)
 2. Генерируется ответ через `qa.main.get_answer()`
 3. LLMJudge оценивает E2E качество
-4. Вычисляется cosine similarity с ground truth
-5. Вычисляются алгоритмические метрики: ROUGE, BLEU
+4. Вычисляются cosine/dot/euclidean similarity с ground truth
+5. При `consistency_runs > 1` считаются consistency-метрики ответа
+6. Вычисляются алгоритмические метрики: ROUGE, BLEU
 
-**Метрики:** avg_e2e_score, avg_semantic_similarity, avg_rouge1_f, avg_rouge2_f, avg_rougeL_f, avg_bleu
+**Метрики:** avg_e2e_score, avg_semantic_similarity, avg_dot_similarity,
+avg_euclidean_distance, response_exact_match_rate,
+response_semantic_consistency, avg_rouge1_f, avg_rouge2_f,
+avg_rougeL_f, avg_bleu
 
 **Важно:** Tier 3 точно воспроизводит production пайпайн (1 чанк, top-1).
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_3()`, использует импорт `get_chunk` из `qa.confluence_retrieving`.
-
-**Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_3()`.
 
 ---
 
@@ -394,7 +417,7 @@ effective_dimensionality, avg_pairwise_distance и др.
 **Команда:** `--tier judge`
 
 **Процесс:**
-1. Используется `LLMJudge` из `benchmarks.utils.llm_judge` (модель Qwen)
+1. Используется `LLMJudge` из `benchmarks.utils.llm_judge`
 2. Для каждого примера вызывается `judge.evaluate_faithfulness()` первый раз
 3. При включённой проверке консистентности — повторный вызов
 4. Сравниваются оценки для вычисления consistency_score
@@ -403,8 +426,8 @@ effective_dimensionality, avg_pairwise_distance и др.
 **Метрики:** consistency_score, error_rate, avg_latency_ms, avg_faithfulness
 
 **Отличие от Tier Judge Pipeline:**
-- Tier Judge тестирует `BENCHMARKS_JUDGE_MODEL` (Qwen) — свой код в benchmarks
-- Tier Judge Pipeline тестирует `JUDGE_MODEL` (Mistral) — production judge
+- Tier Judge тестирует benchmark judge конфигурацию (может быть multi-model)
+- Tier Judge Pipeline тестирует production judge решение show/no-show
 
 **Реализация:** `benchmarks/models/rag_benchmark.py`, метод `run_tier_judge()`.
 
@@ -549,6 +572,8 @@ effective_dimensionality, avg_pairwise_distance и др.
 | judge_model | text | Модель для судейства (Qwen) |
 | generation_model | text | Модель для генерации (Mistral) |
 | embedding_model | text | Модель эмбеддингов |
+| judge_eval_mode | text | Режим судьи: direct/reasoned |
+| consistency_runs | int | Количество повторов для consistency |
 | tier_0_metrics | json | Метрики Tier 0 (Embedding Quality) |
 | tier_1_metrics | json | Метрики Tier 1 (Retrieval) |
 | tier_2_metrics | json | Метрики Tier 2 (Generation) |
@@ -560,6 +585,7 @@ effective_dimensionality, avg_pairwise_distance и др.
 | utilization_metrics | json | Метрики использования чанков |
 | topic_coverage_metrics | json | Метрики покрытия тем |
 | domain_analysis_metrics | json | Метрики анализа real-user домена |
+| model_runs | json | Результаты multi-model комбинаций |
 | executive_summary | text | Сводка запуска для дашборда |
 | overall_status | text | Итоговый статус |
 

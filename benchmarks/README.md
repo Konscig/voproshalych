@@ -1,24 +1,39 @@
 # Модуль для оценки качества RAG-системы Вопрошалыч
 
-Enterprise-grade система бенчмарков для оценки Retrieval, Generation и End-to-End качества RAG-пайплайна.
+Enterprise-grade система бенчмарков для оценки Retrieval, Generation,
+End-to-End качества, качества LLM-судьи и аналитики источников данных.
 
 ---
 
 ## Обзор
 
-Модуль `benchmarks` покрывает три рабочих сценария:
+Модуль `benchmarks` покрывает ключевые сценарии оценки:
 
-- **Synthetic dataset**: автоматически сгенерированный golden standard
-- **Manual dataset**: экспертная разметка для строгой валидации
-- **Real user data**: retrieval-метрики на реальных вопросах пользователей
+- **Synthetic dataset**: автоматически сгенерированный golden standard.
+- **Manual dataset**: экспертная разметка для строгой валидации.
+- **Real user data**: retrieval и доменная аналитика на реальных вопросах.
 
 ### Ключевые особенности
 
-- ✅ **Single Source of Truth**: работа с PostgreSQL базой для векторного поиска
-- ✅ **LLM-as-a-Judge**: оценка quality-метрик через judge-model
-- ✅ **Семь tier-уровней**: Tier 0 (Embedding), Tier 1 (Retrieval), Tier 2 (Generation), Tier 3 (End-to-End), Tier Judge (Qwen), Tier Judge Pipeline (Mistral), Tier UX
-- ✅ **Manual + Real Users режимы**: отдельные пайплайны для академичной оценки
-- ✅ **Локальное хранение**: Датасеты → JSON, Отчёты → Markdown + JSON
+- ✅ **PostgreSQL + pgvector** как production-поиск для benchmark сценариев.
+- ✅ **LLM-as-a-Judge** с режимами `direct` и `reasoned`.
+- ✅ **Tier 0-3 + Judge + Judge Pipeline + UX + Real-users**.
+- ✅ **Source Analytics**: Vector Space, Chunk Utilization, Topic Coverage,
+  Domain Analysis.
+- ✅ **Model Sweep**: сравнение метрик по нескольким judge/generation моделям.
+- ✅ **Локальный запуск через UV** (без benchmark-контейнера).
+
+---
+
+## Режим запуска
+
+Текущий рабочий режим:
+
+- инфраструктура (`db`, `db-migrate`) поднимается через
+  `docker-compose.benchmarks.yml`;
+- benchmark-скрипты запускаются локально через `uv run`.
+
+Контейнерный запуск benchmark-скриптов не используется.
 
 ---
 
@@ -27,9 +42,9 @@ Enterprise-grade система бенчмарков для оценки Retriev
 | Документ | Описание |
 |----------|----------|
 | [CLI_REFERENCE.md](docs/CLI_REFERENCE.md) | Справочник по CLI командам |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура с Mermaid диаграммами |
-| [SMOKE_SCENARIO_LOCAL.md](docs/SMOKE_SCENARIO_LOCAL.md) | Полный цикл проверки |
-| [manual_annotation_guide.md](docs/manual_annotation_guide.md) | Руководство по ручной разметке |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Архитектура и детальный пайплайн |
+| [SMOKE_SCENARIO_LOCAL.md](docs/SMOKE_SCENARIO_LOCAL.md) | Полный локальный smoke-цикл |
+| [manual_annotation_guide.md](docs/manual_annotation_guide.md) | Ручная аннотация датасетов |
 | [METRICS.md](docs/METRICS.md) | Научное описание всех метрик |
 
 ---
@@ -48,119 +63,100 @@ make run-benchmarks-local
 make run-dashboard-local
 ```
 
-Открой дашборд: `http://localhost:7860`
+Дашборд: `http://localhost:7860`
 
 ---
 
-## Уровни тестирования
+## Уровни оценки
 
 ### Tier 0: Intrinsic Embedding Quality
 
-Оценка внутреннего качества эмбеддингов через статистические метрики.
+Метрики геометрии векторного пространства без `cluster_id/label`.
 
-**Метрики:** `avg_nn_distance`, `density_score`, `avg_spread`, `effective_dimensionality`
+**Примеры метрик:** `avg_nn_distance`, `density_score`,
+`effective_dimensionality`, `avg_pairwise_distance`.
 
 ### Tier 1: Retrieval Accuracy
 
-Оценка качества векторного поиска через pgvector.
+Метрики поиска по `pgvector` + дополнительные consistency сигналы.
 
-**Метрики:** `HitRate@K`, `Recall@K`, `Precision@K`, `MRR`, `NDCG@K`
+**Примеры метрик:** `hit_rate@k`, `mrr`, `ndcg@k`,
+`retrieval_consistency`.
 
 ### Tier 2: Generation Quality
 
-Оценка качества генерации ответов при идеальном контексте.
+Оценка генерации при фиксированном контексте.
 
-**Метрики:** `avg_faithfulness`, `avg_answer_relevance` (LLM Judge), `avg_rouge1_f`, `avg_rougeL_f`, `avg_bleu`
+**Примеры метрик:** `avg_faithfulness`, `avg_answer_relevance`,
+`avg_answer_correctness`, `response_semantic_consistency`, ROUGE/BLEU.
 
 ### Tier 3: End-to-End
 
-Оценка полного пайплайна RAG-системы.
+Оценка полного production-like пайплайна retrieval + generation.
 
-**Метрики:** `avg_e2e_score`, `avg_semantic_similarity`, `avg_rouge1_f`, `avg_bleu`
+**Примеры метрик:** `avg_e2e_score`, `avg_semantic_similarity`,
+`avg_dot_similarity`, `avg_euclidean_distance`, consistency, ROUGE/BLEU.
 
-### Tier Judge: LLM-as-a-Judge Quality
+### Tier Judge
 
-Оценка качества и стабильности LLM-судьи (Qwen).
+Оценка стабильности benchmark judge-модели.
 
-**Метрики:** `consistency_score`, `error_rate`, `avg_latency_ms`
+### Tier Judge Pipeline
 
-### Tier Judge Pipeline: Production Judge Quality
+Оценка production judge (Yes/No) как классификатора.
 
-Оценка качества production judge (Mistral) в реальном RAG-пайплайне.
+### Tier UX
 
-**Метрики:** `accuracy`, `precision`, `recall`, `f1_score`, `avg_latency_ms`
+Оценка UX-прокси метрик: кэш, контекст, многотуровая согласованность.
 
-### Tier UX: User Experience Quality
+### Real-users
 
-Оценка качества пользовательского опыта и работы кэша.
-
-**Метрики:** `cache_hit_rate`, `context_preservation`, `multi_turn_consistency`
-
-### Real Users
-
-Retrieval-метрики на реальных вопросах пользователей с высоким score.
+Операционная retrieval-оценка на живых вопросах + domain analytics.
 
 ---
 
-## Структура проекта
+## Дополнительные аналитические скрипты
+
+- `visualize_vector_space.py` — UMAP 2D/3D.
+- `analyze_chunk_utilization.py` — доля используемых чанков.
+- `analyze_topic_coverage.py` — покрытие тематических кластеров.
+- `analyze_real_users_domain.py` — доменная аналитика real-user корпуса.
+
+---
+
+## Структура
 
 ```
 benchmarks/
 ├── data/
-│   ├── dataset_YYYYMMDD_HHMMSS.json
-│   ├── manual_dataset_YYYYMMDD_HHMMSS.json
-│   └── dump/
 ├── docs/
-│   ├── CLI_REFERENCE.md
-│   ├── ARCHITECTURE.md
-│   ├── SMOKE_SCENARIO_LOCAL.md
-│   ├── METRICS.md
-│   └── manual_annotation_guide.md
 ├── models/
-│   ├── rag_benchmark.py
-│   ├── real_queries_benchmark.py
-│   └── retrieval_benchmark.py
 ├── reports/
-│   ├── rag_benchmark_*.json
-│   ├── rag_benchmark_*.md
-│   ├── vector_space.html
-│   ├── utilization.json
-│   └── topic_coverage.json
 ├── utils/
-│   ├── llm_judge.py
-│   ├── evaluator.py
-│   ├── text_metrics.py
-│   ├── embedding_generator.py
-│   ├── database_dump_loader.py
-│   └── report_generator.py
-├── visualize_vector_space.py      # UMAP визуализация
-├── analyze_chunk_utilization.py # Анализ использования чанков
-├── analyze_topic_coverage.py    # Анализ покрытия тем
-├── generate_embeddings.py
+├── analyze_chunk_utilization.py
+├── analyze_real_users_domain.py
+├── analyze_topic_coverage.py
+├── dashboard.py
 ├── generate_dataset.py
+├── generate_embeddings.py
 ├── load_database_dump.py
 ├── run_comprehensive_benchmark.py
 ├── run_dashboard.py
-├── dashboard.py
+├── visualize_vector_space.py
 └── Makefile
-```
-
----
-
-## Makefile команды
-
-```bash
-cd Submodules/voproshalych/benchmarks
-make help
 ```
 
 ---
 
 ## Переменные окружения
 
-Обязательные переменные в `.env.docker`:
+Используются значения из `Submodules/voproshalych/.env` и `.env.docker`.
 
-- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+Ключевые переменные:
+
+- `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+  `POSTGRES_DB`
 - `MISTRAL_API`, `MISTRAL_MODEL`
-- `BENCHMARKS_JUDGE_API_KEY` (или `JUDGE_API`)
-- `EMBEDDING_MODEL_PATH` (или используется HF)
+- `JUDGE_API`, `JUDGE_MODEL`
+- `BENCHMARKS_JUDGE_API_KEY`, `BENCHMARKS_JUDGE_MODEL` (опционально)
+- `EMBEDDING_MODEL_PATH`

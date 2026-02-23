@@ -1,6 +1,6 @@
 # CLI Reference: Команды модуля бенчмарков
 
-Полная документация CLI команд для работы с бенчмарками RAG-системы.
+Полная документация CLI команд для локального режима работы benchmark-модуля.
 
 ---
 
@@ -20,33 +20,22 @@
 
 ## load_database_dump.py
 
-Загрузка дампа PostgreSQL или удаление таблиц.
+Загрузка PostgreSQL дампа или очистка таблиц.
 
 **Файл:** `benchmarks/load_database_dump.py`
 
-**Парсинг аргументов:** функция `main()`, строки 190-217
-
-### Аргументы
-
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--dump` | str | None | Путь к файлу дампа `.dump` |
-| `--dump-dir` | str | None | Директория с дампами для поиска последнего |
-| `--drop-tables-only` | flag | False | Только удалить таблицы без загрузки дампа |
-| `--verbose` | flag | False | Подробный вывод (debug) |
-| `--quiet` | flag | False | Тихий режим (только ошибки) |
+| `--dump` | str | None | Путь к `.dump` файлу |
+| `--dump-dir` | str | None | Директория, где ищется последний дамп |
+| `--drop-tables-only` | flag | False | Удалить таблицы без загрузки дампа |
+| `--verbose` | flag | False | Подробный лог |
+| `--quiet` | flag | False | Только ошибки |
 
-### Примеры
+Пример:
 
 ```bash
-# Загрузить конкретный дамп
 uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
-
-# Найти и загрузить последний дамп из директории
-uv run python benchmarks/load_database_dump.py --dump-dir benchmarks/data/dump
-
-# Только удалить таблицы
-uv run python benchmarks/load_database_dump.py --drop-tables-only
 ```
 
 ---
@@ -57,334 +46,175 @@ uv run python benchmarks/load_database_dump.py --drop-tables-only
 
 **Файл:** `benchmarks/generate_embeddings.py`
 
-**Парсинг аргументов:** функция `main()`, строки 36-71
-
-### Аргументы
-
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--all` | flag | False | Генерировать эмбеддинги для всех вопросов |
-| `--score` | int | None | Генерировать для вопросов с оценкой (1 или 5) |
-| `--chunks` | flag | False | Генерировать эмбеддинги для всех чанков |
-| `--check-coverage` | flag | False | Проверить покрытие эмбеддингами |
-| `--overwrite` | flag | False | Перезаписывать существующие эмбеддинги |
-
-### Примеры
-
-```bash
-# Генерация для чанков
-uv run python benchmarks/generate_embeddings.py --chunks
-
-# Проверка покрытия
-uv run python benchmarks/generate_embeddings.py --check-coverage
-
-# Генерация для вопросов с оценкой 5
-uv run python benchmarks/generate_embeddings.py --score 5
-
-# Генерация для всех вопросов
-uv run python benchmarks/generate_embeddings.py --all
-
-# Перезапись существующих эмбеддингов
-uv run python benchmarks/generate_embeddings.py --chunks --overwrite
-```
+| `--all` | flag | False | Эмбеддинги для всех вопросов |
+| `--score` | int | None | Эмбеддинги вопросов с оценкой 1 или 5 |
+| `--chunks` | flag | False | Эмбеддинги для всех чанков |
+| `--check-coverage` | flag | False | Проверка покрытия эмбеддингами |
+| `--overwrite` | flag | False | Перезаписать существующие эмбеддинги |
 
 ---
 
 ## generate_dataset.py
 
-Генерация датасета для бенчмарков. Поддерживает различные режимы: synthetic, из реальных вопросов пользователей, экспорт для аннотации.
+Генерация benchmark-датасета.
 
 **Файл:** `benchmarks/generate_dataset.py`
 
-**Парсинг аргументов:** функция `main()`
-
-### Режимы (--mode)
-
-| Режим | Описание |
-|-------|---------|
-| `synthetic` | Генерация вопросов из чанков через LLM (по умолчанию) |
-| `from-real-questions` | Использование реальных вопросов из QuestionAnswer |
-| `from-real-questions-score-5` | Только вопросы с оценкой score=5 |
-| `export-annotation` | Экспорт датасета для ручной аннотации |
-
-### Аргументы
-
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--mode` | str | "synthetic" | Режим генерации |
-| `--max-questions` | int | 500 | Максимальное количество пар вопрос-ответ |
-| `--num-samples` | int | None | Устаревший алиас для `--max-questions` |
-| `--output` | str | None | Путь для сохранения (по умолчанию versioned) |
-| `--check-only` | flag | False | Только проверить существующий датасет |
-| `--skip-existing-dataset` | str | None | Путь к существующему датасету для дополнения |
-| `--generation-attempts` | int | 3 | Попытки генерации для одного чанка |
-
-### Примеры
-
-```bash
-# Synthetic — генерация вопросов из чанков (по умолчанию)
-uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 500
-
-# Из реальных вопросов пользователей
-uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 500
-
-# Только вопросы с оценкой 5
-uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 500
-
-# Генерация с кастомным путём
-uv run python benchmarks/generate_dataset.py --max-questions 300 --output benchmarks/data/custom_dataset.json
-
-# Инкрементальное дополнение существующего датасета
-uv run python benchmarks/generate_dataset.py --max-questions 500 --skip-existing-dataset benchmarks/data/dataset_20260216_124845.json
-
-# Проверка существующего датасета
-uv run python benchmarks/generate_dataset.py --check-only --output benchmarks/data/custom_dataset.json
-
-# Экспорт для ручной аннотации
-uv run python benchmarks/generate_dataset.py --mode export-annotation --output benchmarks/data/dataset_20260220.json
-```
+| `--mode` | str | synthetic | `synthetic`, `from-real-questions`, `from-real-questions-score-5`, `export-annotation` |
+| `--max-questions` | int | 500 | Лимит записей |
+| `--num-samples` | int | None | Устаревший алиас `--max-questions` |
+| `--output` | str | None | Выходной JSON (иначе versioned auto-name) |
+| `--check-only` | flag | False | Проверить существующий датасет |
+| `--skip-existing-dataset` | str | None | Не дублировать элементы из указанного датасета |
+| `--generation-attempts` | int | 3 | Попытки генерации на один чанк |
 
 ---
 
 ## run_comprehensive_benchmark.py
 
-Запуск комплексных бенчмарков RAG-системы.
+Главный orchestrator benchmark-сценариев.
 
 **Файл:** `benchmarks/run_comprehensive_benchmark.py`
 
-**Парсинг аргументов:** функция `main()`, строки 325-411
-
-### Аргументы
-
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--tier` | str | "all" | Уровень бенчмарка: "0", "1", "2", "3", "judge", "judge_pipeline", "ux", "all" |
-| `--mode` | str | "synthetic" | Режим: "synthetic", "manual", "real-users" |
-| `--dataset` | str | "benchmarks/data/golden_dataset_synthetic.json" | Путь к датасету |
-| `--manual-dataset` | str | None | Путь к manual датасету (для --mode manual) |
-| `--limit` | int | None | Ограничение количества записей |
-| `--top-k` | int | 10 | Количество результатов для поиска (Tier 1) |
-| `--output-dir` | str | "benchmarks/reports" | Директория для результатов |
-| `--skip-checks` | flag | False | Пропустить проверку prerequisites |
-| `--real-score` | int | 5 | Фильтр score для real-users режима |
-| `--real-limit` | int | 500 | Лимит вопросов для real-users режима |
-| `--real-latest` | flag | False | Брать последние вопросы по created_at |
-| `--analyze-utilization` | flag | False | Выполнить анализ использования чанков |
-| `--utilization-questions-source` | str | synthetic | Источник вопросов: synthetic или real |
-| `--utilization-question-limit` | int | 500 | Лимит вопросов для utilization |
-| `--utilization-top-k` | int | 10 | top-k для utilization |
-| `--analyze-topics` | flag | False | Выполнить анализ покрытия тем |
-| `--topics-question-limit` | int | 2000 | Лимит вопросов для topic coverage |
-| `--topics-count` | int | 20 | Количество тематических кластеров |
-| `--topics-top-k` | int | 5 | top-k для анализа тем |
-| `--consistency-runs` | int | 1 | Повторы одного запроса для consistency метрик |
-| `--judge-eval-mode` | str | direct | Режим судьи: direct или reasoned |
-| `--analyze-domain` | flag | False | Запустить domain analysis real-user вопросов |
-| `--domain-limit` | int | 5000 | Лимит вопросов для domain analysis |
+| `--tier` | str | all | `0/1/2/3/judge/judge_pipeline/ux/all` |
+| `--mode` | str | synthetic | `synthetic/manual/real-users` |
+| `--dataset` | str | benchmarks/data/golden_dataset_synthetic.json | Основной dataset path |
+| `--manual-dataset` | str | None | Dataset path для manual mode |
+| `--limit` | int | None | Лимит записей |
+| `--top-k` | int | 10 | top-k retrieval |
+| `--output-dir` | str | benchmarks/reports | Директория отчётов |
+| `--skip-checks` | flag | False | Пропустить prerequisites |
+| `--real-score` | int | 5 | Фильтр score для real-users |
+| `--real-limit` | int | 500 | Лимит real-users вопросов |
+| `--real-latest` | flag | False | Брать последние вопросы |
+| `--analyze-utilization` | flag | False | Запустить chunk utilization |
+| `--utilization-questions-source` | str | synthetic | `synthetic` или `real` |
+| `--utilization-question-limit` | int | 500 | Лимит вопросов utilization |
+| `--utilization-top-k` | int | 10 | top-k utilization |
+| `--analyze-topics` | flag | False | Запустить topic coverage |
+| `--topics-question-limit` | int | 2000 | Лимит вопросов topic coverage |
+| `--topics-count` | int | 20 | Число topic clusters |
+| `--topics-top-k` | int | 5 | top-k для topics |
+| `--consistency-runs` | int | 1 | Повторы запроса для consistency метрик |
+| `--judge-eval-mode` | str | direct | `direct` или `reasoned` |
+| `--judge-models` | str | "" | CSV judge моделей для multi-run |
+| `--generation-models` | str | "" | CSV generation моделей для multi-run |
+| `--analyze-domain` | flag | False | Запустить real-user domain analysis |
+| `--domain-limit` | int | 5000 | Лимит domain analysis вопросов |
 
-### Режимы
-
-#### synthetic
-Использует автоматически сгенерированный датасет.
-
-```bash
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --tier all --mode synthetic \
-  --dataset benchmarks/data/dataset_20260216_124845.json \
-  --limit 50
-```
-
-#### manual
-Использует экспертно размеченный датасет.
+Пример:
 
 ```bash
 uv run python benchmarks/run_comprehensive_benchmark.py \
-  --tier all --mode manual \
-  --manual-dataset benchmarks/data/manual_dataset_20260217_101500.json
-```
-
-#### real-users
-Использует реальные вопросы из таблицы `question_answer`.
-
-```bash
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --mode real-users \
-  --real-score 5 \
-  --real-limit 500 \
-  --top-k 10
-```
-
-### Tier-уровни
-
-| Tier | Что проверяет | Метрики |
-|------|---------------|---------|
-| 0 | Intrinsic Embedding Quality | avg_nn_distance, density_score, avg_spread, avg_pairwise_distance |
-| 1 | Retrieval Accuracy | HitRate@K, MRR, NDCG@K, Recall@K, Precision@K |
-| 2 | Generation Quality | avg_faithfulness, avg_answer_relevance, avg_rouge1_f, avg_rougeL_f, avg_bleu |
-| 3 | End-to-End | avg_e2e_score, avg_semantic_similarity, avg_rouge1_f, avg_bleu |
-| judge | LLM-as-a-Judge Quality (Qwen) | consistency_score, error_rate, avg_latency_ms |
-| judge_pipeline | Production Judge Quality (Mistral) | accuracy, precision, recall, f1_score, avg_latency_ms |
-| ux | User Experience Quality | cache_hit_rate, context_preservation, multi_turn_consistency |
-| all | Все уровни | Все метрики |
-
-### Дополнительные аналитические флаги
-
-```bash
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --tier all --mode synthetic --limit 200 \
-  --analyze-utilization --utilization-questions-source real \
-  --analyze-topics --topics-count 20
+  --tier all \
+  --mode synthetic \
+  --limit 50 \
+  --consistency-runs 2 \
+  --judge-eval-mode reasoned \
+  --analyze-utilization \
+  --analyze-topics \
+  --analyze-domain
 ```
 
 ---
 
 ## visualize_vector_space.py
 
-UMAP-визуализация пространства эмбеддингов чанков.
-
-**Файл:** `benchmarks/visualize_vector_space.py`
+UMAP-визуализация эмбеддингов чанков.
 
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--limit` | int | 5000 | Количество чанков для визуализации |
-| `--output` | str | benchmarks/reports/vector_space.html | HTML-файл результата |
-| `--3d` | flag | False | Построить 3D UMAP |
-| `--color-by` | str | section | Поле раскраски: cluster/chunk_id/section |
-
-Пример:
-
-```bash
-uv run python benchmarks/visualize_vector_space.py --limit 5000 --color-by section
-```
+| `--limit` | int | 5000 | Число чанков |
+| `--output` | str | benchmarks/reports/vector_space.html | Выходной HTML |
+| `--3d` | flag | False | 3D режим |
+| `--color-by` | str | section | `cluster/chunk_id/section` |
 
 ---
 
 ## analyze_chunk_utilization.py
 
-Оценка доли чанков, реально используемых retrieval-модулем.
-
-**Файл:** `benchmarks/analyze_chunk_utilization.py`
+Оценка доли чанков, используемых retrieval-пайплайном.
 
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--questions-source` | str | synthetic | Источник вопросов: synthetic/real |
+| `--questions-source` | str | synthetic | `synthetic` или `real` |
 | `--question-limit` | int | 500 | Лимит вопросов |
 | `--top-k` | int | 10 | top-k retrieval |
-| `--output` | str | benchmarks/reports/utilization.json | JSON-отчёт |
-
-Пример:
-
-```bash
-uv run python benchmarks/analyze_chunk_utilization.py --questions-source real --question-limit 500
-```
+| `--output` | str | benchmarks/reports/utilization.json | Выходной JSON |
 
 ---
 
 ## analyze_topic_coverage.py
 
-Анализ покрытия тематических кластеров (KMeans + retrieval).
-
-**Файл:** `benchmarks/analyze_topic_coverage.py`
+Кластеризация реальных вопросов и оценка покрытия чанками.
 
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--question-limit` | int | 2000 | Лимит вопросов для кластеризации |
-| `--n-topics` | int | 20 | Количество тематических кластеров |
-| `--top-k` | int | 5 | top-k retrieval на вопрос |
-| `--output` | str | benchmarks/reports/topic_coverage.json | JSON-отчёт |
-
-Пример:
-
-```bash
-uv run python benchmarks/analyze_topic_coverage.py --n-topics 20 --question-limit 2000
-```
+| `--question-limit` | int | 2000 | Лимит вопросов |
+| `--n-topics` | int | 20 | Число topic clusters |
+| `--top-k` | int | 5 | top-k retrieval |
+| `--output` | str | benchmarks/reports/topic_coverage.json | Выходной JSON |
 
 ---
 
 ## analyze_real_users_domain.py
 
-Анализ предметной области на основе real-user вопросов.
-
-**Файл:** `benchmarks/analyze_real_users_domain.py`
+Доменная аналитика корпуса real-user вопросов.
 
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--limit` | int | 5000 | Лимит вопросов для анализа |
-| `--output` | str | benchmarks/reports/real_users_domain_analysis.json | JSON-отчёт |
-
-Пример:
-
-```bash
-uv run python benchmarks/analyze_real_users_domain.py --limit 5000
-```
+| `--limit` | int | 5000 | Лимит вопросов |
+| `--output` | str | benchmarks/reports/real_users_domain_analysis.json | Выходной JSON |
 
 ---
 
 ## run_dashboard.py
 
-Запуск интерактивного дашборда для просмотра результатов.
-
-**Файл:** `benchmarks/run_dashboard.py`
-
-**Парсинг аргументов:** файл `benchmarks/dashboard.py`, функция `main()`, строки 801-831
-
-### Аргументы
+Запуск аналитического dashboard.
 
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--port` | int | None | Порт для дашборда (по умолчанию первый свободный от 7860) |
+| `--port` | int | auto(7860+) | Порт dashboard |
 
-### Примеры
+Пример:
 
 ```bash
-# Запуск на автоматическом порту
-uv run python benchmarks/run_dashboard.py
-
-# Запуск на конкретном порту
-uv run python benchmarks/run_dashboard.py --port 8080
+uv run python benchmarks/run_dashboard.py --port 7860
 ```
-
-Дашборд доступен по адресу: `http://localhost:7860` (или указанный порт)
 
 ---
 
 ## Makefile команды
 
-Альтернативный способ запуска через Makefile.
-
-**Файл:** `benchmarks/Makefile`
-
-### Локальный режим
+`benchmarks/Makefile` содержит только локальный режим + инфраструктурные
+команды для БД/миграций.
 
 | Команда | Описание |
 |---------|----------|
-| `make install-local` | Установить зависимости через uv sync |
-| `make load-dump-local` | Загрузить дамп БД |
-| `make drop-tables-local` | Удалить таблицы БД |
-| `make generate-embeddings-local` | Сгенерировать эмбеддинги |
-| `make generate-dataset-local` | Сгенерировать датасет (20 вопросов) |
-| `make run-benchmarks-local` | Запустить бенчмарки (synthetic, все вопросы из датасета) |
-| `make run-dashboard-local` | Запустить дашборд локально |
-
-### Docker режим
-
-| Команда | Описание |
-|---------|----------|
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml up` | Поднять стек |
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml down` | Остановить стек |
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml load-dump` | Загрузить дамп |
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-embeddings` | Сгенерировать эмбеддинги |
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml generate-dataset` | Сгенерировать датасет (500 вопросов) |
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml run-benchmarks` | Запустить бенчмарки |
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml run-dashboard` | Запустить дашборд |
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml ps` | Статус сервисов |
-| `make COMPOSE_FILE=../docker-compose.benchmarks.yml logs` | Логи benchmarks |
+| `make up` | Поднять `db` и `db-migrate` через compose |
+| `make down` | Остановить сервисы |
+| `make install-local` | `uv sync` |
+| `make load-dump-local` | Загрузить dump |
+| `make drop-tables-local` | Очистить таблицы |
+| `make generate-embeddings-local` | Эмбеддинги + coverage |
+| `make generate-dataset-local` | Synthetic dataset (10) |
+| `make generate-dataset-real-local` | Real questions dataset (10) |
+| `make generate-dataset-score5-local` | Score=5 dataset (10) |
+| `make run-benchmarks-local` | Тестовый комплексный benchmark |
+| `make run-dashboard-local` | Запуск dashboard |
+| `make run-local SCRIPT=... ARGS=...` | Запуск произвольного скрипта |
 
 ---
 
 ## Связанные документы
 
-- [RUN_MODES_LOCAL_VS_DOCKER.md](RUN_MODES_LOCAL_VS_DOCKER.md) — описание режимов
-- [ARCHITECTURE.md](ARCHITECTURE.md) — архитектура модуля
-- [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md) — инструкции для локального режима
-- [SMOKE_SCENARIO_DOCKER.md](SMOKE_SCENARIO_DOCKER.md) — инструкции для Docker режима
+- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [METRICS.md](METRICS.md)
+- [SMOKE_SCENARIO_LOCAL.md](SMOKE_SCENARIO_LOCAL.md)
+- [manual_annotation_guide.md](manual_annotation_guide.md)

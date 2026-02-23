@@ -101,8 +101,11 @@ uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virta
 | `--consistency-runs` | int | 1 | Повторы запроса для consistency метрик |
 | `--judge-eval-mode` | str | direct | `direct` или `reasoned` |
 | `--judge-models` | str | "" | CSV judge моделей для multi-run |
+| `--judge-model-source` | str | "" | Источник judge моделей: mistral/openrouter/deepseek/alibaba |
 | `--generation-models` | str | "" | CSV generation моделей для multi-run |
+| `--generation-model-source` | str | "" | Источник generation моделей: mistral/openrouter/deepseek/alibaba |
 | `--production-judge-models` | str | "" | CSV production judge моделей для tier_judge_pipeline |
+| `--production-judge-model-source` | str | "" | Источник production judge моделей: mistral/openrouter/deepseek/alibaba |
 | `--generation-api-key-var` | str | GENERATION_API_KEY | Имя env с ключом generation LLM |
 | `--generation-api-url-var` | str | GENERATION_API_URL | Имя env с URL generation LLM |
 | `--production-judge-api-key-var` | str | JUDGE_API | Имя env с ключом production judge |

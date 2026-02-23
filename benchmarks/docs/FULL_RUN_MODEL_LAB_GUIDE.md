@@ -33,9 +33,20 @@ cp .env.benchmark-models.example .env.benchmark-models
 Заполните production и compare секции в `.env.benchmark-models`.
 
 Важно: вы можете хранить **все ключи разом** в одном файле
-(`..._COMPARE_API_KEY_01..10`) и выбирать нужный токен на запуск через
-`--generation-api-key-var`, `--production-judge-api-key-var`,
-`--benchmark-judge-api-key-var`.
+(`PROVIDER_MISTRAL_API_KEY`, `PROVIDER_OPENROUTER_API_KEY`,
+`PROVIDER_DEEPSEEK_API_KEY`, `PROVIDER_ALIBABA_API_KEY`) и выбирать нужный
+токен на запуск через `--generation-api-key-var`,
+`--production-judge-api-key-var`, `--benchmark-judge-api-key-var`.
+
+Также вы можете определить списки моделей в переменных окружения:
+- `MISTRAL_GEN_MODELS`, `OPENROUTER_GEN_MODELS`, `DEEPSEEK_GEN_MODELS`, `ALIBABA_GEN_MODELS`
+- `MISTRAL_JUDGE_MODELS`, `OPENROUTER_JUDGE_MODELS`, `DEEPSEEK_JUDGE_MODELS`, `ALIBABA_JUDGE_MODELS`
+- `MISTRAL_BM_JUDGE_MODELS`, `OPENROUTER_BM_JUDGE_MODELS`, `DEEPSEEK_BM_JUDGE_MODELS`, `ALIBABA_BM_JUDGE_MODELS`
+
+И использовать их через флаги:
+- `--generation-model-source mistral` — загрузит все модели из `MISTRAL_GEN_MODELS`
+- `--production-judge-model-source openrouter` — загрузит все модели из `OPENROUTER_JUDGE_MODELS`
+- `--judge-model-source deepseek` — загрузит все модели из `DEEPSEEK_BM_JUDGE_MODELS`
 
 Важно:
 
@@ -137,13 +148,20 @@ make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier 2 -
 ```bash
 cd Submodules/voproshalych/benchmarks
 make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier judge_pipeline --mode synthetic --limit 202 --generation-models \"m_base\" --judge-models \"j_base\" --production-judge-models \"p1,p2,p3,p4,p5,p6,p7,p8,p9,p10\""
+```
 
-Пример с выбором конкретных токенов из единого файла:
+Пример с выбором конкретных токенов и model-source:
 
 ```bash
 cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --generation-api-key-var GENERATION_COMPARE_API_KEY_03 --generation-api-url-var GENERATION_COMPARE_API_URL_03 --production-judge-api-key-var PRODUCTION_JUDGE_COMPARE_API_KEY_02 --benchmark-judge-api-key-var BENCHMARK_JUDGE_COMPARE_API_KEY_07 --benchmark-judge-base-url-var BENCHMARK_JUDGE_COMPARE_BASE_URL_07 --generation-models \"m1,m2\" --judge-models \"j1,j2\" --production-judge-models \"p1,p2\""
+make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY --generation-model-source deepseek --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY --production-judge-model-source mistral --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY --judge-model-source openrouter"
 ```
+
+Пример с ручным списком моделей (старый способ):
+
+```bash
+cd Submodules/voproshalych/benchmarks
+make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY --generation-api-url-var PROVIDER_DEEPSEEK_API_URL --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY --benchmark-judge-base-url-var PROVIDER_OPENROUTER_BASE_URL --generation-models \"deepseek-chat,mistral-small-latest\" --judge-models \"openai/gpt-4o-mini,openai/gpt-4.1-mini\" --production-judge-models \"mistral-small-latest,mistral-medium-latest\""
 ```
 
 Такой подход почти всегда лучше по времени/стоимости и интерпретируемости.

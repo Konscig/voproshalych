@@ -25,7 +25,8 @@
 
 - production + compare секции для generation / production judge /
   benchmark judge;
-- до 10 слотов ключей на каждую compare-секцию;
+- централизованные ключи по платформам: `mistral.ai`, `openrouter.ai`,
+  `platform.deepseek.com`, `alibabacloud.com`;
 - active aliases, используемые кодом по умолчанию.
 
 Ключевая идея: храните **все** токены в одном файле и выбирайте нужный
@@ -34,18 +35,16 @@
 Пример `.env.benchmark-models` (фрагмент):
 
 ```dotenv
-# Generation prod token
-GENERATION_PROD_API_KEY=...
-# Generation compare token #3
-GENERATION_COMPARE_API_KEY_03=...
+# Provider vault
+PROVIDER_MISTRAL_API_KEY=...
+PROVIDER_OPENROUTER_API_KEY=...
+PROVIDER_DEEPSEEK_API_KEY=...
+PROVIDER_ALIBABA_API_KEY=...
 
-# Production judge
-JUDGE_API=...
-JUDGE_MODEL=mistral-small-latest
-
-# Benchmark judge compare token #7
-BENCHMARK_JUDGE_COMPARE_API_KEY_07=...
-BENCHMARK_JUDGE_COMPARE_BASE_URL_07=https://openrouter.ai/api/v1
+# Role aliases
+GENERATION_API_KEY=${PROVIDER_MISTRAL_API_KEY}
+JUDGE_API=${PROVIDER_MISTRAL_API_KEY}
+BENCHMARKS_JUDGE_API_KEY=${PROVIDER_OPENROUTER_API_KEY}
 ```
 
 Пояснение по ключам и моделям:
@@ -60,9 +59,24 @@ BENCHMARK_JUDGE_COMPARE_BASE_URL_07=https://openrouter.ai/api/v1
 
 ## 2. CLI для сравнения моделей
 
-Используйте `run_comprehensive_benchmark.py` с CSV списками:
+Есть два способа указать модели для сравнения:
 
-- `--generation-models` — список generation моделей;
+### Способ А: model-source (рекомендуемый)
+
+Укажите провайдер — скрипт автоматически загрузит модели из env-переменных:
+
+- `--generation-model-source` — mistral / openrouter / deepseek / alibaba
+- `--judge-model-source` — mistral / openrouter / deepseek / alibaba  
+- `--production-judge-model-source` — mistral / openrouter / deepseek / alibaba
+
+Модели берутся из переменных:
+- `*_GEN_MODELS` (generation)
+- `*_BM_JUDGE_MODELS` (benchmark judge)
+- `*_JUDGE_MODELS` (production judge)
+
+### Способ Б: ручной CSV (старый)
+
+- `--generation-models` — список generation моделей через запятую;
 - `--judge-models` — список benchmark judge моделей;
 - `--production-judge-models` — список production judge моделей.
 
@@ -74,7 +88,7 @@ BENCHMARK_JUDGE_COMPARE_BASE_URL_07=https://openrouter.ai/api/v1
 - `--generation-api-url-var`
 - `--benchmark-judge-base-url-var`
 
-### Пример (тестовый)
+### Пример (model-source)
 
 ```bash
 uv run python benchmarks/run_comprehensive_benchmark.py \
@@ -82,10 +96,27 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
   --mode synthetic \
   --limit 10 \
   --judge-eval-mode reasoned \
-  --generation-api-key-var GENERATION_COMPARE_API_KEY_03 \
-  --production-judge-api-key-var PRODUCTION_JUDGE_COMPARE_API_KEY_02 \
-  --benchmark-judge-api-key-var BENCHMARK_JUDGE_COMPARE_API_KEY_07 \
-  --benchmark-judge-base-url-var BENCHMARK_JUDGE_COMPARE_BASE_URL_07 \
+  --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY \
+  --generation-model-source deepseek \
+  --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY \
+  --production-judge-model-source mistral \
+  --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY \
+  --judge-model-source openrouter
+```
+
+### Пример (CSV, старый способ)
+
+```bash
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all \
+  --mode synthetic \
+  --limit 10 \
+  --judge-eval-mode reasoned \
+  --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY \
+  --generation-api-url-var PROVIDER_DEEPSEEK_API_URL \
+  --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY \
+  --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY \
+  --benchmark-judge-base-url-var PROVIDER_OPENROUTER_BASE_URL \
   --generation-models "mistral-small-latest,mistral-medium-latest" \
   --judge-models "openai/gpt-4o-mini,openai/gpt-4.1-mini" \
   --production-judge-models "mistral-small-latest,mistral-medium-latest"

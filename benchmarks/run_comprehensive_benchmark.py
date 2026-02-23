@@ -640,6 +640,14 @@ def main():
     )
 
     parser.add_argument(
+        "--generation-model-source",
+        type=str,
+        default="",
+        help="Источник моделей: mistral, openrouter, deepseek, alibaba. "
+        "Загружает модели из *_GEN_MODELS переменных окружения",
+    )
+
+    parser.add_argument(
         "--generation-api-key-var",
         type=str,
         default="GENERATION_API_KEY",
@@ -658,6 +666,14 @@ def main():
         type=str,
         default="",
         help="CSV список production judge моделей для tier_judge_pipeline сравнения",
+    )
+
+    parser.add_argument(
+        "--production-judge-model-source",
+        type=str,
+        default="",
+        help="Источник production judge моделей: mistral, openrouter, deepseek, alibaba. "
+        "Загружает модели из *_JUDGE_MODELS переменных окружения",
     )
 
     parser.add_argument(
@@ -682,6 +698,21 @@ def main():
     )
 
     parser.add_argument(
+        "--judge-models",
+        type=str,
+        default="",
+        help="CSV список benchmark judge моделей для multi-model сравнения",
+    )
+
+    parser.add_argument(
+        "--judge-model-source",
+        type=str,
+        default="",
+        help="Источник benchmark judge моделей: mistral, openrouter, deepseek, alibaba. "
+        "Загружает модели из *_BM_JUDGE_MODELS переменных окружения",
+    )
+
+    parser.add_argument(
         "--analyze-domain",
         action="store_true",
         help="Запустить анализ предметной области по real-user вопросам",
@@ -695,6 +726,39 @@ def main():
     )
 
     args = parser.parse_args()
+
+    PROVIDER_MODEL_VARS = {
+        "mistral": {
+            "generation": "MISTRAL_GEN_MODELS",
+            "production_judge": "MISTRAL_JUDGE_MODELS",
+            "benchmark_judge": "MISTRAL_BM_JUDGE_MODELS",
+        },
+        "openrouter": {
+            "generation": "OPENROUTER_GEN_MODELS",
+            "production_judge": "OPENROUTER_JUDGE_MODELS",
+            "benchmark_judge": "OPENROUTER_BM_JUDGE_MODELS",
+        },
+        "deepseek": {
+            "generation": "DEEPSEEK_GEN_MODELS",
+            "production_judge": "DEEPSEEK_JUDGE_MODELS",
+            "benchmark_judge": "DEEPSEEK_BM_JUDGE_MODELS",
+        },
+        "alibaba": {
+            "generation": "ALIBABA_GEN_MODELS",
+            "production_judge": "ALIBABA_JUDGE_MODELS",
+            "benchmark_judge": "ALIBABA_BM_JUDGE_MODELS",
+        },
+    }
+
+    def resolve_models_from_source(source: str, category: str) -> list[str]:
+        source_lower = source.lower().strip()
+        if not source_lower or source_lower not in PROVIDER_MODEL_VARS:
+            return []
+        env_var = PROVIDER_MODEL_VARS[source_lower].get(category)
+        if not env_var:
+            return []
+        raw = os.getenv(env_var, "")
+        return [m.strip() for m in raw.split(",") if m.strip()]
 
     def parse_models(raw: str, fallback: str) -> list[str]:
         models = [item.strip() for item in raw.split(",") if item.strip()]
@@ -745,11 +809,48 @@ def main():
         os.getenv("JUDGE_MODEL") or Config.JUDGE_MODEL or ""
     )
     judge_models = parse_models(args.judge_models, default_judge_model)
+    if args.judge_model_source:
+        judge_models = resolve_models_from_source(
+            args.judge_model_source, "benchmark_judge"
+        )
+        if not judge_models:
+            logger.warning(
+                f"Не найдены модели для judge-model-source={args.judge_model_source}, "
+                f"использую defaults"
+            )
+            judge_models = parse_models(args.judge_models, default_judge_model)
+
     generation_models = parse_models(args.generation_models, default_generation_model)
+    if args.generation_model_source:
+        generation_models = resolve_models_from_source(
+            args.generation_model_source, "generation"
+        )
+        if not generation_models:
+            logger.warning(
+                f"Не найдены модели для generation-model-source={args.generation_model_source}, "
+                f"использую defaults"
+            )
+            generation_models = parse_models(
+                args.generation_models, default_generation_model
+            )
+
     production_judge_models = parse_models(
         args.production_judge_models,
         default_production_judge_model,
     )
+    if args.production_judge_model_source:
+        production_judge_models = resolve_models_from_source(
+            args.production_judge_model_source, "production_judge"
+        )
+        if not production_judge_models:
+            logger.warning(
+                f"Не найдены модели для production-judge-model-source="
+                f"{args.production_judge_model_source}, использую defaults"
+            )
+            production_judge_models = parse_models(
+                args.production_judge_models,
+                default_production_judge_model,
+            )
 
     selected_generation_api_key = _resolve_secret_by_var(
         args.generation_api_key_var,

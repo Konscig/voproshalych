@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_json_payload(text: str) -> Dict[str, Any]:
-    """Распарсить JSON-ответ модели или plain number с учётом markdown-обёрток."""
+    """Распарсить JSON-ответ модели или plain number с учётом markdown и экранированных скобок."""
     cleaned = text.strip()
 
     if not cleaned:
@@ -37,13 +37,19 @@ def _parse_json_payload(text: str) -> Dict[str, Any]:
         logger.warning("Пустой ответ после очистки markdown")
         return {"score": 3.0}
 
+    # Убрать экранированные двойные скобки {{ }} -> { }
+    cleaned = cleaned.replace("{{", "{").replace("}}", "}")
+
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
         logger.warning(f"Невалидный JSON: {e}, text: {cleaned[:200]}")
         match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
         if match:
-            return json.loads(match.group(0))
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
 
         plain_match = re.search(r"\d+", cleaned)
         if plain_match:
@@ -288,7 +294,7 @@ class LLMJudge:
         Raises:
             RuntimeError: Если не удалось получить оценку
         """
-        prompt = """Оцени точность ответа по шкале от 1 до 5.
+        prompt = f"""Оцени точность ответа по шкале от 1 до 5.
 
 Критерии:
 - 5: Ответ полностью соответствует контексту, нет галлюцинаций
@@ -301,8 +307,7 @@ class LLMJudge:
 Контекст: {context}
 Ответ системы: {answer}
 
-Верни ТОЛЬКО JSON в формате:
-{{"score": 1}}
+Верни ТОЛЬКО JSON в формате: {{"score": 1}}
 Где score — число от 1 до 5.
 """
 
@@ -367,7 +372,7 @@ class LLMJudge:
         Raises:
             RuntimeError: Если не удалось получить оценку
         """
-        prompt = """Оцени релевантность ответа на вопрос по шкале от 1 до 5.
+        prompt = f"""Оцени релевантность ответа на вопрос по шкале от 1 до 5.
 
 Критерии:
 - 5: Ответ полностью соответствует вопросу, отвечает по существу
@@ -379,8 +384,7 @@ class LLMJudge:
 Вопрос: {question}
 Ответ: {answer}
 
-Верни ТОЛЬКО JSON в формате:
-{{"score": 1}}
+Верни ТОЛЬКО JSON в формате: {{"score": 1}}
 Где score — число от 1 до 5.
 """
 
@@ -527,8 +531,7 @@ class LLMJudge:
 Ответ системы: {system_answer}
 Эталонный ответ: {ground_truth_answer}
 
-Верни ТОЛЬКО JSON в формате:
-{{"score": 1}}
+Верни ТОЛЬКО JSON в формате: {{"score": 1}}
 Где score — число от 1 до 5.
 """
         if self.evaluation_mode == "reasoned":

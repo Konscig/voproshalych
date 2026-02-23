@@ -131,7 +131,7 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all \
   --mode synthetic \
   --limit 202 \
-  --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json \
+  --dataset benchmarks/data/dataset_synthetic_20260223_183530.json \
   --consistency-runs 2 \
   --judge-eval-mode reasoned \
   --analyze-utilization \

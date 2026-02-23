@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_json_payload(text: str) -> Dict[str, Any]:
-    """Распарсить JSON-ответ модели с учётом markdown-обёрток."""
+    """Распарсить JSON-ответ модели или plain number с учётом markdown-обёрток."""
     cleaned = text.strip()
 
     if not cleaned:
@@ -42,10 +42,18 @@ def _parse_json_payload(text: str) -> Dict[str, Any]:
     except json.JSONDecodeError as e:
         logger.warning(f"Невалидный JSON: {e}, text: {cleaned[:200]}")
         match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
-        if not match:
-            logger.warning("Не найден JSON объект в ответе")
-            return {"score": 3.0}
-        return json.loads(match.group(0))
+        if match:
+            return json.loads(match.group(0))
+
+        plain_match = re.search(r"\d+", cleaned)
+        if plain_match:
+            score = int(plain_match.group(0))
+            if 1 <= score <= 5:
+                logger.info(f"Извлечено plain number: {score}")
+                return {"score": float(score)}
+
+        logger.warning("Не найден JSON объект или число в ответе")
+        return {"score": 3.0}
 
 
 def _get_judge_candidates() -> List[tuple[str, str, str]]:

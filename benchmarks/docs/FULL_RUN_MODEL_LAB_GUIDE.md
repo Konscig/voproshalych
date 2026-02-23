@@ -1,7 +1,6 @@
 # Полный прогон и Model Lab: финальный сбор всех метрик
 
-Практическое руководство для полного прогона benchmark-системы и сравнения
-моделей (generation / benchmark judge / production judge) в одном цикле.
+Практическое руководство для полного прогона benchmark-системы и сравнения моделей (generation / benchmark judge / production judge) в одном цикле.
 
 Документ ориентирован на **полный режим**:
 
@@ -34,7 +33,7 @@ cp .env.benchmark-models.example .env.benchmark-models
 
 Важно: вы можете хранить **все ключи разом** в одном файле
 (`PROVIDER_MISTRAL_API_KEY`, `PROVIDER_OPENROUTER_API_KEY`,
-`PROVIDER_DEEPSEEK_API_KEY`, `PROVIDER_ALIBABA_API_KEY`) и выбирать нужный
+ `PROVIDER_DEEPSEEK_API_KEY`, `PROVIDER_ALIBABA_API_KEY`) и выбирать нужный
 токен на запуск через `--generation-api-key-var`,
 `--production-judge-api-key-var`, `--benchmark-judge-api-key-var`.
 
@@ -58,62 +57,99 @@ cp .env.benchmark-models.example .env.benchmark-models
 ## 3. Поднять инфраструктуру и подготовить данные
 
 ```bash
-cd Submodules/voproshalych/benchmarks
-make up
-make install-local
-make load-dump-local
-make generate-embeddings-local
+cd Submodules/voproshalych
+
+# Поднять БД
+docker compose -f docker-compose.benchmarks.yml up -d db db-migrate
+
+# Установить зависимости
+uv sync
+
+# Загрузить дамп БД
+uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+
+# Сгенерировать эмбеддинги
+uv run python benchmarks/generate_embeddings.py --chunks
+uv run python benchmarks/generate_embeddings.py --check-coverage
 ```
 
 Если нужен «чистый» прогон от пустой БД:
 
 ```bash
-cd Submodules/voproshalych/benchmarks
-make drop-tables-local
-make load-dump-local
-make generate-embeddings-local
+cd Submodules/voproshalych
+
+# Очистить таблицы
+uv run python benchmarks/load_database_dump.py --drop-tables-only
+
+# Загрузить дамп
+uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
+
+# Сгенерировать эмбеддинги
+uv run python benchmarks/generate_embeddings.py --chunks
+uv run python benchmarks/generate_embeddings.py --check-coverage
 ```
+
+**Важно:** После генерации датасета (шаг 4) запомните имя файла — оно нужно для всех последующих команд.
 
 ---
 
 ## 4. Генерация synthetic датасета на всех чанках
 
-Полный датасет по всем чанкам (в текущем состоянии БД ориентир: 202):
+Полный датасет по всем чанкам (в текущем состоянии БД ориентировано: 202):
 
 ```bash
-cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/generate_dataset.py ARGS="--mode synthetic --max-questions 202"
+cd Submodules/voproshalych
+uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 202
 ```
 
 Опционально экспорт в аннотацию:
 
 ```bash
-cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/generate_dataset.py ARGS="--mode export-annotation --output benchmarks/data/dataset_for_annotation_full.json"
+cd Submodules/voproshalych
+uv run python benchmarks/generate_dataset.py --mode export-annotation --output benchmarks/data/dataset_for_annotation_full.json
 ```
 
 ---
 
 ## 5. Полный baseline прогон (single-model)
 
-Рекомендуется сначала зафиксировать baseline без model-sweep, чтобы иметь
-точку сравнения.
+Рекомендуется сначала зафиксировать baseline без model-sweep, чтобы иметь точку сравнения.
+Модели берутся из `.env.benchmark-models`:
+
+- `GENERATION_MODEL` — модель для генерации ответов
+- `JUDGE_MODEL` — production judge модель
+- `BENCHMARKS_JUDGE_MODEL` — benchmark judge модель
 
 ```bash
-cd Submodules/voproshalych/benchmarks
+cd Submodules/voproshalych
 
 # Сначала получите имя последнего датасета:
-# ls benchmarks/data/dataset_synthetic_*.json | tail -1
+ls benchmarks/data/dataset_synthetic_*.json | tail -1
 
 # Затем запустите бенчмарк (замените <TIMESTAMP> на реальное):
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_20260223_183530.json --consistency-runs 2 --judge-eval-mode reasoned --analyze-utilization --utilization-questions-source real --utilization-question-limit 100000 --utilization-top-k 10 --analyze-topics --topics-question-limit 100000 --topics-count 20 --topics-top-k 5 --analyze-domain --domain-limit 100000"
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier all \
+  --mode synthetic \
+  --limit 202 \
+  --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json \
+  --consistency-runs 2 \
+  --judge-eval-mode reasoned \
+  --analyze-utilization \
+  --utilization-questions-source real \
+  --utilization-question-limit 100000 \
+  --utilization-top-k 10 \
+  --analyze-topics \
+  --topics-question-limit 100000 \
+  --topics-count 20 \
+  --topics-top-k 5 \
+  --analyze-domain \
+  --domain-limit 100000
 ```
 
 Пояснения к full-limit для real-user аналитики:
 
-- `100000` выбрано как верхний «захват всего», чтобы покрыть таблицу 5000+
-  без ручного пересчёта;
-- скрипты сами ограничат фактическим числом строк.
+- `100000` выбрано как верхний «захват всего», чтобы покрыть таблицу 5000+ без ручного пересчёта;
+- скрипты сами ограничиваются фактическим числом строк.
 
 ---
 
@@ -131,48 +167,92 @@ make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all
 
 ### 6.2 Полный cartesian sweep (осторожно с объёмом)
 
+> **Важно:** Для запуска multi-model sweep нужно:
+> 1. Заполнить списки моделей в `.env.benchmark-models` (например `MISTRAL_GEN_MODELS=model1,model2,model3`)
+> 2. Использовать флаги `--generation-model-source`, `--production-judge-model-source`, `--benchmark-judge-model-source`
+>
+> Примеры см. в секции 6.4 ниже.
+
 ```bash
-cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --consistency-runs 2 --judge-eval-mode reasoned --generation-models \"m1,m2,m3,m4,m5,m6,m7,m8,m9,m10\" --judge-models \"j1,j2,j3,j4,j5,j6,j7,j8,j9,j10\" --production-judge-models \"p1,p2,p3,p4,p5,p6,p7,p8,p9,p10\" --analyze-utilization --utilization-questions-source real --utilization-question-limit 100000 --analyze-topics --topics-question-limit 100000 --topics-count 20 --analyze-domain --domain-limit 100000"
+cd Submodules/voproshalych
+
+# Сначала получите имя последнего датасета:
+# ls benchmarks/data/dataset_synthetic_*.json | tail -1
+
+# Затем запустите бенчмарк (замените <TIMESTAMP> на реальное):
+uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --consistency-runs 2 --judge-eval-mode reasoned --generation-models "m1,m2,m3,m4,m5,m6,m7,m8,m9,m10" --judge-models "j1,j2,j3,j4,j5,j6,j7,j8,j9,j10" --production-judge-models "p1,p2,p3,p4,p5,p6,p7,p8,p9,p10" --analyze-utilization --utilization-questions-source real --utilization-question-limit 100000 --utilization-top-k 10 --analyze-topics --topics-question-limit 100000 --topics-count 20 --topics-top-k 5 --analyze-domain --domain-limit 100000
 ```
 
-Это создаёт комбинации `10 x 10 x 10 = 1000` запусков в одном прогоне
-(`model_runs[]`). По времени и стоимости это очень тяжело.
+Это создаёт комбинации `10 x 10 x 10 = 1000` запусков в одном прогоне (`model_runs[]`). По времени и стоимости это очень тяжело.
 
 ### 6.3 Практичный рекомендованный режим (поэтапно)
 
 1) **Generation + Benchmark Judge sweep** (фиксируем production judge):
 
 ```bash
-cd Submodules/voproshalych/benchmarks
+cd Submodules/voproshalych
 
 # Получите имя последнего датасета и вставьте ниже:
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier 2 --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --consistency-runs 2 --judge-eval-mode reasoned --generation-models \"m1,m2,m3,m4,m5,m6,m7,m8,m9,m10\" --judge-models \"j1,j2,j3,j4,j5,j6,j7,j8,j9,j10\" --production-judge-models \"p_base\""
+uv run python benchmarks/run_comprehensive_benchmark.py --tier 2 --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --consistency-runs 2 --judge-eval-mode reasoned --generation-models "m1,m2,m3,m4,m5,m6,m7,m8,m9,m10" --judge-models "j1,j2,j3,j4,j5,j6,j7,j8,j9,j10" --production-judge-models "p_base"
 ```
 
 2) **Production Judge sweep** (фиксируем generation и benchmark judge):
 
 ```bash
-cd Submodules/voproshalych/benchmarks
+cd Submodules/voproshalych
 
 # Получите имя последнего датасета и вставьте ниже:
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier judge_pipeline --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --generation-models \"m_base\" --judge-models \"j_base\" --production-judge-models \"p1,p2,p3,p4,p5,p6,p7,p8,p9,p10\""
+uv run python benchmarks/run_comprehensive_benchmark.py --tier judge_pipeline --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --generation-models "m_base" --judge-models "j_base" --production-judge-models "p1,p2,p3,p4,p5,p6,p7,p8,p9,p10"
 ```
 
 Пример с выбором конкретных токенов и model-source:
 
 ```bash
-cd Submodules/voproshalych/benchmarks
+cd Submodules/voproshalych
 
 # Получите имя последнего датасета и вставьте ниже:
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY --generation-model-source deepseek --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY --production-judge-model-source mistral --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY --judge-model-source openrouter"
+uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY --generation-model-source deepseek --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY --production-judge-model-source mistral --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY --judge-model-source openrouter
+```
+
+### 6.4 Model-source подход (рекомендуется для multi-model)
+
+Для использования нескольких моделей заполните списки в `.env.benchmark-models`:
+
+```bash
+# Generation модели
+MISTRAL_GEN_MODELS=open-mistral-nemo,mistral-small-latest,mistral-medium-latest
+OPENROUTER_GEN_MODELS=openai/gpt-4o-mini,openai/gpt-4.1-mini
+
+# Production Judge модели
+MISTRAL_JUDGE_MODELS=mistral-small-latest,mistral-medium-latest
+
+# Benchmark Judge модели
+ALIBABA_BM_JUDGE_MODELS=qwen-turbo
+```
+
+Затем запускайте с флагами `--*-model-source`:
+
+```bash
+cd Submodules/voproshalych
+
+# Generation sweep (фиксированные judge модели)
+uv run python benchmarks/run_comprehensive_benchmark.py \
+  --tier 2 \
+  --mode synthetic \
+  --limit 202 \
+  --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json \
+  --generation-model-source mistral \
+  --production-judge-model-source mistral \
+  --benchmark-judge-model-source alibaba
 ```
 
 Пример с ручным списком моделей (старый способ):
 
 ```bash
-cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY --generation-api-url-var PROVIDER_DEEPSEEK_API_URL --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY --benchmark-judge-api-key-var PROVIDER_OPENROUTER_API_KEY --benchmark-judge-base-url-var PROVIDER_OPENROUTER_BASE_URL --generation-models \"deepseek-chat,mistral-small-latest\" --judge-models \"openai/gpt-4o-mini,openai/gpt-4.1-mini\" --production-judge-models \"mistral-small-latest,mistral-medium-latest\""
+cd Submodules/voproshalych
+
+# Получите имя последнего датасета и вставьте ниже:
+uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 202 --dataset benchmarks/data/dataset_synthetic_<TIMESTAMP>.json --generation-api-key-var PROVIDER_DEEPSEEK_API_KEY --generation-api-url-var PROVIDER_DEEPSEEK_API_URL --production-judge-api-key-var PROVIDER_MISTRAL_API_KEY --benchmark-judge-base-url-var PROVIDER_OPENROUTER_BASE_URL --generation-models "deepseek-chat,mistral-small-latest" --judge-models "openai/gpt-4o-mini,openai/gpt-4.1-mini" --production-judge-models "mistral-small-latest,mistral-medium-latest"
 ```
 
 Такой подход почти всегда лучше по времени/стоимости и интерпретируемости.
@@ -184,10 +264,11 @@ make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all
 Если нужно прогнать source analytics отдельно, без tier-бенчмарков:
 
 ```bash
-cd Submodules/voproshalych/benchmarks
-make run-local SCRIPT=benchmarks/analyze_chunk_utilization.py ARGS="--questions-source real --question-limit 100000 --top-k 10 --output benchmarks/reports/utilization_full.json"
-make run-local SCRIPT=benchmarks/analyze_topic_coverage.py ARGS="--question-limit 100000 --n-topics 20 --top-k 5 --output benchmarks/reports/topic_coverage_full.json"
-make run-local SCRIPT=benchmarks/analyze_real_users_domain.py ARGS="--limit 100000 --output benchmarks/reports/real_users_domain_analysis_full.json"
+cd Submodules/voproshalych
+
+uv run python benchmarks/analyze_chunk_utilization.py --questions-source real --question-limit 100000 --top-k 10 --output benchmarks/reports/utilization_full.json
+uv run python benchmarks/analyze_topic_coverage.py --question-limit 100000 --n-topics 20 --top-k 5 --output benchmarks/reports/topic_coverage_full.json
+uv run python benchmarks/analyze_real_users_domain.py --limit 100000 --output benchmarks/reports/real_users_domain_analysis_full.json
 ```
 
 ---
@@ -195,11 +276,11 @@ make run-local SCRIPT=benchmarks/analyze_real_users_domain.py ARGS="--limit 1000
 ## 8. Просмотр результатов и сравнение в дашборде
 
 ```bash
-cd Submodules/voproshalych/benchmarks
-make run-dashboard-local
+cd Submodules/voproshalych
+uv run python benchmarks/run_dashboard.py
 ```
 
-Открой `http://localhost:7860` и проверь вкладки:
+Открой `http://localhost:7860` и проверьте вкладки:
 
 - `Run Details`
 - `LLM Comparison` (generation)
@@ -233,8 +314,8 @@ make run-dashboard-local
 ## 10. Завершение
 
 ```bash
-cd Submodules/voproshalych/benchmarks
-make down
+cd Submodules/voproshalych
+docker compose -f docker-compose.benchmarks.yml down
 ```
 
 ---

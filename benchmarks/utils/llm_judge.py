@@ -44,19 +44,33 @@ def _parse_json_payload(text: str) -> Dict[str, Any]:
         return json.loads(cleaned)
     except json.JSONDecodeError as e:
         logger.warning(f"Невалидный JSON: {e}, text: {cleaned[:200]}")
-        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+
+        # Искать полный JSON {...}
+        match = re.search(r"\{[^{}]*\}", cleaned, flags=re.DOTALL)
         if match:
             try:
-                return json.loads(match.group(0))
+                result = json.loads(match.group(0))
+                if "score" in result:
+                    logger.info(f"Извлечено score из JSON: {result['score']}")
+                    return result
             except json.JSONDecodeError:
                 pass
 
-        plain_match = re.search(r"\d+", cleaned)
-        if plain_match:
-            score = int(plain_match.group(0))
+        # Искать обрезанный JSON типа {"score": 4
+        partial_match = re.search(
+            r"\{\s*['\"]?score['\"]?\s*[:=]\s*(\d+)", cleaned, flags=re.IGNORECASE
+        )
+        if partial_match:
+            score = int(partial_match.group(1))
             if 1 <= score <= 5:
-                logger.info(f"Извлечено plain number: {score}")
+                logger.info(f"Извлечено score из partial JSON: {score}")
                 return {"score": float(score)}
+
+        # Искать просто число от 1 до 5
+        for match in re.finditer(r"\b([1-5])\b", cleaned):
+            score = int(match.group(1))
+            logger.info(f"Извлечено plain number: {score}")
+            return {"score": float(score)}
 
         logger.warning("Не найден JSON объект или число в ответе")
         return {"score": 3.0}

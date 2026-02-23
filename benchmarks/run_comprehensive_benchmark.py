@@ -47,6 +47,16 @@ load_dotenv(dotenv_path=".env.docker")
 load_dotenv(dotenv_path=".env.benchmark-models", override=False)
 
 
+def _resolve_secret_by_var(var_name: str, fallback: str = "") -> str:
+    """Получить секрет из env по имени переменной."""
+    if not var_name:
+        return fallback
+    value = os.getenv(var_name)
+    if value:
+        return value
+    return fallback
+
+
 def check_prerequisites(
     engine,
     mode: str,
@@ -414,6 +424,13 @@ def save_results(
         "embedding_model": Config.EMBEDDING_MODEL_PATH,
         "judge_eval_mode": judge_eval_mode,
         "consistency_runs": consistency_runs,
+        "generation_api_key_var": selected_model_run.get("generation_api_key_var"),
+        "production_judge_api_key_var": selected_model_run.get(
+            "production_judge_api_key_var"
+        ),
+        "benchmark_judge_api_key_var": selected_model_run.get(
+            "benchmark_judge_api_key_var"
+        ),
         "tier_0_metrics": normalized_results.get("tier_0"),
         "tier_1_metrics": normalized_results.get("tier_1"),
         "tier_2_metrics": normalized_results.get("tier_2"),
@@ -623,10 +640,45 @@ def main():
     )
 
     parser.add_argument(
+        "--generation-api-key-var",
+        type=str,
+        default="GENERATION_API_KEY",
+        help="Имя env-переменной с API ключом generation LLM",
+    )
+
+    parser.add_argument(
+        "--generation-api-url-var",
+        type=str,
+        default="GENERATION_API_URL",
+        help="Имя env-переменной с API URL generation LLM",
+    )
+
+    parser.add_argument(
         "--production-judge-models",
         type=str,
         default="",
         help="CSV список production judge моделей для tier_judge_pipeline сравнения",
+    )
+
+    parser.add_argument(
+        "--production-judge-api-key-var",
+        type=str,
+        default="JUDGE_API",
+        help="Имя env-переменной с API ключом production judge",
+    )
+
+    parser.add_argument(
+        "--benchmark-judge-api-key-var",
+        type=str,
+        default="BENCHMARKS_JUDGE_API_KEY",
+        help="Имя env-переменной с API ключом benchmark judge",
+    )
+
+    parser.add_argument(
+        "--benchmark-judge-base-url-var",
+        type=str,
+        default="BENCHMARKS_JUDGE_BASE_URL",
+        help="Имя env-переменной с base URL benchmark judge",
     )
 
     parser.add_argument(
@@ -699,6 +751,39 @@ def main():
         default_production_judge_model,
     )
 
+    selected_generation_api_key = _resolve_secret_by_var(
+        args.generation_api_key_var,
+        os.getenv("GENERATION_API_KEY") or os.getenv("MISTRAL_API") or "",
+    )
+    selected_generation_api_url = _resolve_secret_by_var(
+        args.generation_api_url_var,
+        os.getenv("GENERATION_API_URL")
+        or os.getenv("MISTRAL_API_URL")
+        or "https://api.mistral.ai/v1/chat/completions",
+    )
+    selected_production_judge_api_key = _resolve_secret_by_var(
+        args.production_judge_api_key_var,
+        os.getenv("JUDGE_API") or "",
+    )
+    selected_benchmark_judge_api_key = _resolve_secret_by_var(
+        args.benchmark_judge_api_key_var,
+        os.getenv("BENCHMARKS_JUDGE_API_KEY") or "",
+    )
+    selected_benchmark_judge_base_url = _resolve_secret_by_var(
+        args.benchmark_judge_base_url_var,
+        os.getenv("BENCHMARKS_JUDGE_BASE_URL") or os.getenv("JUDGE_API") or "",
+    )
+
+    os.environ["GENERATION_API_KEY"] = selected_generation_api_key
+    os.environ["MISTRAL_API"] = selected_generation_api_key
+    os.environ["GENERATION_API_URL"] = selected_generation_api_url
+    os.environ["MISTRAL_API_URL"] = selected_generation_api_url
+    os.environ["JUDGE_API"] = selected_production_judge_api_key
+
+    Config.MISTRAL_API = selected_generation_api_key
+    Config.MISTRAL_API_URL = selected_generation_api_url
+    Config.JUDGE_API = selected_production_judge_api_key
+
     if dataset is not None:
         logger.info(
             "Запуск бенчмарка mode=%s, tier=%s, dataset_rows=%s",
@@ -726,6 +811,8 @@ def main():
                 judge = None
                 if needs_judge:
                     judge = LLMJudge(
+                        api_key=selected_benchmark_judge_api_key,
+                        base_url=selected_benchmark_judge_base_url,
                         model=judge_model,
                         evaluation_mode=args.judge_eval_mode,
                     )
@@ -759,6 +846,9 @@ def main():
                         "judge_model": judge_model,
                         "production_judge_model": production_judge_model,
                         "generation_model": generation_model,
+                        "generation_api_key_var": args.generation_api_key_var,
+                        "production_judge_api_key_var": args.production_judge_api_key_var,
+                        "benchmark_judge_api_key_var": args.benchmark_judge_api_key_var,
                         "judge_eval_mode": args.judge_eval_mode,
                         "metrics": run_result,
                     }

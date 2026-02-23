@@ -44,15 +44,16 @@ def _resolve_embedding_model_path() -> str:
 class Config:
     """Класс с переменными окружения и конфигурацией для API-запросов"""
 
-    MISTRAL_API = environ.get("MISTRAL_API")
+    MISTRAL_API = environ.get("GENERATION_API_KEY") or environ.get("MISTRAL_API")
     CONFLUENCE_TOKEN = environ.get("CONFLUENCE_TOKEN")
     CONFLUENCE_HOST = environ.get("CONFLUENCE_HOST")
     CONFLUENCE_SPACES = environ.get("CONFLUENCE_SPACES", "").split()  # type: ignore
     SQLALCHEMY_DATABASE_URI = _build_database_uri()
     MISTRAL_API_URL = environ.get(
-        "MISTRAL_API_URL", "https://api.mistral.ai/v1/chat/completions"
+        "GENERATION_API_URL",
+        environ.get("MISTRAL_API_URL", "https://api.mistral.ai/v1/chat/completions"),
     )
-    MISTRAL_MODEL = environ.get("MISTRAL_MODEL")
+    MISTRAL_MODEL = environ.get("GENERATION_MODEL") or environ.get("MISTRAL_MODEL")
 
     JUDGE_MODEL = environ.get("JUDGE_MODEL")
     JUDGE_API = environ.get("JUDGE_API")
@@ -184,7 +185,7 @@ class Config:
         """
         if not cls.MISTRAL_API:
             raise ValueError(
-                "API-ключ для Mistral не найден. Убедитесь, что MISTRAL_API установлен."
+                "API-ключ генерации не найден. Установите GENERATION_API_KEY или MISTRAL_API."
             )
         return {
             "Authorization": f"Bearer {cls.MISTRAL_API}",

@@ -21,22 +21,40 @@
 
 Шаблон: `.env.benchmark-models.example` (в корне `Submodules/voproshalych`).
 
-Пример `.env.benchmark-models`:
+Файл `.env.benchmark-models.example` уже содержит:
+
+- production + compare секции для generation / production judge /
+  benchmark judge;
+- до 10 слотов ключей на каждую compare-секцию;
+- active aliases, используемые кодом по умолчанию.
+
+Ключевая идея: храните **все** токены в одном файле и выбирайте нужный
+на запуск через флаги выбора имени env-переменной.
+
+Пример `.env.benchmark-models` (фрагмент):
 
 ```dotenv
-# LLM для генерации
-MISTRAL_API=...
-MISTRAL_MODEL=mistral-small-latest
+# Generation prod token
+GENERATION_PROD_API_KEY=...
+# Generation compare token #3
+GENERATION_COMPARE_API_KEY_03=...
 
 # Production judge
 JUDGE_API=...
 JUDGE_MODEL=mistral-small-latest
 
-# Benchmark judge
-BENCHMARKS_JUDGE_API_KEY=...
-BENCHMARKS_JUDGE_MODEL=openai/gpt-4o-mini
-BENCHMARKS_JUDGE_BASE_URL=https://openrouter.ai/api/v1
+# Benchmark judge compare token #7
+BENCHMARK_JUDGE_COMPARE_API_KEY_07=...
+BENCHMARK_JUDGE_COMPARE_BASE_URL_07=https://openrouter.ai/api/v1
 ```
+
+Пояснение по ключам и моделям:
+
+- если один API-ключ покрывает несколько моделей провайдера, достаточно
+  одного ключа и CSV списка моделей (`--generation-models`, `--judge-models`,
+  `--production-judge-models`);
+- если для разных моделей нужны разные ключи/провайдеры, запускайте батчи
+  отдельно (по 1-2 провайдера за прогон).
 
 ---
 
@@ -48,6 +66,14 @@ BENCHMARKS_JUDGE_BASE_URL=https://openrouter.ai/api/v1
 - `--judge-models` — список benchmark judge моделей;
 - `--production-judge-models` — список production judge моделей.
 
+Выбор токенов (из единого файла ключей):
+
+- `--generation-api-key-var`
+- `--production-judge-api-key-var`
+- `--benchmark-judge-api-key-var`
+- `--generation-api-url-var`
+- `--benchmark-judge-base-url-var`
+
 ### Пример (тестовый)
 
 ```bash
@@ -56,6 +82,10 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
   --mode synthetic \
   --limit 10 \
   --judge-eval-mode reasoned \
+  --generation-api-key-var GENERATION_COMPARE_API_KEY_03 \
+  --production-judge-api-key-var PRODUCTION_JUDGE_COMPARE_API_KEY_02 \
+  --benchmark-judge-api-key-var BENCHMARK_JUDGE_COMPARE_API_KEY_07 \
+  --benchmark-judge-base-url-var BENCHMARK_JUDGE_COMPARE_BASE_URL_07 \
   --generation-models "mistral-small-latest,mistral-medium-latest" \
   --judge-models "openai/gpt-4o-mini,openai/gpt-4.1-mini" \
   --production-judge-models "mistral-small-latest,mistral-medium-latest"

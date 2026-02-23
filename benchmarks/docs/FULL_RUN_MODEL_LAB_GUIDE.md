@@ -30,12 +30,12 @@ cd Submodules/voproshalych
 cp .env.benchmark-models.example .env.benchmark-models
 ```
 
-Заполните:
+Заполните production и compare секции в `.env.benchmark-models`.
 
-- `MISTRAL_API`, `MISTRAL_MODEL`
-- `JUDGE_API`, `JUDGE_MODEL`
-- `BENCHMARKS_JUDGE_API_KEY`, `BENCHMARKS_JUDGE_MODEL`,
-  `BENCHMARKS_JUDGE_BASE_URL`
+Важно: вы можете хранить **все ключи разом** в одном файле
+(`..._COMPARE_API_KEY_01..10`) и выбирать нужный токен на запуск через
+`--generation-api-key-var`, `--production-judge-api-key-var`,
+`--benchmark-judge-api-key-var`.
 
 Важно:
 
@@ -137,6 +137,13 @@ make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier 2 -
 ```bash
 cd Submodules/voproshalych/benchmarks
 make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier judge_pipeline --mode synthetic --limit 202 --generation-models \"m_base\" --judge-models \"j_base\" --production-judge-models \"p1,p2,p3,p4,p5,p6,p7,p8,p9,p10\""
+
+Пример с выбором конкретных токенов из единого файла:
+
+```bash
+cd Submodules/voproshalych/benchmarks
+make run-local SCRIPT=benchmarks/run_comprehensive_benchmark.py ARGS="--tier all --mode synthetic --limit 202 --generation-api-key-var GENERATION_COMPARE_API_KEY_03 --generation-api-url-var GENERATION_COMPARE_API_URL_03 --production-judge-api-key-var PRODUCTION_JUDGE_COMPARE_API_KEY_02 --benchmark-judge-api-key-var BENCHMARK_JUDGE_COMPARE_API_KEY_07 --benchmark-judge-base-url-var BENCHMARK_JUDGE_COMPARE_BASE_URL_07 --generation-models \"m1,m2\" --judge-models \"j1,j2\" --production-judge-models \"p1,p2\""
+```
 ```
 
 Такой подход почти всегда лучше по времени/стоимости и интерпретируемости.

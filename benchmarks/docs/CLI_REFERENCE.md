@@ -103,6 +103,11 @@ uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virta
 | `--judge-models` | str | "" | CSV judge моделей для multi-run |
 | `--generation-models` | str | "" | CSV generation моделей для multi-run |
 | `--production-judge-models` | str | "" | CSV production judge моделей для tier_judge_pipeline |
+| `--generation-api-key-var` | str | GENERATION_API_KEY | Имя env с ключом generation LLM |
+| `--generation-api-url-var` | str | GENERATION_API_URL | Имя env с URL generation LLM |
+| `--production-judge-api-key-var` | str | JUDGE_API | Имя env с ключом production judge |
+| `--benchmark-judge-api-key-var` | str | BENCHMARKS_JUDGE_API_KEY | Имя env с ключом benchmark judge |
+| `--benchmark-judge-base-url-var` | str | BENCHMARKS_JUDGE_BASE_URL | Имя env с base URL benchmark judge |
 | `--analyze-domain` | flag | False | Запустить real-user domain analysis |
 | `--domain-limit` | int | 5000 | Лимит domain analysis вопросов |
 

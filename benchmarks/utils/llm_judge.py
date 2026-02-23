@@ -514,7 +514,7 @@ class LLMJudge:
         ground_truth_answer: str,
     ) -> float:
         """Оценить корректность ответа относительно эталона по шкале 1-5."""
-        prompt = """Оцени корректность ответа системы по отношению к эталонному ответу.
+        prompt = f"""Оцени корректность ответа системы по отношению к эталонному ответу.
 
 Критерии:
 - 5: ответ полностью корректен и покрывает ключевые факты эталона
@@ -527,12 +527,14 @@ class LLMJudge:
 Ответ системы: {system_answer}
 Эталонный ответ: {ground_truth_answer}
 
-Ответ только числом от 1 до 5.
+Верни ТОЛЬКО JSON в формате:
+{{"score": 1}}
+Где score — число от 1 до 5.
 """
         if self.evaluation_mode == "reasoned":
             prompt += (
                 "\nСначала рассуждай пошагово про себя, но в ответе верни только "
-                "одно число от 1 до 5 без пояснений."
+                "JSON с оценкой."
             )
 
         try:
@@ -543,20 +545,22 @@ class LLMJudge:
                         "role": "system",
                         "content": "Ты эксперт по проверке фактической корректности ответов.",
                     },
-                    {"role": "user", "content": prompt.format(**locals())},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.2,
-                max_tokens=10,
+                max_tokens=200,
             )
 
-            score_str = (response.choices[0].message.content or "").strip()
-            try:
-                score = float(score_str)
-                score = max(1.0, min(5.0, score))
-                time.sleep(self.request_delay)
-                return score
-            except ValueError as error:
-                raise ValueError(f"Некорректный формат оценки: {score_str}") from error
+            content = (response.choices[0].message.content or "").strip()
+            payload = _parse_json_payload(content)
+
+            score = float(payload.get("score", 3.0))
+            score = max(1.0, min(5.0, score))
+
+            logger.info(f"Answer Correctness оценка: {score}")
+
+            time.sleep(self.request_delay)
+            return score
 
         except Exception as e:
             error_msg = f"Ошибка оценки answer correctness: {e}"

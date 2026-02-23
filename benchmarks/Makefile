@@ -3,7 +3,6 @@ COMPOSE_FILE := ../docker-compose.benchmarks.yml
 
 .PHONY: up down install-local load-dump-local drop-tables-local
 .PHONY: generate-embeddings-local generate-dataset-local
-.PHONY: generate-dataset-real-local generate-dataset-score5-local
 .PHONY: run-benchmarks-local run-dashboard-local run-local help
 
 # Сервисы инфраструктуры (только БД + миграции)
@@ -29,12 +28,6 @@ generate-embeddings-local:
 
 generate-dataset-local:
 	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode synthetic --max-questions 10
-
-generate-dataset-real-local:
-	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions --max-questions 10
-
-generate-dataset-score5-local:
-	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 10
 
 run-benchmarks-local:
 	@GIT_BRANCH=$$(git -C $(ROOT_DIR) rev-parse --abbrev-ref HEAD) && \
@@ -64,8 +57,6 @@ help:
 	@echo "  make drop-tables-local            - Очистить таблицы"
 	@echo "  make generate-embeddings-local    - Эмбеддинги чанков + coverage"
 	@echo "  make generate-dataset-local       - Synthetic dataset (10 вопросов)"
-	@echo "  make generate-dataset-real-local  - Dataset из real вопросов (10)"
-	@echo "  make generate-dataset-score5-local - Dataset score=5 (10)"
 	@echo "  make run-benchmarks-local         - Комплексный тестовый запуск"
 	@echo "  make run-dashboard-local          - Запустить дашборд"
 	@echo "  make run-local SCRIPT=... ARGS=... - Запуск произвольного скрипта"

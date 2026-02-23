@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
-from sqlalchemy import func
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -25,11 +24,9 @@ from qa.database import (
     Chunk,
     create_engine,
 )
-from qa.database import QuestionAnswer
 from benchmarks.analyze_chunk_utilization import analyze_chunk_utilization
 from benchmarks.analyze_real_users_domain import analyze_real_users_domain
 from benchmarks.analyze_topic_coverage import analyze_topic_coverage
-from benchmarks.models.real_queries_benchmark import RealQueriesBenchmark
 from benchmarks.models.rag_benchmark import RAGBenchmark
 from benchmarks.utils.llm_judge import LLMJudge
 from benchmarks.utils.report_generator import ReportGenerator
@@ -58,7 +55,7 @@ def check_prerequisites(
 
     Args:
         engine: Движок базы данных
-        mode: Режим запуска (synthetic/manual/real-users)
+        mode: Режим запуска (synthetic/manual)
         dataset_path: Путь к датасету
 
     Returns:
@@ -94,17 +91,6 @@ def check_prerequisites(
             "python benchmarks/generate_dataset.py --max-questions 50"
         )
         return False
-
-    if mode == "real-users":
-        with Session(engine) as session:
-            total_real = session.scalar(
-                select(func.count(QuestionAnswer.id)).where(
-                    QuestionAnswer.embedding.isnot(None)
-                )
-            )
-        if not total_real:
-            logger.error("❌ В таблице question_answer нет вопросов с эмбеддингами")
-            return False
 
     logger.info("✅ Все предварительные условия выполнены")
     return True
@@ -212,9 +198,6 @@ def run_benchmark(
     tier: str,
     mode: str,
     top_k: int = 10,
-    real_score_filter: int | None = 5,
-    real_limit: int = 500,
-    real_latest: bool = False,
     judge_pipeline_dataset_path: Optional[str] = None,
     analyze_utilization: bool = False,
     analyze_topics: bool = False,
@@ -236,45 +219,12 @@ def run_benchmark(
         judge: LLM-судья
         dataset: Датасет
         tier: Уровень бенчмарка (1, 2, 3, all)
-        mode: Режим запуска (synthetic/manual/real-users)
+        mode: Режим запуска (synthetic/manual)
         top_k: Количество результатов для поиска (Tier 1)
 
     Returns:
         Результаты бенчмарка
     """
-    if mode == "real-users":
-        real_benchmark = RealQueriesBenchmark(engine, encoder)
-        results: dict[str, Any] = {
-            "tier_real_users": real_benchmark.run(
-                top_k=top_k,
-                score_filter=real_score_filter,
-                limit=real_limit,
-                latest=real_latest,
-            )
-        }
-        if analyze_utilization:
-            results["utilization_metrics"] = analyze_chunk_utilization(
-                engine=engine,
-                encoder=encoder,
-                questions_source=utilization_questions_source,
-                question_limit=utilization_question_limit,
-                top_k=utilization_top_k,
-            )
-        if analyze_topics:
-            results["topic_coverage_metrics"] = analyze_topic_coverage(
-                engine=engine,
-                encoder=encoder,
-                question_limit=topics_question_limit,
-                n_topics=topics_count,
-                top_k=topics_top_k,
-            )
-        if analyze_domain:
-            results["domain_analysis_metrics"] = analyze_real_users_domain(
-                engine=engine,
-                limit=domain_limit,
-            )
-        return results
-
     benchmark = RAGBenchmark(engine, encoder, judge)
     dataset = dataset or []
 
@@ -462,7 +412,6 @@ def save_results(
         "tier_judge_metrics": normalized_results.get("tier_judge"),
         "tier_judge_pipeline_metrics": normalized_results.get("tier_judge_pipeline"),
         "tier_ux_metrics": normalized_results.get("tier_ux"),
-        "real_user_metrics": normalized_results.get("tier_real_users"),
         "utilization_metrics": normalized_results.get("utilization_metrics"),
         "topic_coverage_metrics": normalized_results.get("topic_coverage_metrics"),
         "domain_analysis_metrics": normalized_results.get("domain_analysis_metrics"),
@@ -532,9 +481,9 @@ def main():
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["synthetic", "manual", "real-users"],
+        choices=["synthetic", "manual"],
         default="synthetic",
-        help="Режим бенчмарка: synthetic, manual или real-users",
+        help="Режим бенчмарка: synthetic или manual",
     )
 
     parser.add_argument(
@@ -579,26 +528,6 @@ def main():
         "--skip-checks",
         action="store_true",
         help="Пропустить проверку предварительных условий",
-    )
-
-    parser.add_argument(
-        "--real-score",
-        type=int,
-        default=5,
-        help="Фильтр score для real-users режима (default: 5)",
-    )
-
-    parser.add_argument(
-        "--real-limit",
-        type=int,
-        default=500,
-        help="Лимит вопросов для real-users режима",
-    )
-
-    parser.add_argument(
-        "--real-latest",
-        action="store_true",
-        help="Брать последние real-user вопросы по created_at",
     )
 
     parser.add_argument(
@@ -781,9 +710,6 @@ def main():
                 args.tier,
                 args.mode,
                 args.top_k,
-                real_score_filter=args.real_score,
-                real_limit=args.real_limit,
-                real_latest=args.real_latest,
                 judge_pipeline_dataset_path=None
                 if args.tier == "judge_pipeline"
                 else args.dataset,
@@ -821,8 +747,6 @@ def main():
         results["model_runs"] = model_runs
 
     dataset_name = resolved_dataset
-    if args.mode == "real-users":
-        dataset_name = f"real_users_score_{args.real_score}"
 
     save_results(
         results,

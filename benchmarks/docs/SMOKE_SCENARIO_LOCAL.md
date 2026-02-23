@@ -122,8 +122,6 @@ uv run python benchmarks/generate_embeddings.py --check-coverage
 ```bash
 cd Submodules/voproshalych
 uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 10
-uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 10
-uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 10
 uv run python benchmarks/generate_dataset.py --mode export-annotation --output benchmarks/data/dataset_for_annotation.json
 ```
 
@@ -132,8 +130,6 @@ Make-аналоги:
 ```bash
 cd Submodules/voproshalych/benchmarks
 make generate-dataset-local
-make generate-dataset-real-local
-make generate-dataset-score5-local
 make run-local SCRIPT=benchmarks/generate_dataset.py ARGS="--mode export-annotation --output benchmarks/data/dataset_for_annotation.json"
 ```
 
@@ -142,8 +138,6 @@ make run-local SCRIPT=benchmarks/generate_dataset.py ARGS="--mode export-annotat
 ```bash
 cd Submodules/voproshalych
 uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 10000
-uv run python benchmarks/generate_dataset.py --mode from-real-questions --max-questions 10000
-uv run python benchmarks/generate_dataset.py --mode from-real-questions-score-5 --max-questions 10000
 ```
 
 ---
@@ -167,12 +161,6 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
   --tier all --mode manual \
   --manual-dataset benchmarks/data/dataset_for_annotation.json \
   --limit 10 --judge-eval-mode reasoned --consistency-runs 2
-
-uv run python benchmarks/run_comprehensive_benchmark.py \
-  --mode real-users --real-score 5 --real-limit 10 --top-k 10 \
-  --analyze-utilization --utilization-questions-source real --utilization-question-limit 10 \
-  --analyze-topics --topics-question-limit 10 --topics-count 5 \
-  --analyze-domain --domain-limit 500
 ```
 
 Make-аналог (произвольные сценарии):

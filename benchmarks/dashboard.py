@@ -75,14 +75,6 @@ METRICS_BY_TIER = {
         "avg_latency_ms",
     ],
     "tier_ux": ["cache_hit_rate", "context_preservation", "multi_turn_consistency"],
-    "tier_real_users": [
-        "mrr",
-        "recall@1",
-        "recall@5",
-        "precision@1",
-        "precision@5",
-        "ndcg@5",
-    ],
     "domain_analysis_metrics": [
         "total_questions",
         "with_answers",
@@ -198,7 +190,6 @@ class RAGBenchmarkDashboard:
                     "tier_judge_pipeline": record.get("tier_judge_pipeline_metrics")
                     or {},
                     "tier_ux": record.get("tier_ux_metrics") or {},
-                    "tier_real_users": record.get("real_user_metrics") or {},
                     "utilization_metrics": record.get("utilization_metrics") or {},
                     "topic_coverage_metrics": record.get("topic_coverage_metrics")
                     or {},
@@ -375,7 +366,6 @@ class RAGBenchmarkDashboard:
                 "tier_judge": "Tier Judge (Qwen)",
                 "tier_judge_pipeline": "Tier Judge Pipeline (Mistral)",
                 "tier_ux": "Tier UX",
-                "tier_real_users": "Real Users (Retrieval)",
                 "utilization_metrics": "Chunk Utilization",
                 "topic_coverage_metrics": "Topic Coverage",
                 "domain_analysis_metrics": "Domain Analysis",
@@ -580,7 +570,6 @@ class RAGBenchmarkDashboard:
             "tier_judge": "Tier Judge (Qwen)",
             "tier_judge_pipeline": "Tier Judge Pipeline",
             "tier_ux": "Tier UX",
-            "tier_real_users": "Real Users",
             "utilization_metrics": "Chunk Utilization",
             "topic_coverage_metrics": "Topic Coverage",
             "domain_analysis_metrics": "Domain Analysis",
@@ -653,7 +642,7 @@ class RAGBenchmarkDashboard:
 
     def _create_all_runs_tab(self):
         mode_filter = gr.Dropdown(
-            choices=["all", "synthetic", "manual", "real-users"],
+            choices=["all", "synthetic", "manual"],
             value="all",
             label="Фильтр по типу датасета",
         )
@@ -746,19 +735,6 @@ class RAGBenchmarkDashboard:
             )
             if run is None:
                 return "Не найден выбранный запуск", pd.DataFrame()
-
-            if run.get("dataset_type") == "real-users":
-                real_metrics = run.get("tier_real_users", {})
-                info = "\n".join(
-                    [
-                        f"**Dataset:** `{run.get('dataset_file', 'unknown')}`",
-                        f"**Mode:** `{run.get('dataset_type', 'real-users')}`",
-                        f"**MRR:** `{_safe_float(real_metrics.get('mrr')):.4f}`",
-                        f"**Recall@5:** `{_safe_float(real_metrics.get('recall@5')):.4f}`",
-                        f"**NDCG@5:** `{_safe_float(real_metrics.get('ndcg@5')):.4f}`",
-                    ]
-                )
-                return info, pd.DataFrame()
 
             dataset_file = run.get("dataset_file") or ""
             benchmark_dir = Path(__file__).resolve().parent
@@ -853,7 +829,7 @@ class RAGBenchmarkDashboard:
                 )
 
         mode_filter = gr.Dropdown(
-            choices=["all", "synthetic", "manual", "real-users"],
+            choices=["all", "synthetic", "manual"],
             value="all",
             label="Тип запуска",
         )

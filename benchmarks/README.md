@@ -11,13 +11,13 @@ End-to-End качества, качества LLM-судьи и аналитик
 
 - **Synthetic dataset**: автоматически сгенерированный golden standard.
 - **Manual dataset**: экспертная разметка для строгой валидации.
-- **Real user data**: retrieval и доменная аналитика на реальных вопросах.
+- **Real user data**: источник продуктовой и доменной аналитики.
 
 ### Ключевые особенности
 
 - ✅ **PostgreSQL + pgvector** как production-поиск для benchmark сценариев.
 - ✅ **LLM-as-a-Judge** с режимами `direct` и `reasoned`.
-- ✅ **Tier 0-3 + Judge + Judge Pipeline + UX + Real-users**.
+- ✅ **Tier 0-3 + Judge + Judge Pipeline + UX**.
 - ✅ **Source Analytics**: Vector Space, Chunk Utilization, Topic Coverage,
   Domain Analysis.
 - ✅ **Model Sweep**: сравнение метрик по нескольким judge/generation моделям.
@@ -109,9 +109,11 @@ make run-dashboard-local
 
 Оценка UX-прокси метрик: кэш, контекст, многотуровая согласованность.
 
-### Real-users
+### Real-users data
 
-Операционная retrieval-оценка на живых вопросах + domain analytics.
+Используется как аналитический источник для topic coverage, utilization
+и domain insights. В качестве отдельного benchmark-датасета для Tier 1/2/3
+не используется.
 
 ---
 

@@ -2,8 +2,7 @@
 
 Поддерживает различные режимы генерации:
 - synthetic: генерация вопросов из чанков через LLM
-- from-real-questions: использование реальных вопросов пользователей
-- from-real-questions-score-5: использование вопросов с оценкой 5
+- export-annotation: экспорт synthetic/manual датасета для ручной аннотации
 """
 
 import argparse
@@ -22,7 +21,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from qa.config import Config
-from qa.database import Chunk, QuestionAnswer, create_engine
+from qa.database import Chunk, create_engine
 from benchmarks.utils.llm_judge import LLMJudge
 
 logging.basicConfig(
@@ -240,180 +239,6 @@ def generate_synthetic_dataset(
     print(f"Файл датасета: {output_path}")
 
 
-def generate_from_real_questions(
-    engine,
-    max_questions: int,
-    output_path: str,
-    score_filter: Optional[int] = None,
-    skip_existing_dataset: Optional[str] = None,
-):
-    """Сгенерировать датасет из реальных вопросов пользователей.
-
-    Использует вопросы из таблицы QuestionAnswer как основу.
-    Для каждого вопроса находит релевантные чанки через similarity search.
-
-    Args:
-        engine: Движок базы данных
-        max_questions: Максимальное количество вопросов
-        output_path: Путь для сохранения датасета
-        score_filter: Фильтр по score (None - все вопросы, 5 - только с оценкой 5)
-        skip_existing_dataset: Путь к существующему датасету для дополнения
-    """
-    from sqlalchemy import func, select
-    from sqlalchemy.orm import Session
-    from sentence_transformers import SentenceTransformer
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    encoder = SentenceTransformer(Config.EMBEDDING_MODEL_PATH)
-    generation_errors: List[Dict[str, Any]] = []
-
-    existing_dataset = _load_existing_dataset(skip_existing_dataset or "")
-    existing_question_ids = {
-        item.get("question_answer_id")
-        for item in existing_dataset
-        if isinstance(item, dict) and item.get("question_answer_id") is not None
-    }
-    dataset: List[Dict[str, Any]] = [
-        item for item in existing_dataset if isinstance(item, dict)
-    ]
-
-    if existing_dataset:
-        logger.info(
-            "Загружен существующий датасет: %s записей, %s уникальных question_answer_id",
-            len(existing_dataset),
-            len(existing_question_ids),
-        )
-
-    with Session(engine) as session:
-        query = select(QuestionAnswer).where(
-            QuestionAnswer.embedding.isnot(None),
-            QuestionAnswer.question.isnot(None),
-            QuestionAnswer.question != "",
-        )
-
-        if score_filter is not None:
-            query = query.where(QuestionAnswer.score == score_filter)
-
-        query = query.order_by(QuestionAnswer.id.asc())
-        questions = session.scalars(query.limit(max_questions * 2)).all()
-
-        total_questions = len(questions)
-        logger.info(f"Найдено вопросов в БД: {total_questions}")
-
-        for i, qa in enumerate(questions, 1):
-            if len(dataset) >= max_questions:
-                logger.info("Достигнут лимит max_questions=%s", max_questions)
-                break
-            if qa.id in existing_question_ids:
-                continue
-
-            try:
-                embedding = encoder.encode(qa.question)
-                retrieved_chunks = session.scalars(
-                    select(Chunk)
-                    .where(Chunk.embedding.isnot(None))
-                    .order_by(Chunk.embedding.cosine_distance(embedding))
-                    .limit(5)
-                ).all()
-
-                relevant_chunk_ids = [c.id for c in retrieved_chunks]
-                chunk_text = retrieved_chunks[0].text if retrieved_chunks else ""
-                confluence_url = qa.confluence_url or (
-                    retrieved_chunks[0].confluence_url if retrieved_chunks else None
-                )
-
-                is_relevant_chunk_matched = None
-                if qa.answer:
-                    import re
-
-                    answer_urls = re.findall(
-                        r"https://confluence\.utmn\.ru[^\s\)]+", qa.answer
-                    )
-                    is_relevant_chunk_matched = -1
-                    if answer_urls:
-                        answer_url = answer_urls[0]
-                        answer_page_id = re.search(r"pageId=(\d+)", answer_url)
-                        if answer_page_id:
-                            answer_page_id = answer_page_id.group(1)
-                            first_chunk_url = (
-                                retrieved_chunks[0].confluence_url
-                                if retrieved_chunks
-                                else None
-                            )
-                            first_chunk_page_id = (
-                                re.search(r"pageId=(\d+)", first_chunk_url).group(1)
-                                if first_chunk_url
-                                and re.search(r"pageId=(\d+)", first_chunk_url)
-                                else None
-                            )
-                            if answer_page_id == first_chunk_page_id:
-                                is_relevant_chunk_matched = 1
-                            else:
-                                is_relevant_chunk_matched = 0
-
-                ground_truth = qa.answer or ""
-                if not ground_truth:
-                    generation_errors.append(
-                        {
-                            "question_answer_id": qa.id,
-                            "reason": "no_answer_in_questionanswer",
-                        }
-                    )
-                    continue
-
-                dataset_item = _create_dataset_item(
-                    question=qa.question,
-                    ground_truth_answer=ground_truth,
-                    chunk_id=retrieved_chunks[0].id if retrieved_chunks else None,
-                    chunk_text=chunk_text,
-                    confluence_url=confluence_url,
-                    source="real-users",
-                    question_source="real-user",
-                    relevant_chunk_ids=relevant_chunk_ids,
-                    user_score=qa.score,
-                    question_answer_id=qa.id,
-                    is_relevant_chunk_matched=is_relevant_chunk_matched,
-                )
-
-                dataset.append(dataset_item)
-                existing_question_ids.add(qa.id)
-
-                logger.info(
-                    "[%s/%s] question_answer_id=%s, вопрос пользователя добавлен",
-                    len(dataset),
-                    max_questions,
-                    qa.id,
-                )
-
-            except Exception as e:
-                logger.error(f"Ошибка для вопроса {qa.id}: {e}")
-                generation_errors.append(
-                    {"question_answer_id": qa.id, "reason": str(e)}
-                )
-                continue
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(dataset, f, ensure_ascii=False, indent=2)
-
-    logger.info(f"✅ Датасет сохранён: {output_path}")
-    logger.info(f"📊 Собрано вопросов: {len(dataset)}")
-    if generation_errors:
-        logger.warning("📛 Ошибок: %s", len(generation_errors))
-        for err in generation_errors[:5]:
-            logger.warning(f"  - {err}")
-        if len(generation_errors) > 5:
-            logger.warning(f"  ... и ещё {len(generation_errors) - 5} ошибок")
-
-    print(f"\n=== Итог генерации из реальных вопросов ===")
-    print(f"Режим: {'score=' + str(score_filter) if score_filter else 'all'}")
-    print(f"Успешно собрано вопросов: {len(dataset)}")
-    if generation_errors:
-        print(f"Ошибок: {len(generation_errors)}")
-    print(f"Файл датасета: {output_path}")
-
-
 def export_for_annotation(
     input_dataset: str,
     output_path: str,
@@ -487,12 +312,10 @@ def main():
         type=str,
         choices=[
             "synthetic",
-            "from-real-questions",
-            "from-real-questions-score-5",
             "export-annotation",
         ],
         default="synthetic",
-        help="Режим генерации датасета: synthetic (из чанков), from-real-questions (из вопросов пользователей), export-annotation (экспорт для ручной аннотации)",
+        help="Режим генерации датасета: synthetic (из чанков), export-annotation (экспорт для ручной аннотации)",
     )
 
     parser.add_argument(
@@ -566,8 +389,6 @@ def main():
 
     mode_prefix = {
         "synthetic": "synthetic",
-        "from-real-questions": "realq",
-        "from-real-questions-score-5": "realq5",
     }.get(args.mode, "synthetic")
 
     output_path = (
@@ -590,22 +411,6 @@ def main():
             output_path=output_path,
             skip_existing_dataset=args.skip_existing_dataset,
             generation_attempts=max(1, args.generation_attempts),
-        )
-    elif args.mode == "from-real-questions":
-        generate_from_real_questions(
-            engine,
-            max_questions=max_questions,
-            output_path=output_path,
-            score_filter=None,
-            skip_existing_dataset=args.skip_existing_dataset,
-        )
-    elif args.mode == "from-real-questions-score-5":
-        generate_from_real_questions(
-            engine,
-            max_questions=max_questions,
-            output_path=output_path,
-            score_filter=5,
-            skip_existing_dataset=args.skip_existing_dataset,
         )
 
 

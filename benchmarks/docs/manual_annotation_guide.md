@@ -7,8 +7,7 @@
 ### Основные сценарии
 
 1. **Synthetic dataset** — сгенерирован из чанков через LLM
-2. **Real-users dataset** — на основе реальных вопросов пользователей
-3. **Score-5 dataset** — только вопросы с оценкой 5 (положительный фидбек)
+2. **Manual dataset** — вручную аннотированный synthetic датасет
 
 ---
 
@@ -17,19 +16,9 @@
 ### Режимы генерации
 
 ```bash
-# 1. Synthetic — вопросы генерируются из чанков (как раньше)
+# Synthetic — вопросы генерируются из чанков
 uv run python benchmarks/generate_dataset.py \
     --mode synthetic \
-    --max-questions 500
-
-# 2. Из реальных вопросов пользователей
-uv run python benchmarks/generate_dataset.py \
-    --mode from-real-questions \
-    --max-questions 500
-
-# 3. Только вопросы с оценкой score=5
-uv run python benchmarks/generate_dataset.py \
-    --mode from-real-questions-score-5 \
     --max-questions 500
 ```
 
@@ -40,8 +29,8 @@ uv run python benchmarks/generate_dataset.py \
 ```json
 {
   "id": "syn_a1b2c3d4e5f6",
-  "source": "synthetic|real-users",
-  "question_source": "synthetic|real-user|manual",
+  "source": "synthetic",
+  "question_source": "synthetic|manual",
   "question": "Вопрос пользователя",
   "ground_truth_answer": "Эталонный ответ",
   "chunk_id": 12345,
@@ -56,8 +45,8 @@ uv run python benchmarks/generate_dataset.py \
 
 Поля:
 - `id` — уникальный идентификатор записи
-- `source` — источник данных (synthetic, real-users)
-- `question_source` — происхождение вопроса (synthetic, real-user, manual)
+- `source` — источник данных (synthetic)
+- `question_source` — происхождение вопроса (synthetic/manual)
 
 ---
 
@@ -123,9 +112,7 @@ uv run python benchmarks/run_comprehensive_benchmark.py \
 ```
 1. Генерация датасета
    │
-   ├── synthetic (из чанков)
-   ├── from-real-questions (все вопросы)
-   └── from-real-questions-score-5 (только score=5)
+   └── synthetic (из чанков)
    │
    ▼
 2. Экспорт для аннотации

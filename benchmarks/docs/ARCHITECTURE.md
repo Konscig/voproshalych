@@ -14,7 +14,6 @@ sequenceDiagram
     participant Generator as EmbeddingGenerator
     participant Judge as LLMJudge
     participant RAGBenchmark as RAGBenchmark
-    participant RealBenchmark as RealQueriesBenchmark
     participant QA as qa.main
     participant DB as PostgreSQL
     participant FS as Файловая система
@@ -46,31 +45,6 @@ sequenceDiagram
     end
     CLI->>FS: Сохранить dataset_synthetic_*.json
     CLI-->>User: Путь к датасету
-
-    Note over User,Dashboard: Режим Real Questions
-    User->>CLI: generate_dataset.py --mode from-real-questions --max-questions N
-    CLI->>DB: SELECT QuestionAnswer WHERE embedding IS NOT NULL
-    DB-->>CLI: real questions
-    loop Для каждого вопроса
-        CLI->>CLI: encoder.encode(question)
-        CLI->>DB: SELECT Chunk ORDER BY cosine_distance LIMIT 5
-        DB-->>CLI: top-5 chunks
-        CLI->>CLI: is_relevant_chunk_matched = match(pageId)
-        CLI->>CLI: dataset.append(item)
-    end
-    CLI->>FS: Сохранить dataset_realq_*.json
-
-    Note over User,Dashboard: Режим Score 5
-    User->>CLI: generate_dataset.py --mode from-real-questions-score-5 --max-questions N
-    CLI->>DB: SELECT QuestionAnswer WHERE score=5 AND embedding IS NOT NULL
-    DB-->>CLI: real questions with score=5
-    loop Для каждого вопроса
-        CLI->>CLI: encoder.encode(question)
-        CLI->>DB: SELECT Chunk ORDER BY cosine_distance LIMIT 5
-        DB-->>CLI: top-5 chunks
-        CLI->>CLI: dataset.append(item)
-    end
-    CLI->>FS: Сохранить dataset_realq5_*.json
 
     Note over User,Dashboard: Режим Manual (ручная аннотация)
     User->>CLI: generate_dataset.py --mode export-annotation --output dataset.json
@@ -189,21 +163,6 @@ sequenceDiagram
     RAGBenchmark-->>CLI: tier_ux_metrics
     CLI->>FS: save to benchmark_runs.json
 
-    Note over User,Dashboard: Real-users Benchmark
-    User->>CLI: run_comprehensive_benchmark.py --mode real-users --real-score 5
-    CLI->>RealBenchmark: run(top_k, score_filter, limit)
-    RealBenchmark->>DB: SELECT QuestionAnswer WHERE score=5 AND embedding IS NOT NULL
-    DB-->>RealBenchmark: real_questions
-    loop Для каждого реального вопроса
-        RealBenchmark->>RealBenchmark: encoder.encode(question)
-        RealBenchmark->>DB: SELECT Chunk ORDER BY cosine_distance LIMIT top_k
-        DB-->>RealBenchmark: retrieved_chunks
-        RealBenchmark->>RealBenchmark: compare with QuestionAnswer.confluence_url
-        RealBenchmark->>RealBenchmark: compute recall, precision, mrr, ndcg
-    end
-    RealBenchmark-->>CLI: real_user_metrics
-    CLI->>FS: save to benchmark_runs.json
-
     Note over User,Dashboard: Source Analytics
     User->>CLI: --analyze-utilization / --analyze-topics / --analyze-domain
     CLI->>CLI: analyze_chunk_utilization()
@@ -280,29 +239,9 @@ sequenceDiagram
   "confluence_url": "https://...",
   "relevant_chunk_ids": [123, 456],
   "source": "synthetic",
-  "question_source": "llm"
+  "question_source": "synthetic"
 }
 ```
-
-#### Режим Real Questions
-
-**Команда:** `generate_dataset.py --mode from-real-questions --max-questions N`
-
-**Процесс:**
-1. CLI запрашивает вопросы из `QuestionAnswer` с эмбеддингами
-2. Для каждого вопроса выполняется similarity search (top-5 чанков)
-3. Вычисляется `is_relevant_chunk_matched` — совпадение pageId из URL
-4. Сохраняется в `dataset_realq_YYYYMMDD_HHMMSS.json`
-
-**Особенности:**
-- Ground truth answer: `QuestionAnswer.answer`
-- Сохраняется: `user_score`, `question_answer_id`, `is_relevant_chunk_matched`
-
-#### Режим Score 5
-
-**Команда:** `generate_dataset.py --mode from-real-questions-score-5 --max-questions N`
-
-Аналогично Real Questions, но фильтр по `score = 5` (наиболее удовлетворённые пользователи).
 
 #### Режим Manual (ручная аннотация)
 
@@ -314,12 +253,11 @@ sequenceDiagram
    - `is_question_ok` — вопрос корректен
    - `is_answer_ok` — ответ корректен
    - `is_chunk_ok` — чанок релевантен
-   - `is_confluence_url_ok` — URL корректен
    - `notes` — примечания
 3. Сохраняет в `annotation_YYYYMMDD_HHMMSS.json`
 4. Пользователь вручную проверяет и редактирует поля
 
-**Реализация:** `benchmarks/generate_dataset.py`, функции `generate_synthetic_dataset()`, `generate_from_real_questions()`, `export_for_annotation()`.
+**Реализация:** `benchmarks/generate_dataset.py`, функции `generate_synthetic_dataset()`, `export_for_annotation()`.
 
 ---
 
@@ -466,22 +404,22 @@ avg_rougeL_f, avg_bleu
 
 ---
 
-#### Real-users Benchmark (бенчмарк на реальных пользователях)
+#### Source Analytics на real-user данных
 
-**Команда:** `--mode real-users --real-score 5 --real-limit N --top-k K`
+Real-user данные используются как источник аналитики, а не как benchmark-датасет
+для Tier 1/2/3.
 
-**Процесс:**
-1. Загружаются вопросы из `QuestionAnswer` с фильтром score (обычно 5)
-2. Для каждого вопроса генерируется эмбеддинг
-3. Выполняется retrieval top-k
-4. Retrieved URLs сравниваются с `QuestionAnswer.confluence_url` (ground truth)
-5. Вычисляются: HitRate, MRR, NDCG, Recall, Precision
+**Команды:**
 
-**Метрики:** hit_rate@1/5/10, mrr, recall@K, precision@K, ndcg@5/10
+- `--analyze-utilization`
+- `--analyze-topics`
+- `--analyze-domain`
 
-**Ground truth:** `QuestionAnswer.confluence_url` — URL документа, показанного пользователю в production
+**Реализация:**
 
-**Реализация:** `benchmarks/models/real_queries_benchmark.py`, метод `run()`.
+- `benchmarks/analyze_chunk_utilization.py`
+- `benchmarks/analyze_topic_coverage.py`
+- `benchmarks/analyze_real_users_domain.py`
 
 ---
 
@@ -522,7 +460,6 @@ avg_rougeL_f, avg_bleu
 | `run_dashboard.py` | Запуск дашборда |
 | `dashboard.py` | Gradio дашборд |
 | `models/rag_benchmark.py` | Tier 0/1/2/3/Judge/UX бенчмарки |
-| `models/real_queries_benchmark.py` | Real-users benchmark |
 | `utils/llm_judge.py` | LLM-судья для оценки качества |
 | `utils/evaluator.py` | Метрики: HitRate, MRR, NDCG |
 | `utils/text_metrics.py` | Алгоритмические метрики: ROUGE, BLEU, BERTScore |
@@ -568,7 +505,7 @@ avg_rougeL_f, avg_bleu
 | run_author | text | Автор запуска |
 | schema_version | text | Версия схемы метрик (для совместимости) |
 | dataset_file | text | Имя файла датасета |
-| dataset_type | text | synthetic/manual/real-users |
+| dataset_type | text | synthetic/manual |
 | judge_model | text | Модель для судейства (Qwen) |
 | generation_model | text | Модель для генерации (Mistral) |
 | embedding_model | text | Модель эмбеддингов |
@@ -581,7 +518,6 @@ avg_rougeL_f, avg_bleu
 | tier_judge_metrics | json | Метрики Tier Judge (LLM Quality, Qwen) |
 | tier_judge_pipeline_metrics | json | Метрики Tier Judge Pipeline (Production Judge, Mistral) |
 | tier_ux_metrics | json | Метрики Tier UX (User Experience) |
-| real_user_metrics | json | Метрики real-users |
 | utilization_metrics | json | Метрики использования чанков |
 | topic_coverage_metrics | json | Метрики покрытия тем |
 | domain_analysis_metrics | json | Метрики анализа real-user домена |

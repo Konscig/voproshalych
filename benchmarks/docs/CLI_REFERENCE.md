@@ -64,7 +64,7 @@ uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virta
 
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `--mode` | str | synthetic | `synthetic`, `from-real-questions`, `from-real-questions-score-5`, `export-annotation` |
+| `--mode` | str | synthetic | `synthetic`, `export-annotation` |
 | `--max-questions` | int | 500 | Лимит записей |
 | `--num-samples` | int | None | Устаревший алиас `--max-questions` |
 | `--output` | str | None | Выходной JSON (иначе versioned auto-name) |
@@ -83,16 +83,13 @@ uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virta
 | Флаг | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
 | `--tier` | str | all | `0/1/2/3/judge/judge_pipeline/ux/all` |
-| `--mode` | str | synthetic | `synthetic/manual/real-users` |
+| `--mode` | str | synthetic | `synthetic/manual` |
 | `--dataset` | str | benchmarks/data/golden_dataset_synthetic.json | Основной dataset path |
 | `--manual-dataset` | str | None | Dataset path для manual mode |
 | `--limit` | int | None | Лимит записей |
 | `--top-k` | int | 10 | top-k retrieval |
 | `--output-dir` | str | benchmarks/reports | Директория отчётов |
 | `--skip-checks` | flag | False | Пропустить prerequisites |
-| `--real-score` | int | 5 | Фильтр score для real-users |
-| `--real-limit` | int | 500 | Лимит real-users вопросов |
-| `--real-latest` | flag | False | Брать последние вопросы |
 | `--analyze-utilization` | flag | False | Запустить chunk utilization |
 | `--utilization-questions-source` | str | synthetic | `synthetic` или `real` |
 | `--utilization-question-limit` | int | 500 | Лимит вопросов utilization |
@@ -204,8 +201,6 @@ uv run python benchmarks/run_dashboard.py --port 7860
 | `make drop-tables-local` | Очистить таблицы |
 | `make generate-embeddings-local` | Эмбеддинги + coverage |
 | `make generate-dataset-local` | Synthetic dataset (10) |
-| `make generate-dataset-real-local` | Real questions dataset (10) |
-| `make generate-dataset-score5-local` | Score=5 dataset (10) |
 | `make run-benchmarks-local` | Тестовый комплексный benchmark |
 | `make run-dashboard-local` | Запуск dashboard |
 | `make run-local SCRIPT=... ARGS=...` | Запуск произвольного скрипта |

@@ -698,7 +698,7 @@ def main():
     )
 
     parser.add_argument(
-        "--judge-models",
+        "--benchmark-judge-models",
         type=str,
         default="",
         help="CSV список benchmark judge моделей для multi-model сравнения",

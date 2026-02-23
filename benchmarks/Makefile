@@ -14,35 +14,35 @@ down:
 
 # Локальный режим (UV + локальные скрипты)
 install-local:
-	uv sync
+	cd $(ROOT_DIR) && uv sync
 
 load-dump-local:
-	uv run python $(ROOT_DIR)/benchmarks/load_database_dump.py --dump $(ROOT_DIR)/benchmarks/data/dump/virtassist_backup_20260213.dump
+	cd $(ROOT_DIR) && uv run python benchmarks/load_database_dump.py --dump benchmarks/data/dump/virtassist_backup_20260213.dump
 
 drop-tables-local:
-	uv run python $(ROOT_DIR)/benchmarks/load_database_dump.py --drop-tables-only
+	cd $(ROOT_DIR) && uv run python benchmarks/load_database_dump.py --drop-tables-only
 
 generate-embeddings-local:
-	uv run python $(ROOT_DIR)/benchmarks/generate_embeddings.py --chunks
-	uv run python $(ROOT_DIR)/benchmarks/generate_embeddings.py --check-coverage
+	cd $(ROOT_DIR) && uv run python benchmarks/generate_embeddings.py --chunks
+	cd $(ROOT_DIR) && uv run python benchmarks/generate_embeddings.py --check-coverage
 
 generate-dataset-local:
-	uv run python $(ROOT_DIR)/benchmarks/generate_dataset.py --mode synthetic --max-questions 10
+	cd $(ROOT_DIR) && uv run python benchmarks/generate_dataset.py --mode synthetic --max-questions 10
 
 run-benchmarks-local:
 	@GIT_BRANCH=$$(git -C $(ROOT_DIR) rev-parse --abbrev-ref HEAD) && \
 	GIT_COMMIT=$$(git -C $(ROOT_DIR) rev-parse --short HEAD) && \
 	GIT_AUTHOR=$$(git -C $(ROOT_DIR) config user.name) && \
 	echo "Using git branch: $$GIT_BRANCH, commit: $$GIT_COMMIT, author: $$GIT_AUTHOR" && \
-	BENCHMARK_GIT_BRANCH=$$GIT_BRANCH BENCHMARK_GIT_COMMIT_HASH=$$GIT_COMMIT BENCHMARK_RUN_AUTHOR=$$GIT_AUTHOR \
-	uv run python $(ROOT_DIR)/benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10 --analyze-utilization --analyze-topics --analyze-domain
+	cd $(ROOT_DIR) && BENCHMARK_GIT_BRANCH=$$GIT_BRANCH BENCHMARK_GIT_COMMIT_HASH=$$GIT_COMMIT BENCHMARK_RUN_AUTHOR=$$GIT_AUTHOR \
+	uv run python benchmarks/run_comprehensive_benchmark.py --tier all --mode synthetic --limit 10 --analyze-utilization --analyze-topics --analyze-domain
 
 run-dashboard-local:
-	uv run python $(ROOT_DIR)/benchmarks/run_dashboard.py
+	cd $(ROOT_DIR) && uv run python benchmarks/run_dashboard.py
 
 run-local:
 	@test -n "$(SCRIPT)" || (echo "Usage: make run-local SCRIPT=benchmarks/script.py ARGS=\"...\"" && exit 1)
-	uv run python $(ROOT_DIR)/$(SCRIPT) $(ARGS)
+	cd $(ROOT_DIR) && uv run python $(SCRIPT) $(ARGS)
 
 help:
 	@echo "Доступные команды benchmarks:"

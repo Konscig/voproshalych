@@ -27,6 +27,7 @@ requires-python = ">=3.12"
     "pandas",
     "plotly",
     "umap-learn",
+    "requests",
 ]
 
 [tool.black]

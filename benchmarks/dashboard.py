@@ -826,7 +826,7 @@ class RAGBenchmarkDashboard:
                 )
 
                 preview_rows = []
-                for row in dataset[:30]:
+                for row in dataset:
                     if not isinstance(row, dict):
                         continue
                     rendered_row = {}
@@ -874,6 +874,8 @@ class RAGBenchmarkDashboard:
             value=initial_preview,
             interactive=False,
             wrap=True,
+            max_height=500,
+            column_widths=["20%", "20%", "20%", "20%", "5%", "5%", "5%", "5%"],
         )
 
         def update_on_filter_change(filter_mode: str):
@@ -908,14 +910,16 @@ class RAGBenchmarkDashboard:
         )
 
     def _create_vector_space_tab(self):
-        gr.Markdown("### Визуализация векторного пространства чанков")
+        gr.Markdown(
+            "### Визуализация векторного пространства чанков (202 чанка в базе)"
+        )
 
         with gr.Row():
             limit_slider = gr.Slider(
-                minimum=100,
-                maximum=10000,
-                value=3000,
-                step=100,
+                minimum=10,
+                maximum=202,
+                value=202,
+                step=10,
                 label="Количество чанков",
             )
             dim_radio = gr.Radio(["2D", "3D"], value="2D", label="Размерность")
@@ -925,106 +929,145 @@ class RAGBenchmarkDashboard:
                 label="Раскраска",
             )
 
-        output_html = gr.HTML(label="Векторное пространство")
         visualize_btn = gr.Button("Визуализировать")
+        output_plot = gr.Plot(label="Векторное пространство")
 
         def run_visualization(limit: int, dimension: str, color: str):
+            import warnings
+
+            warnings.filterwarnings("ignore", message="n_jobs value")
+
             try:
-                from benchmarks.visualize_vector_space import (
-                    _load_chunk_embeddings,
-                    visualize_embeddings,
-                )
+                import numpy as np
+                import plotly.express as px
+                import umap
+                from benchmarks.visualize_vector_space import _load_chunk_embeddings
+
+                embeddings, metadata = _load_chunk_embeddings(int(limit))
 
                 dim = 3 if dimension == "3D" else 2
-                output_path = (
-                    self.reports_dir
-                    / f"vector_space_dashboard_{dim}d_{int(limit)}_{color}.html"
+                reducer = umap.UMAP(
+                    n_components=dim,
+                    random_state=42,
+                    n_neighbors=15,
+                    min_dist=0.1,
+                    metric="cosine",
                 )
-                embeddings, metadata = _load_chunk_embeddings(int(limit))
-                html_path = visualize_embeddings(
-                    embeddings=embeddings,
-                    metadata=metadata,
-                    output_path=str(output_path),
-                    dim=dim,
-                    color_by=color,
-                )
-                with open(html_path, "r", encoding="utf-8") as file:
-                    return file.read()
+                projected = reducer.fit_transform(embeddings)
+
+                df_data = {
+                    "x": projected[:, 0],
+                    "y": projected[:, 1],
+                    "chunk_id": [m["chunk_id"] for m in metadata],
+                    "section": [m["section"] for m in metadata],
+                }
+                if dim == 3:
+                    df_data["z"] = projected[:, 2]
+
+                import pandas as pd
+
+                df = pd.DataFrame(df_data)
+
+                if color == "cluster":
+                    from sklearn.cluster import KMeans
+
+                    n_clusters = max(2, min(20, len(df)))
+                    kmeans = KMeans(
+                        n_clusters=n_clusters, random_state=42, n_init="auto"
+                    )
+                    df["cluster"] = kmeans.fit_predict(embeddings).astype(str)
+                    color_col = "cluster"
+                else:
+                    color_col = color if color in df.columns else "section"
+
+                if dim == 3:
+                    fig = px.scatter_3d(
+                        df,
+                        x="x",
+                        y="y",
+                        z="z",
+                        color=color_col,
+                        hover_data=["chunk_id", "section"],
+                        title=f"UMAP 3D: {len(embeddings)} embeddings",
+                    )
+                else:
+                    fig = px.scatter(
+                        df,
+                        x="x",
+                        y="y",
+                        color=color_col,
+                        hover_data=["chunk_id", "section"],
+                        title=f"UMAP 2D: {len(embeddings)} embeddings",
+                    )
+
+                return fig
             except Exception as error:
-                return (
-                    "<div style='padding:12px;border:1px solid #ddd;'>"
-                    f"Ошибка визуализации: {error}</div>"
-                )
+                import traceback
+
+                return f"Ошибка: {error}\n{traceback.format_exc()}"
 
         visualize_btn.click(
             fn=run_visualization,
             inputs=[limit_slider, dim_radio, color_by],
-            outputs=[output_html],
+            outputs=[output_plot],
         )
 
     def _create_chunk_utilization_tab(self):
-        gr.Markdown("### Анализ использования чанков")
-        if not self.runs:
-            gr.Markdown("Нет запусков для анализа utilization.")
-            return
+        gr.Markdown("### Анализ использования чанков (полный анализ на 5248 вопросах)")
 
-        ordered_runs = list(reversed(self.runs))
+        utilization_path = self.reports_dir / "utilization_full.json"
 
-        def format_run_choice(run: Dict) -> str:
-            return (
-                f"{run['timestamp_readable']} | {run['dataset_type']} | "
-                f"{run['git_commit_hash'][:7]}"
-            )
+        def load_utilization_data():
+            if utilization_path.exists():
+                with open(utilization_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return None
 
-        run_choices = [format_run_choice(run) for run in ordered_runs]
-        run_selector = gr.Dropdown(
-            choices=run_choices,
-            value=run_choices[0],
-            label="Выберите запуск",
-        )
+        full_data = load_utilization_data()
+
+        if full_data:
+            gr.Markdown("**Данные загружены из полного анализа (5248 вопросов)**")
+        else:
+            gr.Markdown("**Файл utilization_full.json не найден**")
 
         def build_utilization_view(selected: str):
             import plotly.express as px
             import plotly.graph_objects as go
 
-            run = next(
-                (item for item in ordered_runs if format_run_choice(item) == selected),
-                None,
-            )
-            if run is None:
-                return "Запуск не найден", go.Figure(), go.Figure()
+            metrics = full_data if full_data else {}
 
-            metrics = run.get("utilization_metrics") or {}
             if not metrics:
-                return "В запуске нет utilization_metrics", go.Figure(), go.Figure()
+                return "Нет данных для отображения", go.Figure(), go.Figure()
 
             used = int(metrics.get("used_chunks", 0))
             total = int(metrics.get("total_chunks", 0))
             unused = int(metrics.get("unused_chunks", max(total - used, 0)))
             rate = _safe_float(metrics.get("utilization_rate"))
+            question_count = metrics.get("question_count", 0)
 
             pie = px.pie(
-                names=["used", "unused"],
+                names=["Использованы", "Не использованы"],
                 values=[used, unused],
-                title="Utilization",
+                title=f"Utilization ({question_count} вопросов)",
             )
 
             used_ids = metrics.get("used_chunk_ids") or []
-            top_ids = used_ids[:20]
+            top_ids = used_ids[:50]
             top = px.bar(
                 x=list(range(len(top_ids))),
                 y=top_ids,
                 labels={"x": "Позиция", "y": "chunk_id"},
-                title="Первые 20 использованных chunk_id",
+                title="Топ-50 использованных chunk_id",
             )
 
             text = (
                 f"**Utilization rate:** `{rate:.4f}`\n"
-                f"\n**Used chunks:** `{used}` из `{total}`"
+                f"\n**Использовано чанков:** `{used}` из `{total}`\n"
+                f"\n**Обработано вопросов:** `{question_count}`"
             )
             return text, pie, top
 
-        initial_text, initial_pie, initial_top = build_utilization_view(run_choices[0])
+        initial_text, initial_pie, initial_top = build_utilization_view("full")
         summary = gr.Markdown(value=initial_text)
         pie_plot = gr.Plot(
             value=initial_pie,
@@ -1035,52 +1078,34 @@ class RAGBenchmarkDashboard:
             label="Топ использованных chunk_id",
         )
 
-        run_selector.change(
-            fn=build_utilization_view,
-            inputs=[run_selector],
-            outputs=[summary, pie_plot, top_plot],
-        )
-
     def _create_topic_coverage_tab(self):
-        gr.Markdown("### Анализ покрытия тем")
-        if not self.runs:
-            gr.Markdown("Нет запусков для анализа topic coverage.")
-            return
+        gr.Markdown("### Анализ покрытия тем (полный анализ на 5248 вопросах)")
 
-        ordered_runs = list(reversed(self.runs))
+        topic_coverage_path = self.reports_dir / "topic_coverage_full.json"
 
-        def format_run_choice(run: Dict) -> str:
-            return (
-                f"{run['timestamp_readable']} | {run['dataset_type']} | "
-                f"{run['git_commit_hash'][:7]}"
-            )
+        def load_topic_coverage_data():
+            if topic_coverage_path.exists():
+                with open(topic_coverage_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return None
 
-        run_choices = [format_run_choice(run) for run in ordered_runs]
-        run_selector = gr.Dropdown(
-            choices=run_choices,
-            value=run_choices[0],
-            label="Выберите запуск",
-        )
+        full_data = load_topic_coverage_data()
+
+        if full_data:
+            gr.Markdown("**Данные загружены из полного анализа (5248 вопросов)**")
+        else:
+            gr.Markdown("**Файл topic_coverage_full.json не найден**")
 
         def build_topic_view(selected: str):
             import plotly.express as px
             import plotly.graph_objects as go
 
-            run = next(
-                (item for item in ordered_runs if format_run_choice(item) == selected),
-                None,
-            )
-            if run is None:
-                return "Запуск не найден", go.Figure(), pd.DataFrame()
+            metrics = full_data if full_data else {}
 
-            metrics = run.get("topic_coverage_metrics") or {}
+            if not metrics:
+                return "Нет данных для отображения", go.Figure(), pd.DataFrame()
+
             topics = metrics.get("topic_coverage") or []
-            if not metrics or not topics:
-                return (
-                    "В запуске нет topic_coverage_metrics",
-                    go.Figure(),
-                    pd.DataFrame(),
-                )
 
             table = pd.DataFrame(topics)
             plot = px.bar(
@@ -1098,20 +1123,15 @@ class RAGBenchmarkDashboard:
             )
             return text, plot, table
 
-        initial_text, initial_plot, initial_table = build_topic_view(run_choices[0])
+        initial_text, initial_plot, initial_table = build_topic_view("full")
         summary = gr.Markdown(value=initial_text)
         coverage_plot = gr.Plot(value=initial_plot, label="Покрытие по темам")
         coverage_table = gr.Dataframe(
             value=initial_table,
             interactive=False,
             wrap=True,
-            max_height=400,
-        )
-
-        run_selector.change(
-            fn=build_topic_view,
-            inputs=[run_selector],
-            outputs=[summary, coverage_plot, coverage_table],
+            max_height=600,
+            headers=["topic_id", "question_count", "unique_chunks", "unique_urls"],
         )
 
     def _create_domain_insights_tab(self):
@@ -1185,12 +1205,14 @@ class RAGBenchmarkDashboard:
             headers=["Score", "Count"],
         )
 
-        gr.Markdown("### Топ токенов в вопросах")
+        gr.Markdown("### Топ токенов в вопросах (топ-50)")
         token_table = gr.Dataframe(
             value=initial_tokens,
             interactive=False,
             wrap=True,
+            max_height=400,
             column_widths=["50%", "50%"],
+            headers=["Токен", "Частота"],
         )
 
         run_selector.change(
@@ -1470,15 +1492,31 @@ flowchart LR
 
         gr.Markdown("## Описание уровней оценки")
 
-        tier_descriptions = """
-| Tier | Название | Описание |
-|------|---------|----------|
-| Tier 0 | Embedding Quality | Анализ качества векторных представлений без использования внешних меток |
-| Tier 1 | Retrieval | Оценка качества поиска релевантных документов |
-| Tier 2 | Generation | Оценка качества сгенерированных ответов |
-| Tier 3 | End-to-End | Комплексная оценка всего пайплайна |
-"""
-        gr.Markdown(tier_descriptions)
+        gr.Markdown("""
+### Tier 0: Качество эмбеддингов (Intrinsic)
+
+Tier 0 оценивает геометрию векторного пространства без использования внешних меток. Это фундаментальный уровень, определяющий способность модели захватывать семантические отношения между текстами. Компоненты, которые покрывает Tier 0: качество модели эмбеддингов, геометрия векторного пространства (плотность, разброс, эффективная размерность), косвенный контроль деградации датасета. Компоненты, которые Tier 0 не покрывает: эффективность индекса в БД, качество ранжирования retrieval, качество генерации ответа.
+
+### Tier 1: Точность поиска (Retrieval Accuracy)
+
+Tier 1 оценивает эффективность информационно-поисковой системы на уровне извлечения релевантных документов. Это критический компонент RAG, поскольку качество конечного ответа напрямую зависит от релевантности контекста, переданного генеративной модели. Оценивается конкретная цепочка retrieval: преобразование вопроса в вектор, сравнение через косинусное расстояние, SQL-запрос к PostgreSQL с pgvector, возврат top-k результатов.
+
+### Tier 2: Качество генерации
+
+Tier 2 оценивает способность генеративной модели формировать качественные ответы при условии, что контекст (релевантные документы) уже извлечён. Это позволяет изолировать проблемы генерации от проблем поиска и провести диагностику каждого компонента независимо. Используется парадигма идеального контекста — модели предоставляется вся релевантная информация из датасета. Оцениваются: фактичность (Faithfulness), релевантность ответа (Answer Relevance), корректность относительно эталона (Answer Correctness).
+
+### Tier 3: Сквозное качество (End-to-End)
+
+Tier 3 оценивает полный RAG-пайплайн в условиях, максимально приближенных к реальной эксплуатации. В отличие от Tier 2, где используется идеальный контекст из датасета, Tier 3 выполняет реальный поиск через production-код, что позволяет оценить систему в целом. Покрывается: путь от query до retrieval, генерация через production-модель, качество финального ответа, усиление ошибок retrieval в генерации.
+
+### Tier Judge: Качество LLM-судьи
+
+Tier Judge оценивает не RAG-ответ как таковой, а инструмент оценки — стабильность и надёжность LLM-судьи, используемого для выставления оценок в Tier 2 и Tier 3. Это мета-уровень контроля качества, который влияет на доверие ко всем LLM-основанным метрикам.
+
+### Tier Judge Pipeline: Production Judge
+
+Tier Judge Pipeline оценивает классификацию production judge решения (show/no-show). Позволяет определить качество текста генерации как таковое и сопоставить его с решениями production judge.
+""")
 
         rows = []
         for tier, metrics in METRICS_BY_TIER.items():

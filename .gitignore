@@ -15,16 +15,5 @@ qa/research
 benchmarks/reports/
 
 # === Данные бенчарков (исключаем, так как эти файлы создаются динамически) ===
-benchmarks/data/raw/
-benchmarks/data/cleaned/
-benchmarks/data/annotated/
-benchmarks/data/dump/
-benchmarks/data/final/
-benchmarks/data/static/
-
-# === Временные файлы для бенчарков (прокомментированы) ===
-# pyproject.toml    - зависимости проекта для бенчарков
-# main.py         - заглушка для запуска
-# .venv/          - виртуальное окружение для бенчарков
-# .pytest_cache/   - кеш pytest для бенчарков
-# Рекомендация: изолировать эти файлы в директорию benchmarks/
+benchmarks/data
+benchmarks/reports

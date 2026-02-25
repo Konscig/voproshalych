@@ -296,6 +296,8 @@ def check_spam(engine: Engine, user_id: int) -> bool:
         if len(user.question_answers) > 5:
             minute_ago = datetime.now() - timedelta(minutes=1)
             fifth_message_date = user.question_answers[4].created_at
+            if fifth_message_date is None:
+                return False
             return minute_ago < fifth_message_date.replace(tzinfo=None)
         return False
 
